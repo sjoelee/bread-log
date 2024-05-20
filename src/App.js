@@ -8,12 +8,13 @@ function App() {
     setSelected(item);
   }
   const doughMakes = [
-    {label: 'Team Make #1', value: 'team_1'},
-    {label: 'Team Make #2', value: 'team_2'},
+    {label: 'Team Make A', value: 'team_a'},
+    {label: 'Team Make B', value: 'team_b'},
+    {label: 'Team Make C', value: 'team_c'},
     {label: 'Ube', value: 'ube'},
     {label: 'Demi Baguette', value: 'demi'},
-    {label: 'Hoagies #1', value: 'hoagie_1'},
-    {label: 'Hoagies #2', value: 'hoagie_2'},
+    {label: 'Hoagies A', value: 'hoagie_a'},
+    {label: 'Hoagies B', value: 'hoagie_b'},
     {label: 'Ciaboutty', value: 'ciaboutty'},
   ]
   return(
