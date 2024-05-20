@@ -1,4 +1,5 @@
 import Dropdown from "./components/Dropdown";
+import DoughMake from "./components/DoughMake";
 import { useState } from "react";
 
 function App() {
@@ -6,7 +7,6 @@ function App() {
   const onSelect = (item) => {
     setSelected(item);
   }
-  console.log('app selection: ', selected);
   const doughMakes = [
     {label: 'Team Make #1', value: 'team_1'},
     {label: 'Team Make #2', value: 'team_2'},
@@ -19,6 +19,7 @@ function App() {
   return(
     <div>
       <Dropdown items={ doughMakes } onSelect={ onSelect } selected={ selected }/>
+      <DoughMake makeName={ selected }/>
     </div>
   );
 }

@@ -6,20 +6,22 @@ function Dropdown({ selected, items, onSelect }) {
     setIsOpen(!isOpen);
   };
 
-  const handleSelect = (item) => {
+  const handleItemSelect = (item) => {
     setIsOpen(false);
     onSelect(item);
   };
 
   const renderedItems = items.map((item) => {
-    return (<div key={item.label} onClick={() => handleSelect(item)}>
+    return (<div className="hover:bg-sky-100 rounded cursor-pointer p-1" key={item.label} onClick={() => handleItemSelect(item)}>
       {item.label}
     </div>);
   });
 
   return (
-    <div onClick={handleClick}>
-      {(isOpen && renderedItems) || selected?.label || 'Select Make'}
+    <div className='w-48 relative'>
+      <div className="flex justify-between items-center cursor-pointer border rounded p-3 shadow bg-white w-full" onClick={handleClick}>
+        {(isOpen && renderedItems) || selected?.label || 'Select Make'}
+      </div>
     </div>
   );
 }
