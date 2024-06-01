@@ -1,6 +1,6 @@
 // Should store the entries such as temp and times on this page
-function Make({ makeName }) {
+function DoughMakePage({ makeName }) {
   return <div>Make for {makeName?.label}</div>
 }
 
-export default Make;
+export default DoughMakePage;

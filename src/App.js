@@ -1,5 +1,7 @@
 import Dropdown from "./components/Dropdown";
-import DoughMake from "./components/DoughMake";
+import DoughMakePage from "./components/DoughMakePage";
+import Link from './components/Link';
+import Route from './components/Route';
 import { useState } from "react";
 
 function App() {
@@ -20,7 +22,13 @@ function App() {
   return(
     <div>
       <Dropdown items={ doughMakes } onSelect={ onSelect } selected={ selected }/>
-      <DoughMake makeName={ selected }/>
+      <Link to="/accordion">Go to accordion</Link>
+      <Link to="/make">Go to dropdown</Link>
+      <div>
+        <Route path="/make">
+          <DoughMakePage makeName={ selected }/>
+        </Route>
+      </div>
     </div>
   );
 }
