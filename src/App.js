@@ -2,6 +2,7 @@ import Dropdown from "./components/Dropdown";
 import DoughMakePage from "./components/DoughMakePage";
 import Link from './components/Link';
 import Route from './components/Route';
+import Sidebar from "./components/Sidebar";
 import { useState } from "react";
 
 function App() {
@@ -20,14 +21,10 @@ function App() {
     {label: 'Ciaboutty', value: 'ciaboutty'},
   ]
   return(
-    <div>
+    <div className="container mx-auto grid grid-cols-6 gap-4 mt-4">
       <Dropdown items={ doughMakes } onSelect={ onSelect } selected={ selected }/>
-      <Link to="/accordion">Go to accordion</Link>
-      <Link to="/make">Go to dropdown</Link>
       <div>
-        <Route path="/make">
-          <DoughMakePage makeName={ selected }/>
-        </Route>
+        <Sidebar />
       </div>
     </div>
   );
