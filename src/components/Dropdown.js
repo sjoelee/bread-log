@@ -33,9 +33,15 @@ function Dropdown({ selected, items, onSelect }) {
   };
 
   const renderedItems = items.map((item) => {
-    return (<div className="hover:bg-sky-100 rounded cursor-pointer p-1" key={item.label} onClick={() => handleItemSelect(item)}>
-      {item.label}
-    </div>);
+    return (
+      <div
+        className="hover:bg-sky-100 rounded cursor-pointer p-1"
+        key={item.label}
+        onClick={() => handleItemSelect(item)}
+      >
+        {item.label}
+      </div>
+    );
   });
 
   return (
