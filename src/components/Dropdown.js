@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import useNavigation from '../hooks/use-navigation';
 import { GoChevronDown } from "react-icons/go";
 import Panel from './Panel';
 
 function Dropdown({ selected, items, onSelect }) {
   const [isOpen, setIsOpen] = useState(false);
   const divEl = useRef();
+  const { navigate } = useNavigation();
 
   useEffect(() => {
     const handler = (event) => {
@@ -30,6 +32,7 @@ function Dropdown({ selected, items, onSelect }) {
   const handleItemSelect = (item) => {
     setIsOpen(false);
     onSelect(item);
+    navigate(item.value)
   };
 
   const renderedItems = items.map((item) => {
