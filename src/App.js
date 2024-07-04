@@ -21,8 +21,10 @@ function App() {
     {label: 'Ciaboutty', value: 'ciaboutty'},
   ]
   return(
-    <div className="container mx-auto grid grid-cols-6 gap-4 mt-4">
-      <Dropdown items={ doughMakes } onSelect={ onSelect } selected={ selected }/>
+    <div className="container mx-auto grid grid-cols-1 gap-4 mt-4">
+      <div>
+        <Dropdown items={doughMakes} onSelect={onSelect} selected={selected} />
+      </div>
       <div>
         <Sidebar />
       </div>
