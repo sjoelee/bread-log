@@ -32,7 +32,7 @@ function Dropdown({ selected, items, onSelect }) {
   const handleItemSelect = (item) => {
     setIsOpen(false);
     onSelect(item);
-    navigate(item.value)
+    navigate(`/${item.value}`)
   };
 
   const renderedItems = items.map((item) => {

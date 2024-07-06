@@ -1,8 +1,8 @@
-import { Link, useLocation } from 'wouter';
+import Link from "./Link";
 
 function Sidebar() {
-  const [ location ] = useLocation();
-  const basePath = location.split('/')[1] // should contain the make and the date
+  const location = window.location.pathname;
+  const basePath = location.split('/')[1]; // should contain the make and the date
   // it should be directing to the make and bake of the dough for that day.
   const links = [
     { label: 'Make', path: `/${basePath}/make`},
