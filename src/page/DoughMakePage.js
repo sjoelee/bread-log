@@ -26,7 +26,7 @@ function DoughMakePage({ date, doughLabel, doughValue }) {
 
   return (
     <div>
-      <h2>{doughLabel} - Dough Make Page</h2>
+      <h2>[{date}]{doughLabel} - Dough Make Page</h2>
       <form onSubmit={handleSubmit}>
         {Object.entries(steps).map(([step, { time, temp }]) => (
           <div key={step}>

@@ -1,12 +1,11 @@
 import Link from "./Link";
 
 function Sidebar() {
-  const location = window.location.pathname;
-  const basePath = location.split('/')[1]; // should contain the make and the date
+  const location = window.location.pathname; // should contain the make and the date
   // it should be directing to the make and bake of the dough for that day.
   const links = [
-    { label: 'Make', path: `/${basePath}/make`},
-    { label: 'Bake', path: `/${basePath}/bake`},
+    { label: 'Make', path: `${location}/make`},
+    { label: 'Bake', path: `${location}/bake`},
   ];
 
   const renderedLinks = links.map((link) => {

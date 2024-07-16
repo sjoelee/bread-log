@@ -6,9 +6,19 @@ import Sidebar from "./components/Sidebar";
 import { useState } from "react";
 import { Route, Switch } from 'wouter';
 import { NavigationProvider } from './components/NavigationProvider';
+import useNavigation from './hooks/use-navigation';
 
 function App() {
+  const { navigate } = useNavigation()
   const [date, setDate] = useState(new Date());
+  const onDateChange = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    console.log(`${year}/${month}/${day}`);
+    navigate(`/${year}/${month}/${day}`);
+    setDate(date);
+  }
   const [selected, setSelected] = useState(null);
   const onSelect = (item) => {
     setSelected(item);
@@ -29,7 +39,7 @@ function App() {
       <div className="container mx-auto grid grid-cols-4 gap-4 mt-4 relative">
         <div className="col-span-1 space-y-4">
           <div className="relative z-0">
-            <DatePicker date={date} onDateChange={setDate} />
+            <DatePicker date={date} onDateChange={onDateChange} />
           </div>
           <div className="relative z-10">
             <Dropdown items={doughMakes} onSelect={onSelect} selected={selected} />
@@ -40,13 +50,14 @@ function App() {
         </div>
         <div className="col-span-3">
           <Switch>
-            <Route path="/:selected/make">
+            <Route path={`/:year/:month/:day/:selected/make`}>
               {(params) => {
                 const selected = params.selected;
                 const selectedDough = doughMakes.find(item => item.value === selected);
+                const formattedDate = `${params.year}-${params.month}-${params.day}`;
 
                 return (
-                  <DoughMakePage doughLabel={selectedDough.label} doughValue={selectedDough.value} />
+                  <DoughMakePage date={formattedDate} doughLabel={selectedDough.label} doughValue={selectedDough.value} />
                 );
               }}
             </Route>
