@@ -1,9 +1,14 @@
+import DatePicker from "./components/DatePicker";
 import Dropdown from "./components/Dropdown";
-import DoughMakePage from "./components/DoughMakePage";
+import DoughMakePage from "./page/DoughMakePage";
+import DoughBakePage from "./page/DoughBakePage";
 import Sidebar from "./components/Sidebar";
 import { useState } from "react";
+import { Route, Switch } from 'wouter';
+import { NavigationProvider } from './components/NavigationProvider';
 
 function App() {
+  const [date, setDate] = useState(new Date());
   const [selected, setSelected] = useState(null);
   const onSelect = (item) => {
     setSelected(item);
@@ -19,15 +24,37 @@ function App() {
     {label: 'Ciaboutty', value: 'ciaboutty'},
   ]
 
-  return(
-    <div className="container mx-auto grid grid-cols-1 gap-4 mt-4 relative">
-      <div className="z-10">
-        <Dropdown items={doughMakes} onSelect={onSelect} selected={selected} />
+  return (
+    <NavigationProvider>
+      <div className="container mx-auto grid grid-cols-4 gap-4 mt-4 relative">
+        <div className="col-span-1 space-y-4">
+          <div className="relative z-0">
+            <DatePicker date={date} onDateChange={setDate} />
+          </div>
+          <div className="relative z-10">
+            <Dropdown items={doughMakes} onSelect={onSelect} selected={selected} />
+          </div>
+          <div className="relative z-0">
+            <Sidebar />
+          </div>
+        </div>
+        <div className="col-span-3">
+          <Switch>
+            <Route path="/:selected/make">
+              {(params) => {
+                const selected = params.selected;
+                const selectedDough = doughMakes.find(item => item.value === selected);
+
+                return (
+                  <DoughMakePage doughLabel={selectedDough.label} doughValue={selectedDough.value} />
+                );
+              }}
+            </Route>
+            <Route path="/:selected/bake" component={DoughBakePage} />
+          </Switch>
+        </div>
       </div>
-      <div className="z-0">
-        <Sidebar />
-      </div>
-    </div>
+    </NavigationProvider>
   );
 }
 

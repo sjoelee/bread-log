@@ -58,7 +58,7 @@ function Dropdown({ selected, items, onSelect }) {
       </Panel>
       {isOpen && (
         <Panel 
-          className="absolute top-full"
+          className="absolute top-full z-10"
         >
           {renderedItems}
         </Panel>
