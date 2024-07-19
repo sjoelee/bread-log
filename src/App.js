@@ -15,7 +15,7 @@ function App() {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const day = date.getDate();
-    console.log(`${year}/${month}/${day}`);
+    console.log(date);
     navigate(`/${year}/${month}/${day}`);
     setDate(date);
   }
@@ -61,7 +61,7 @@ function App() {
                 );
               }}
             </Route>
-            <Route path="/:selected/bake" component={DoughBakePage} />
+            <Route path="/:year/:month/:day/:selected/bake" component={DoughBakePage} />
           </Switch>
         </div>
       </div>

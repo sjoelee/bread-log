@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
 function DoughMakePage({ date, doughLabel, doughValue }) {
-  console.log("selected ", date, doughLabel, doughValue);
   const [steps, setSteps] = useState({
     autolyse: { time: '', temp: '' },
     addStarter: { time: '', temp: '' },

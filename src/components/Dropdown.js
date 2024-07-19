@@ -7,7 +7,9 @@ function Dropdown({ selected, items, onSelect }) {
   const [isOpen, setIsOpen] = useState(false);
   const divEl = useRef();
   const { navigate } = useNavigation();
-  const location = window.location.pathname;
+  const [year, month, day] = window.location.pathname.split('/').slice(1,4);
+  console.log(window.location.pathname);
+  console.log(year, month, day);
 
   useEffect(() => {
     const handler = (event) => {
@@ -33,7 +35,7 @@ function Dropdown({ selected, items, onSelect }) {
   const handleItemSelect = (item) => {
     setIsOpen(false);
     onSelect(item);
-    navigate(`${location}/${item.value}`)
+    navigate(`/${year}/${month}/${day}/${item.value}`)
   };
 
   const renderedItems = items.map((item) => {
