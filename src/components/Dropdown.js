@@ -8,8 +8,6 @@ function Dropdown({ selected, items, onSelect }) {
   const divEl = useRef();
   const { navigate } = useNavigation();
   const [year, month, day] = window.location.pathname.split('/').slice(1,4);
-  console.log(window.location.pathname);
-  console.log(year, month, day);
 
   useEffect(() => {
     const handler = (event) => {
