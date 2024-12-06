@@ -10,10 +10,8 @@ CREATE TABLE dough_makes (
     flour_temp DECIMAL(5,1),
     preferment_temp DECIMAL(5,1),
     
-    -- Time duration (in minutes)
-    autolyse_time INTEGER,
-    
     -- Timestamps for each stage of the process
+    autolyse_time TIMESTAMP,
     start_time TIMESTAMP NOT NULL,
     pull_time TIMESTAMP,
     pre_shape_time TIMESTAMP,

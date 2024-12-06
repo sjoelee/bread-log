@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class DoughMake(BaseModel):
   # company = str # replace with user_id
   name: str # name of the make
-  date: datetime # date of when the dough is made
+  date: date # date of when the dough is made
 
   # Times needed to store 
   autolyse: datetime
