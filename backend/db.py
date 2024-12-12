@@ -98,35 +98,40 @@ class DBConnector():
         WHERE make_date = %s AND dough_name = %s;
     """
     values = (date, make_name)
-    with self.db_pool.get_connection() as conn:
-      with conn.cursor() as cur:
-        cur.execute(sql, values)
-        res = cur.fetchone()
-        if res is None:
-          return None
+    try: 
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql, values)
+          res = cur.fetchone()
+    except Exception as e:
+      logger.error(f"Error getting entry: {str(e)}")
+    
+    if res is None:
+      return None
  
-        (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_time, autolyse_time, pull_time, pre_shape_time, final_shape_time, fridge_time) = res
+    logger.info(f"Retrieved make {make_name} for {date}")
+    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_time, autolyse_time, pull_time, pre_shape_time, final_shape_time, fridge_time) = res
 
-        room_temp = int(room_temp) if room_temp else None
-        water_temp = int(water_temp) if water_temp else None
-        flour_temp = int(flour_temp) if flour_temp else None
-        preferment_temp = int(preferment_temp) if preferment_temp else None
+    room_temp = int(room_temp) if room_temp else None
+    water_temp = int(water_temp) if water_temp else None
+    flour_temp = int(flour_temp) if flour_temp else None
+    preferment_temp = int(preferment_temp) if preferment_temp else None
 
-        return DoughMake(
-          name=dough_name,
-          date=make_date,
-          autolyse=autolyse_time,
-          start=start_time,
-          pull=pull_time,
-          preshape=pre_shape_time,
-          final_shape=final_shape_time,
-          fridge=fridge_time,
-          room_temp=room_temp,
-          preferment_temp=preferment_temp,
-          water_temp=water_temp,
-          flour_temp=flour_temp,
-          notes=None  # This field isn't in the database
-        )
+    return DoughMake(
+      name=dough_name,
+      date=make_date,
+      autolyse=autolyse_time,
+      start=start_time,
+      pull=pull_time,
+      preshape=pre_shape_time,
+      final_shape=final_shape_time,
+      fridge=fridge_time,
+      room_temp=room_temp,
+      preferment_temp=preferment_temp,
+      water_temp=water_temp,
+      flour_temp=flour_temp,
+      notes=None  # This field isn't in the database
+    )
 
   # if there are any updates needed to be made
   def update_dough_make(self, dough_make: DoughMake) -> None:
@@ -138,35 +143,40 @@ if __name__ == '__main__':
 
   dt = datetime(2024, 12, 1)
   dt_strfmt = "%Y-%m-%d %H:%M:%S"
-  autolyse_time = datetime.strptime("2024-12-01 04:45:00", dt_strfmt)
-  start_time = datetime.strptime("2024-12-01 05:45:00", dt_strfmt)
-  pull_time = datetime.strptime("2024-12-01 06:05:00", dt_strfmt)
-  preshape_time = datetime.strptime("2024-12-01 08:45:00", dt_strfmt)
-  final_shape_time = datetime.strptime("2024-12-01 09:30:00", dt_strfmt)
-  fridge_time = datetime.strptime("2024-12-01 11:45:00", dt_strfmt)
-
-  dough = DoughMake(
-    # company="Rize Up Bakery",
-    name="Hoagie A",
-    date=dt,
-    autolyse=autolyse_time,
-    start=start_time,
-    pull=pull_time,
-    preshape=preshape_time,
-    final_shape=final_shape_time,
-    fridge=fridge_time,
-    room_temp=72,
-    preferment_temp=75,
-    water_temp=80,
-    flour_temp=70,
-    notes="Perfect spring day for baking"
-  )
-
   dbname = 'bread_makes'
   db_conn = DBConnector(dbname=dbname)
-  make_id = db_conn.insert_dough_make(dough)
-  print(f"Inserted dough make with ID: {make_id}")
+  # autolyse_time = datetime.strptime("2024-12-01 04:45:00", dt_strfmt)
+  # start_time = datetime.strptime("2024-12-01 05:45:00", dt_strfmt)
+  # pull_time = datetime.strptime("2024-12-01 06:05:00", dt_strfmt)
+  # preshape_time = datetime.strptime("2024-12-01 08:45:00", dt_strfmt)
+  # final_shape_time = datetime.strptime("2024-12-01 09:30:00", dt_strfmt)
+  # fridge_time = datetime.strptime("2024-12-01 11:45:00", dt_strfmt)
 
-  connector1 = DBConnector(dbname)
-  connector2 = DBConnector(dbname)
-  print(connector1.db_pool == connector2.db_pool)
+  # dough = DoughMake(
+  #   # company="Rize Up Bakery",
+  #   name="Hoagie A",
+  #   date=dt,
+  #   autolyse=autolyse_time,
+  #   start=start_time,
+  #   pull=pull_time,
+  #   preshape=preshape_time,
+  #   final_shape=final_shape_time,
+  #   fridge=fridge_time,
+  #   room_temp=72,
+  #   preferment_temp=75,
+  #   water_temp=80,
+  #   flour_temp=70,
+  #   notes="Perfect spring day for baking"
+  # )
+
+
+  # make_id = db_conn.insert_dough_make(dough)
+  # print(f"Inserted dough make with ID: {make_id}")
+
+  # connector1 = DBConnector(dbname)
+  # connector2 = DBConnector(dbname)
+  # print(connector1.db_pool == connector2.db_pool)
+
+  dt = datetime(2024, 12, 1)
+  dough_make = db_conn.get_dough_make(dt, make_name="hoagie_a")
+  print(dough_make)

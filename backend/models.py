@@ -1,5 +1,21 @@
 from datetime import date, datetime
 from pydantic import BaseModel
+from enum import Enum
+
+class MakeNames(Enum):
+  # Sticks
+  DEMI_BAGUETTE = "demi_baguette"
+  HOAGIE_A = "hoagie_a"
+  HOAGIE_B = "hoagie_b"
+
+  # Sourdough
+  UBE = "ube"
+  TEAM_A = "team_a"
+  TEAM_B = "team_b"
+  TEAM_C = "team_c"
+
+MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
+
 
 class DoughMake(BaseModel):
   # company = str # replace with user_id
@@ -20,4 +36,4 @@ class DoughMake(BaseModel):
   water_temp: int | None = None
   flour_temp: int | None = None
 
-  notes: str=None
+  notes: str | None = None
