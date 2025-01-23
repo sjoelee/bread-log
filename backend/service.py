@@ -42,6 +42,8 @@ def update_make(make_name: str, date: str, dough_make: DoughMake) -> int:
   Updates the dough_make {make_name} that was made on {date}
   """
   # look 
+  old_dough_make = get_make(make_name, date)
+  dough_make
   pass
 
 @app.get("/makes/{date}/{make_name}")
@@ -62,6 +64,8 @@ def get_make(make_name: str, date: str):
 
   dough_make = db_conn.get_dough_make(date, make_name)
   logger.info(f"Make retrieved: {dough_make}")
+  if not dough_make:
+    raise HTTPException(status_code=404, detail=f"Make doesn't exist")
   return dough_make
 
 @app.delete("/makes/{date}/{make_name}")
@@ -85,7 +89,8 @@ def get_makes_for_date(date: str):
 
 def validate_date(date: str, date_format: str="%Y-%m-%d"):
   try: 
-    datetime.strptime(date, date_format)
+    parsed_date = datetime.strptime(date, date_format)
+    # ensure that year is valid
     return True
   except:
     return False
