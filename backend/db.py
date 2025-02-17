@@ -50,7 +50,7 @@ class DBConnector():
     self.dbname = dbname
     self.db_pool = DatabasePool.get_instance(self.dbname, self.user)
 
-  def insert_dough_make(self, dough_make: DoughMake) -> int:
+  def insert_dough_make(self, dough_make: DoughMake) -> None:
     table = 'dough_makes'
     insert_data = {
       'dough_name': dough_make.name,
@@ -59,12 +59,12 @@ class DBConnector():
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
       'preferment_temp': dough_make.preferment_temp,
-      'start_time': dough_make.start,
-      'pull_time': dough_make.pull,
-      'pre_shape_time': dough_make.preshape,
-      'final_shape_time': dough_make.final_shape,
-      'fridge_time': dough_make.fridge,
-      'autolyse_time': dough_make.autolyse,
+      'start_ts': dough_make.start,
+      'pull_ts': dough_make.pull,
+      'preshape_ts': dough_make.preshape,
+      'final_shape_ts': dough_make.final_shape,
+      'fridge_ts': dough_make.fridge,
+      'autolyse_ts': dough_make.autolyse,
     }
     # maybe add first fermentation and second fermentation
     insert_data = {k: v for k, v in insert_data.items() if v is not None}
@@ -74,17 +74,14 @@ class DBConnector():
     sql = f"""
       INSERT INTO {table} ({columns})
       VALUES ({placeholders})
-      RETURNING make_id;
+      RETURNING make_num;
     """
     logger.debug(f'SQL Command\n {sql}')
     try:
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
           cur.execute(sql, values)
-          make_id = cur.fetchone()[0]
           conn.commit()
-          logger.info(f"Inserted dough make with ID: {make_id}")
-          return make_id
     except Exception as e:
       logger.error(f"Error inserting dough make: {str(e)}")
       raise  # Re-raise the exception after printing it
@@ -92,8 +89,8 @@ class DBConnector():
   def get_dough_make(self, date: date, make_name: str) -> Optional[DoughMake]:
     sql = """
         SELECT dough_name, make_date, room_temp, water_temp,
-               flour_temp, preferment_temp, start_time, autolyse_time,
-               pull_time, pre_shape_time, final_shape_time, fridge_time
+               flour_temp, preferment_temp, start_ts, autolyse_ts,
+               pull_ts, preshape_ts, final_shape_ts, fridge_ts
         FROM dough_makes
         WHERE make_date = %s AND dough_name = %s;
     """
@@ -110,7 +107,7 @@ class DBConnector():
       return None
  
     logger.info(f"Retrieved make {make_name} for {date}")
-    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_time, autolyse_time, pull_time, pre_shape_time, final_shape_time, fridge_time) = res
+    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts) = res
 
     room_temp = int(room_temp) if room_temp else None
     water_temp = int(water_temp) if water_temp else None
@@ -120,12 +117,12 @@ class DBConnector():
     return DoughMake(
       name=dough_name,
       date=make_date,
-      autolyse=autolyse_time,
-      start=start_time,
-      pull=pull_time,
-      preshape=pre_shape_time,
-      final_shape=final_shape_time,
-      fridge=fridge_time,
+      autolyse=autolyse_ts,
+      start=start_ts,
+      pull=pull_ts,
+      preshape=preshape_ts,
+      final_shape=final_shape_ts,
+      fridge=fridge_ts,
       room_temp=room_temp,
       preferment_temp=preferment_temp,
       water_temp=water_temp,
@@ -145,23 +142,23 @@ if __name__ == '__main__':
   dt_strfmt = "%Y-%m-%d %H:%M:%S"
   dbname = 'bread_makes'
   db_conn = DBConnector(dbname=dbname)
-  # autolyse_time = datetime.strptime("2024-12-01 04:45:00", dt_strfmt)
-  # start_time = datetime.strptime("2024-12-01 05:45:00", dt_strfmt)
-  # pull_time = datetime.strptime("2024-12-01 06:05:00", dt_strfmt)
-  # preshape_time = datetime.strptime("2024-12-01 08:45:00", dt_strfmt)
-  # final_shape_time = datetime.strptime("2024-12-01 09:30:00", dt_strfmt)
-  # fridge_time = datetime.strptime("2024-12-01 11:45:00", dt_strfmt)
+  # autolyse_ts = datetime.strptime("2024-12-01 04:45:00", dt_strfmt)
+  # start_ts = datetime.strptime("2024-12-01 05:45:00", dt_strfmt)
+  # pull_ts = datetime.strptime("2024-12-01 06:05:00", dt_strfmt)
+  # preshape_ts = datetime.strptime("2024-12-01 08:45:00", dt_strfmt)
+  # final_shape_ts = datetime.strptime("2024-12-01 09:30:00", dt_strfmt)
+  # fridge_ts = datetime.strptime("2024-12-01 11:45:00", dt_strfmt)
 
   # dough = DoughMake(
   #   # company="Rize Up Bakery",
   #   name="Hoagie A",
   #   date=dt,
-  #   autolyse=autolyse_time,
-  #   start=start_time,
-  #   pull=pull_time,
-  #   preshape=preshape_time,
-  #   final_shape=final_shape_time,
-  #   fridge=fridge_time,
+  #   autolyse=autolyse_ts,
+  #   start=start_ts,
+  #   pull=pull_ts,
+  #   preshape=preshape_ts,
+  #   final_shape=final_shape_ts,
+  #   fridge=fridge_ts,
   #   room_temp=72,
   #   preferment_temp=75,
   #   water_temp=80,

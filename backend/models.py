@@ -37,4 +37,3 @@ class DoughMakeRequest(BaseModel):
 class DoughMake(DoughMakeRequest):
   name: str
   date: date
-  num: int # accounts for multiple makes of the same dough on the same day

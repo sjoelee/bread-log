@@ -17,12 +17,11 @@ logger.info("app brought up")
 # Create make entries within the DB table 
 # TODO: update endpoint to just /makes because the date and make_name are within the request body
 @app.post("/makes/{year}/{month}/{day}/{make_name}")
-def create_make(year: int, month: int, day: int, make_name: str, dough_make_req: DoughMakeRequest) -> int:
+def create_make(year: int, month: int, day: int, make_name: str, dough_make_req: DoughMakeRequest) -> None:
   date = validate_date(year, month, day)
   dough_make = DoughMake(
     name=make_name,
     date=date,
-    num=0, #TODO: autoincrement
     **dough_make_req.model_dump()
   )
   def validate_dough_make(dough_make: DoughMake):
@@ -31,8 +30,8 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
   logger.info(f"Inserting dough make: {dough_make.name}")
   try: 
     validate_dough_make(dough_make)
-    make_id = db_conn.insert_dough_make(dough_make)
-    logger.info(f"Successfully inserted dough make {make_id}")
+    db_conn.insert_dough_make(dough_make)
+    logger.info(f"Successfully inserted dough make")
   except ValueError as e:
     logger.error(f"Validation error: {e}")
     raise HTTPException(status_code=400, detail=str(e))
@@ -40,7 +39,7 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
     logger.error("Error ocurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
 
-  return make_id
+  return
 
 @app.patch("/makes/{year}/{month}/{day}/{make_name}")
 def update_make(make_name: str, year: int, month: int, day: int, dough_make: DoughMakeRequest) -> int:
@@ -55,7 +54,7 @@ def update_make(make_name: str, year: int, month: int, day: int, dough_make: Dou
   # get diff
   # perform inserts on teh diff fields
   make_id = db_conn.insert_dough_make(dough_make)
-  # we should return the same make_id as before since we're not creating a new entry
+  # we should return the same make_id as before since we're not creating a new entry, disagree. we should just not return make_id
   return make_id
 
 @app.get("/makes/{year}/{month}/{day}/{make_name}")
