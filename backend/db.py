@@ -51,6 +51,7 @@ class DBConnector():
     self.dbname = dbname
     self.db_pool = DatabasePool.get_instance(self.dbname, self.user)
 
+
   def insert_dough_make(self, dough_make: DoughMake) -> None:
     table = 'dough_makes'
     insert_data = {
@@ -86,6 +87,7 @@ class DBConnector():
     except Exception as e:
       logger.error(f"Error inserting dough make: {str(e)}")
       raise  # Re-raise the exception after printing it
+
 
   def get_dough_make(self, date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
     sql = """
@@ -127,8 +129,7 @@ class DBConnector():
       room_temp=room_temp,
       preferment_temp=preferment_temp,
       water_temp=water_temp,
-      flour_temp=flour_temp,
-      notes=None  # This field isn't in the database
+      flour_temp=flour_temp
     )
 
   # if there are any updates needed to be made

@@ -17,6 +17,7 @@ class MakeNames(Enum):
 
 MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
 
+# Updates
 class DoughMakeUpdate(BaseModel):
     # Make all fields optional by using Optional
     autolyse: Optional[datetime] = None
@@ -25,15 +26,13 @@ class DoughMakeUpdate(BaseModel):
     preshape: Optional[datetime] = None
     final_shape: Optional[datetime] = None
     fridge: Optional[datetime] = None
- 
+
     room_temp: Optional[float] = None
     preferment_temp: Optional[float] = None
     water_temp: Optional[float] = None
     flour_temp: Optional[float] = None
- 
-    notes: Optional[str] = None
 
-# Request sent
+# New request
 class DoughMakeRequest(BaseModel):
   # Times needed to store 
   autolyse: datetime
@@ -48,8 +47,6 @@ class DoughMakeRequest(BaseModel):
   preferment_temp: int | None = None
   water_temp: int | None = None
   flour_temp: int | None = None
-
-  notes: str | None = None
 
 class DoughMake(DoughMakeRequest):
   name: str
