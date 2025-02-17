@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from datetime import date, datetime
 from db import DBConnector
-from models import DoughMake, DoughMakeRequest, MAKE_NAMES
+from exceptions import DatabaseError
+from models import DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES
 
 import logging
 
@@ -15,7 +16,6 @@ logger.setLevel(logging.DEBUG)
 logger.info("app brought up")
 
 # Create make entries within the DB table 
-# TODO: update endpoint to just /makes because the date and make_name are within the request body
 @app.post("/makes/{year}/{month}/{day}/{make_name}")
 def create_make(year: int, month: int, day: int, make_name: str, dough_make_req: DoughMakeRequest) -> None:
   date = validate_date(year, month, day)
@@ -41,37 +41,60 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
 
   return
 
-@app.patch("/makes/{year}/{month}/{day}/{make_name}")
-def update_make(make_name: str, year: int, month: int, day: int, dough_make: DoughMakeRequest) -> int:
+
+@app.patch("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
+def update_make(make_name: str, make_num: int, year: int, month: int, day: int, updates: DoughMakeUpdate):
   """
   Updates the dough_make {make_name} that was made on {date}
   """
   date = validate_date(year, month, day)
 
-  old_dough_make = get_make(make_name, year, month, day)
-  if not old_dough_make:
-    raise HTTPException(status_code=404, detail=f"Make {dough_make} for {str(date)} not found")
-  # get diff
-  # perform inserts on teh diff fields
-  make_id = db_conn.insert_dough_make(dough_make)
-  # we should return the same make_id as before since we're not creating a new entry, disagree. we should just not return make_id
-  return make_id
+  existing_make = get_make(make_name, make_num, year, month, day)
+  if not existing_make:
+    raise HTTPException(status_code=404, detail=f"Dough Make for {make_name} #{make_num} on {str(date)} not found")
+ 
+      # Convert the updates to a dictionary, excluding None values
+  update_data = updates.model_dump(exclude_none=True)
+ 
+  if not update_data:
+    raise HTTPException(
+      status_code=400,
+      detail="No valid fields to update were provided"
+    )
+  try:
+    db_conn.update_dough_make(
+      make_name=make_name,
+      make_date=date,
+      make_num=make_num,
+      updates=update_data
+    )
+  except DatabaseError as e:
+    raise HTTPException(
+      status_code=500,
+      detail=f"Database error: {e.message}"
+    )
+  except Exception as e:
+    raise HTTPException(
+      status_code=500,
+      detail=f"Unexpected error occurred: {str(e)}"
+    )
 
-@app.get("/makes/{year}/{month}/{day}/{make_name}")
-def get_make(make_name: str, year: int, month: int, day: int):
+
+@app.get("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
+def get_make(make_name: str, make_num: int, year: int, month: int, day: int):
   """
   Retrieves the dough_make that have {make_name} for made on {date}
   """
   date = validate_date(year, month, day)
 
-  logger.info(f"Getting make: {make_name} for date: {str(date)}")
+  logger.info(f"Getting dough make: {make_name} #{make_num} for date: {str(date)}")
 
   # check that make_name is valid
   if make_name not in MAKE_NAMES:
     raise HTTPException(status_code=400, detail=f"The make name must be one of these {MAKE_NAMES}")
 
-  dough_make = db_conn.get_dough_make(date, make_name)
-  logger.info(f"Make retrieved: {dough_make}")
+  dough_make = db_conn.get_dough_make(date, make_name, make_num)
+  logger.info(f"Make retrieved")
   if not dough_make:
     raise HTTPException(status_code=404, detail=f"Make doesn't exist")
   return dough_make

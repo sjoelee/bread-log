@@ -1,6 +1,7 @@
 from datetime import date, datetime
-from pydantic import BaseModel
 from enum import Enum
+from pydantic import BaseModel
+from typing import Optional
 
 class MakeNames(Enum):
   # Sticks
@@ -15,6 +16,22 @@ class MakeNames(Enum):
   TEAM_C = "team_c"
 
 MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
+
+class DoughMakeUpdate(BaseModel):
+    # Make all fields optional by using Optional
+    autolyse: Optional[datetime] = None
+    start: Optional[datetime] = None
+    pull: Optional[datetime] = None
+    preshape: Optional[datetime] = None
+    final_shape: Optional[datetime] = None
+    fridge: Optional[datetime] = None
+ 
+    room_temp: Optional[float] = None
+    preferment_temp: Optional[float] = None
+    water_temp: Optional[float] = None
+    flour_temp: Optional[float] = None
+ 
+    notes: Optional[str] = None
 
 # Request sent
 class DoughMakeRequest(BaseModel):
