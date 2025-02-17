@@ -1,30 +1,22 @@
 DROP FUNCTION IF EXISTS reset_daily_make_num();
-
+DROP TRIGGER IF EXISTS reset_make_num_trigger ON dough_makes;
 -- Create a function to reset sequence daily
 CREATE OR REPLACE FUNCTION reset_daily_make_num()
 RETURNS TRIGGER AS $$
 DECLARE
-    curr_date DATE;
-    last_make_date DATE;
+    next_num INTEGER;
 BEGIN
-    -- Debug logging
-    RAISE NOTICE 'New make_date: %', NEW.make_date;
-    
-    curr_date := NEW.make_date;
-    
-    SELECT make_date, make_num 
-    INTO last_make_date, max_num
+    -- Find the highest make_num for this dough and date
+    SELECT COALESCE(MAX(make_num) + 1, 1)
+    INTO next_num
     FROM dough_makes 
     WHERE dough_name = NEW.dough_name 
-    ORDER BY make_date DESC, make_num DESC 
-    LIMIT 1;
+        AND make_date = NEW.make_date;
     
-    RAISE NOTICE 'Last make_date: %, max_num: %', last_make_date, max_num;
+    -- Directly set the new make_num
+    NEW.make_num := next_num;
     
-    IF last_make_date IS NULL OR curr_date > last_make_date THEN
-        RAISE NOTICE 'Resetting sequence';
-        ALTER SEQUENCE daily_make_num RESTART WITH 1;
-    END IF;
+    RAISE NOTICE 'Setting make_num to % for % on %', next_num, NEW.dough_name, NEW.make_date;
     
     RETURN NEW;
 END;
