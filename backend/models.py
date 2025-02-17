@@ -16,12 +16,8 @@ class MakeNames(Enum):
 
 MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
 
-
-class DoughMake(BaseModel):
-  # company = str # replace with user_id
-  name: str # name of the make
-  date: date # date of when the dough is made
-
+# Request sent
+class DoughMakeRequest(BaseModel):
   # Times needed to store 
   autolyse: datetime
   start: datetime
@@ -37,3 +33,8 @@ class DoughMake(BaseModel):
   flour_temp: int | None = None
 
   notes: str | None = None
+
+class DoughMake(DoughMakeRequest):
+  name: str
+  date: date
+  num: int # accounts for multiple makes of the same dough on the same day

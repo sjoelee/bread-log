@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from datetime import date, datetime
 from db import DBConnector
-from models import DoughMake, MAKE_NAMES
+from models import DoughMake, DoughMakeRequest, MAKE_NAMES
 
 import logging
 
@@ -16,9 +16,15 @@ logger.info("app brought up")
 
 # Create make entries within the DB table 
 # TODO: update endpoint to just /makes because the date and make_name are within the request body
-@app.post("/makes/{date}/{make_name}")
-def create_make(date: str, make_name: str, dough_make: DoughMake) -> int:
-  dough_make.name = make_name
+@app.post("/makes/{year}/{month}/{day}/{make_name}")
+def create_make(year: int, month: int, day: int, make_name: str, dough_make_req: DoughMakeRequest) -> int:
+  date = validate_date(year, month, day)
+  dough_make = DoughMake(
+    name=make_name,
+    date=date,
+    num=0, #TODO: autoincrement
+    **dough_make_req.model_dump()
+  )
   def validate_dough_make(dough_make: DoughMake):
     if dough_make.start < dough_make.autolyse:
         raise ValueError("Start time must be after autolyse time")
@@ -36,27 +42,30 @@ def create_make(date: str, make_name: str, dough_make: DoughMake) -> int:
 
   return make_id
 
-@app.patch("/makes/{date}/{make_name}")
-def update_make(make_name: str, date: str, dough_make: DoughMake) -> int:
+@app.patch("/makes/{year}/{month}/{day}/{make_name}")
+def update_make(make_name: str, year: int, month: int, day: int, dough_make: DoughMakeRequest) -> int:
   """
   Updates the dough_make {make_name} that was made on {date}
   """
-  # look 
-  old_dough_make = get_make(make_name, date)
-  dough_make
-  pass
+  date = validate_date(year, month, day)
 
-@app.get("/makes/{date}/{make_name}")
-def get_make(make_name: str, date: str):
+  old_dough_make = get_make(make_name, year, month, day)
+  if not old_dough_make:
+    raise HTTPException(status_code=404, detail=f"Make {dough_make} for {str(date)} not found")
+  # get diff
+  # perform inserts on teh diff fields
+  make_id = db_conn.insert_dough_make(dough_make)
+  # we should return the same make_id as before since we're not creating a new entry
+  return make_id
+
+@app.get("/makes/{year}/{month}/{day}/{make_name}")
+def get_make(make_name: str, year: int, month: int, day: int):
   """
   Retrieves the dough_make that have {make_name} for made on {date}
   """
-  logger.info(f"Getting make: {make_name} for date: {date}")
-  # check that date is valid
-  try:
-    validate_date(date)
-  except Exception as e:
-    raise HTTPException(status_code=400, detail=f"Wrong date format")
+  date = validate_date(year, month, day)
+
+  logger.info(f"Getting make: {make_name} for date: {str(date)}")
 
   # check that make_name is valid
   if make_name not in MAKE_NAMES:
@@ -87,10 +96,13 @@ def get_makes_for_date(date: str):
   """
   pass
 
-def validate_date(date: str, date_format: str="%Y-%m-%d"):
+def validate_date(year: int, month: int, day: int) -> date:
+  assert 1985 <= year, "Year must be valid"
+  assert 1 <= month <= 12, "Month must be valid"
+  assert 0 < day < 31, "Day must be valid"
+  
+  # Custom checks
   try: 
-    parsed_date = datetime.strptime(date, date_format)
-    # ensure that year is valid
-    return True
+    return datetime(year, month, day).date()
   except:
     return False
