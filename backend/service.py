@@ -52,10 +52,10 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
   existing_make = get_make(make_name, make_num, year, month, day)
   if not existing_make:
     raise HTTPException(status_code=404, detail=f"Dough Make for {make_name} #{make_num} on {str(date)} not found")
- 
+
       # Convert the updates to a dictionary, excluding None values
   update_data = updates.model_dump(exclude_none=True)
- 
+
   if not update_data:
     raise HTTPException(
       status_code=400,
