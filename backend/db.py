@@ -56,7 +56,7 @@ class DBConnector():
     table = 'dough_makes'
     insert_data = {
       'dough_name': dough_make.name,
-      'make_date': dough_make.date,  # Extract just the date part
+      'make_date': dough_make.date,
       'room_temp': dough_make.room_temp,
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
@@ -89,7 +89,7 @@ class DBConnector():
       raise  # Re-raise the exception after printing it
 
 
-  def get_dough_make(self, date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
+  def get_dough_make(self, make_date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
     sql = """
         SELECT dough_name, make_date, room_temp, water_temp,
                flour_temp, preferment_temp, start_ts, autolyse_ts,
@@ -97,7 +97,7 @@ class DBConnector():
         FROM dough_makes
         WHERE make_date = %s AND dough_name = %s AND make_num = %s;
     """
-    values = (date, make_name, make_num)
+    values = (make_date, make_name, make_num)
     try: 
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
@@ -109,7 +109,7 @@ class DBConnector():
     if res is None:
       return None
  
-    logger.info(f"Retrieved make {make_name} for {date}")
+    logger.info(f"Retrieved make {make_name} for {make_date}")
     (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts) = res
 
     room_temp = int(room_temp) if room_temp else None
@@ -133,7 +133,7 @@ class DBConnector():
     )
 
   # if there are any updates needed to be made
-  def update_dough_make(self, make_name: str, make_date: date, make_num: int, updates: dict):
+  def update_dough_make(self, make_date: date, make_name: str, make_num: int, updates: dict):
     """
     Updates only the specified fields for a dough make.
     
@@ -166,6 +166,30 @@ class DBConnector():
     except Exception as e:
       logger.error(f"Error updating dough make: {str(e)}")
       raise DatabaseError(f"Error updating dough make: {e}")
+  
+
+  def delete_dough_make(self, make_date: date, make_name: str, make_num: int):
+    """
+    Deletes a specific dough make by name, date, and num
+    """
+    query = f"""
+        DELETE FROM dough_makes
+        WHERE dough_name = %s
+        AND make_date = %s
+        AND make_num = %s
+    """
+    params = [make_name, make_date, make_num]
+    logger.debug(f'SQL Command\n {query}')
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          if cur.rowcount == 0:
+            raise DatabaseError(f"No dough make found with name {make_name} #{make_num} on {make_date}")
+          conn.commit()
+    except Exception as e:
+      raise DatabaseError(f"{e}")
+
 
 # testing
 if __name__ == '__main__':

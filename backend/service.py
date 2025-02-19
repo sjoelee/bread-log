@@ -63,8 +63,8 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
     )
   try:
     db_conn.update_dough_make(
-      make_name=make_name,
       make_date=date,
+      make_name=make_name,
       make_num=make_num,
       updates=update_data
     )
@@ -99,9 +99,22 @@ def get_make(make_name: str, make_num: int, year: int, month: int, day: int):
     raise HTTPException(status_code=404, detail=f"Make doesn't exist")
   return dough_make
 
-@app.delete("/makes/{date}/{make_name}")
-def delete_make(make_name: str, date: str):
-  pass
+
+@app.delete("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
+def delete_make(make_name: str, make_num: int, year: int, month: int, day: int):
+  date = validate_date(year, month, day)
+  
+  logger.info(f"Deleting dough make: {make_name} #{make_num} for date: {str(date)}")
+  try:
+    db_conn.delete_dough_make(date, make_name, make_num)
+  except DatabaseError as e:
+    logger.error(f"Error deleting dough make ({make_name} #{make_num}): {str(e)}")
+    raise HTTPException(
+      status_code=400,
+      detail=f"Database error: {e.message}"
+    )
+  logger.info(f"Make deleted")
+
 
 
 @app.get("/makes/{make_name}")
