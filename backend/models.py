@@ -6,14 +6,11 @@ from typing import Optional
 class MakeNames(Enum):
   # Sticks
   DEMI_BAGUETTE = "demi_baguette"
-  HOAGIE_A = "hoagie_a"
-  HOAGIE_B = "hoagie_b"
+  HOAGIE = "hoagie"
 
   # Sourdough
   UBE = "ube"
-  TEAM_A = "team_a"
-  TEAM_B = "team_b"
-  TEAM_C = "team_c"
+  TEAM = "team"
 
 MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
 
