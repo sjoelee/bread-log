@@ -45,10 +45,6 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
   date = validate_date(year, month, day)
 
   try:
-    existing_make = get_make(make_name, make_num, year, month, day)
-    if not existing_make:
-      raise HTTPException(status_code=404, detail=f"Dough Make for {make_name} #{make_num} on {str(date)} not found")
-
     # Convert the updates to a dictionary, excluding None values
     update_data = updates.model_dump(exclude_none=True)
     if not update_data:
@@ -56,12 +52,25 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
         status_code=400,
         detail="No valid fields to update were provided"
       )
-    # TODO: ensure that with the updates, the updated dough make is still valid
+
+    existing_make = get_make(make_name, make_num, year, month, day).model_dump(exclude_none=True)
+    # Add logging to see the data structure
+    logger.info(f"Existing make data: {existing_make}")
+    logger.info(f"Update data: {update_data}")
+    logger.info(f"Combined data: {{**existing_make, **update_data}}")
+    updated_make = DoughMake(**{**existing_make, **update_data})
+    validate_dough_make(updated_make)
+    logger.info(f"Updating make to {updated_make.model_dump()}")
     db_conn.update_dough_make(
       make_date=date,
       make_name=make_name,
       make_num=make_num,
       updates=update_data
+    )
+  except ValueError as e:  # Add this before DatabaseError
+    raise HTTPException(
+        status_code=400,
+        detail=f"Validation error: {str(e)}"
     )
   except DatabaseError as e:
     raise HTTPException(
@@ -150,11 +159,12 @@ def validate_dough_make(make: DoughMake) -> bool:
       if ts1 >= ts2:
           raise ValueError(f"{earlier_name} time must occur before {later_name} time")
 
-  def validate_timestamps(autolyse_ts, start_ts, pull_ts, preshape_ts, fridge_ts):
+  def validate_timestamps(autolyse_ts, start_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts):
       validate_timestamp_order(autolyse_ts, start_ts, "Autolyse", "Start")
       validate_timestamp_order(start_ts, pull_ts, "Start", "Pull")
       validate_timestamp_order(pull_ts, preshape_ts, "Pull", "Preshape")
-      validate_timestamp_order(preshape_ts, fridge_ts, "Preshape", "Fridge")
+      validate_timestamp_order(preshape_ts, final_shape_ts, "Preshape", "Final shape")
+      validate_timestamp_order(final_shape_ts, fridge_ts, "Final shape", "Fridge")
       return True
   
-  return True if validate_timestamps(make.autolyse, make.start, make.pull, make.preshape, make.fridge) else False
+  return True if validate_timestamps(make.autolyse_ts, make.start_ts, make.pull_ts, make.preshape_ts, make.final_shape_ts, make.fridge_ts) else False
