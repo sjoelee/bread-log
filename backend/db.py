@@ -106,16 +106,10 @@ class DBConnector():
     except Exception as e:
       logger.error(f"Error getting entry: {str(e)}")
     
-    if res is None:
-      return None
- 
-    logger.info(f"Retrieved make {make_name} for {make_date}")
+    if not res:
+      raise DatabaseError(f"Dough make {make_name} #{make_num} on {make_date} doesn't exist")
     (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts) = res
-
-    room_temp = int(room_temp) if room_temp else None
-    water_temp = int(water_temp) if water_temp else None
-    flour_temp = int(flour_temp) if flour_temp else None
-    preferment_temp = int(preferment_temp) if preferment_temp else None
+    logger.info(f"Retrieved make {make_name} for {make_date}")
 
     return DoughMake(
       name=dough_name,
@@ -126,10 +120,10 @@ class DBConnector():
       preshape=preshape_ts,
       final_shape=final_shape_ts,
       fridge=fridge_ts,
-      room_temp=room_temp,
-      preferment_temp=preferment_temp,
-      water_temp=water_temp,
-      flour_temp=flour_temp
+      room_temp=int(room_temp) if room_temp else None,
+      preferment_temp=int(preferment_temp) if preferment_temp else None,
+      water_temp=int(water_temp) if water_temp else None,
+      flour_temp=int(flour_temp) if flour_temp else None
     )
 
   # if there are any updates needed to be made

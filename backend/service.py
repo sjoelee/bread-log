@@ -24,17 +24,12 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
     date=date,
     **dough_make_req.model_dump()
   )
-  def validate_dough_make(dough_make: DoughMake):
-    if dough_make.start < dough_make.autolyse:
-        raise ValueError("Start time must be after autolyse time")
+
   logger.info(f"Inserting dough make: {dough_make.name}")
   try: 
     validate_dough_make(dough_make)
     db_conn.insert_dough_make(dough_make)
     logger.info(f"Successfully inserted dough make")
-  except ValueError as e:
-    logger.error(f"Validation error: {e}")
-    raise HTTPException(status_code=400, detail=str(e))
   except Exception as e:
     logger.error("Error ocurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
@@ -49,19 +44,19 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
   """
   date = validate_date(year, month, day)
 
-  existing_make = get_make(make_name, make_num, year, month, day)
-  if not existing_make:
-    raise HTTPException(status_code=404, detail=f"Dough Make for {make_name} #{make_num} on {str(date)} not found")
-
-      # Convert the updates to a dictionary, excluding None values
-  update_data = updates.model_dump(exclude_none=True)
-
-  if not update_data:
-    raise HTTPException(
-      status_code=400,
-      detail="No valid fields to update were provided"
-    )
   try:
+    existing_make = get_make(make_name, make_num, year, month, day)
+    if not existing_make:
+      raise HTTPException(status_code=404, detail=f"Dough Make for {make_name} #{make_num} on {str(date)} not found")
+
+    # Convert the updates to a dictionary, excluding None values
+    update_data = updates.model_dump(exclude_none=True)
+    if not update_data:
+      raise HTTPException(
+        status_code=400,
+        detail="No valid fields to update were provided"
+      )
+    # TODO: ensure that with the updates, the updated dough make is still valid
     db_conn.update_dough_make(
       make_date=date,
       make_name=make_name,
@@ -87,16 +82,24 @@ def get_make(make_name: str, make_num: int, year: int, month: int, day: int):
   """
   date = validate_date(year, month, day)
 
-  logger.info(f"Getting dough make: {make_name} #{make_num} for date: {str(date)}")
-
-  # check that make_name is valid
+  # separate the application logic from DB logic. This service app doesn't know how many makes there are for a specific dough on a given date. But it knows what's an allowed name.
   if make_name not in MAKE_NAMES:
     raise HTTPException(status_code=400, detail=f"The make name must be one of these {MAKE_NAMES}")
 
-  dough_make = db_conn.get_dough_make(date, make_name, make_num)
+  logger.info(f"Getting dough make: {make_name} #{make_num} for date: {str(date)}")
+  try:
+    dough_make = db_conn.get_dough_make(date, make_name, make_num)
+  except DatabaseError as e:
+    raise HTTPException(
+      status_code=400,
+      detail=f"Database error: {e.message}"
+    )
+  except Exception as e:
+    raise HTTPException(
+      status_code=500,
+      detail=f"Unexpected error ocurred: {str(e)}"
+    )
   logger.info(f"Make retrieved")
-  if not dough_make:
-    raise HTTPException(status_code=404, detail=f"Make doesn't exist")
   return dough_make
 
 
@@ -141,3 +144,17 @@ def validate_date(year: int, month: int, day: int) -> date:
     return datetime(year, month, day).date()
   except:
     return False
+
+def validate_dough_make(make: DoughMake) -> bool:
+  def validate_timestamp_order(ts1, ts2, earlier_name, later_name):
+      if ts1 >= ts2:
+          raise ValueError(f"{earlier_name} time must occur before {later_name} time")
+
+  def validate_timestamps(autolyse_ts, start_ts, pull_ts, preshape_ts, fridge_ts):
+      validate_timestamp_order(autolyse_ts, start_ts, "Autolyse", "Start")
+      validate_timestamp_order(start_ts, pull_ts, "Start", "Pull")
+      validate_timestamp_order(pull_ts, preshape_ts, "Pull", "Preshape")
+      validate_timestamp_order(preshape_ts, fridge_ts, "Preshape", "Fridge")
+      return True
+  
+  return True if validate_timestamps(make.autolyse, make.start, make.pull, make.preshape, make.fridge) else False
