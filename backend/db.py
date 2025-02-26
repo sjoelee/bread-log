@@ -44,7 +44,7 @@ class DatabasePool:
   def close(self):
     self.pool.close()
 
-class DBConnector():
+class DBConnector:
   USER = 'sammylee'
   def __init__(self, dbname):
     self.user = DBConnector.USER
