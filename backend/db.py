@@ -61,12 +61,12 @@ class DBConnector:
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
       'preferment_temp': dough_make.preferment_temp,
-      'start_ts': dough_make.start,
-      'pull_ts': dough_make.pull,
-      'preshape_ts': dough_make.preshape,
-      'final_shape_ts': dough_make.final_shape,
-      'fridge_ts': dough_make.fridge,
-      'autolyse_ts': dough_make.autolyse,
+      'autolyse_ts': dough_make.autolyse_ts,
+      'start_ts': dough_make.start_ts,
+      'pull_ts': dough_make.pull_ts,
+      'preshape_ts': dough_make.preshape_ts,
+      'final_shape_ts': dough_make.final_shape_ts,
+      'fridge_ts': dough_make.fridge_ts,
     }
     # maybe add first fermentation and second fermentation
     insert_data = {k: v for k, v in insert_data.items() if v is not None}
