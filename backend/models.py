@@ -5,7 +5,7 @@ from typing import Optional
 
 class MakeNames(Enum):
   # Sticks
-  DEMI_BAGUETTE = "demi_baguette"
+  DEMI_BAGUETTE = "demi"
   HOAGIE = "hoagie"
 
   # Sourdough
