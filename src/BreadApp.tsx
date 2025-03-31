@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { Dayjs } from 'dayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 
 // Types
 interface DoughProcess {
   step: string;
   time: string;
-  amPm: 'AM' | 'PM';
 }
 
 interface BreadFormData {
@@ -36,11 +37,11 @@ const BreadApp = () => {
       doughTemp: '68F',
     },
     processes: [
-      { step: 'Autolyse', time: '', amPm: 'AM' },
-      { step: 'Start', time: '', amPm: 'AM' },
-      { step: 'Pull', time: '', amPm: 'AM' },
-      { step: 'Preshape', time: '', amPm: 'AM' },
-      { step: 'Fridge', time: '', amPm: 'AM' },
+      { step: 'Autolyse', time: ''},
+      { step: 'Start', time: ''},
+      { step: 'Pull', time: ''},
+      { step: 'Preshape', time: ''},
+      { step: 'Fridge', time: ''},
     ],
     notes: '',
   });
@@ -48,6 +49,7 @@ const BreadApp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [value, setValue] = React.useState<Dayjs | null>(null);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -86,8 +88,9 @@ const BreadApp = () => {
 
   // Show time picker
   const showTimePicker = (index: number) => {
+    <TimePicker label="Basic time picker" />
     // In a real implementation, this would open a time picker
-    alert(`Show time picker for ${formData.processes[index].step}`);
+    // alert(`Show time picker for ${formData.processes[index].step}`);
   };
 
   // Submit form data
@@ -96,16 +99,29 @@ const BreadApp = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    
+    // Determine API endpoint based on environment
+    const isDevelopment = window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
 
+    const apiBaseUrl = isDevelopment
+      ? 'http://localhost:8000'
+      : 'https://your-production-api.com';
+
+    const endpoint = `${apiBaseUrl}`;
+
+    const requestBody = JSON.stringify(formData, null, 2);
+    console.log('Request Body: ', requestBody)
     try {
       // Replace with your actual API endpoint
-      const response = await fetch('https://your-api-endpoint.com/bread-tracker', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(formData),
       });
+      console.log('Response Status:', response.status);
 
       if (response.ok) {
         setSuccess(true);
@@ -126,6 +142,7 @@ const BreadApp = () => {
     // Implementation for adding new dough records
     alert('Add new dough functionality would be implemented here');
   };
+  // TODO: API get call to retrieve list of makes.
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
@@ -135,14 +152,7 @@ const BreadApp = () => {
           <div className="w-1/2">
             <label className="block text-sm font-medium mb-1">Date</label>
             <div className="relative">
-              <input
-                type="date"
-                name="date"
-                value={formData.date}
-                onChange={handleInputChange}
-                className="w-full border rounded p-2 pl-8"
-              />
-              <Calendar className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+              <DatePicker value={value} onChange={(newValue) => setValue(newValue)} />
             </div>
           </div>
 
@@ -245,35 +255,8 @@ const BreadApp = () => {
 
               <div className="w-1/2 pr-2">
                 <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Time"
-                    value={process.time}
-                    onChange={(e) => handleProcessChange(index, 'time', e.target.value)}
-                    className="w-full border rounded p-2 pl-8"
-                  />
-                  <Clock
-                    className="absolute left-2 top-2.5 h-4 w-4 text-gray-500 cursor-pointer"
-                    onClick={() => showTimePicker(index)}
-                  />
+                  <TimePicker label="Basic time picker" />
                 </div>
-              </div>
-
-              <div className="w-1/4 flex">
-                <button
-                  type="button"
-                  className={`w-1/2 border rounded-l p-2 text-sm ${process.amPm === 'AM' ? 'bg-blue-100 border-blue-300' : ''}`}
-                  onClick={() => handleProcessChange(index, 'amPm', 'AM')}
-                >
-                  AM
-                </button>
-                <button
-                  type="button"
-                  className={`w-1/2 border-t border-r border-b rounded-r p-2 text-sm ${process.amPm === 'PM' ? 'bg-blue-100 border-blue-300' : ''}`}
-                  onClick={() => handleProcessChange(index, 'amPm', 'PM')}
-                >
-                  PM
-                </button>
               </div>
             </div>
           ))}
