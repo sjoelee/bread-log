@@ -1,47 +1,55 @@
 import React, { useState } from 'react';
-import { Calendar, Clock } from 'lucide-react';
-import { Dayjs } from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 
-// Types
+enum TemperatureUnit {
+  CELSIUS = 'C',
+  FAHRENHEIT = 'F'
+}
+
+interface TemperatureSettings {
+  unit: TemperatureUnit;
+  roomTemp: number;
+  flourTemp: number;
+  prefermentTemp: number;
+  waterTemp: number;
+  doughTemp: number;
+}
+
 interface DoughProcess {
   step: string;
-  time: string;
+  time: Dayjs | null;
 }
 
 interface BreadFormData {
-  date: string;
+  date: Dayjs | null;
   teamMake: string;
-  temperatures: {
-    roomTemp: string;
-    flourTemp: string;
-    prefermentTemp: string;
-    waterTemp: string;
-    doughTemp: string;
-  };
+  temperatures: TemperatureSettings;
   processes: DoughProcess[];
   notes: string;
 }
 
+const initialTempSettings: TemperatureSettings = {
+  unit: TemperatureUnit.FAHRENHEIT,
+  roomTemp: 65,
+  flourTemp: 65,
+  prefermentTemp: 76,
+  waterTemp: 45,
+  doughTemp: 76,
+};
+
 const BreadApp = () => {
-  // Initial form state
   const [formData, setFormData] = useState<BreadFormData>({
-    date: new Date().toISOString().split('T')[0],
+    date: dayjs(),
     teamMake: 'Team Make #1',
-    temperatures: {
-      roomTemp: '68F',
-      flourTemp: '68F',
-      prefermentTemp: '68F',
-      waterTemp: '68F',
-      doughTemp: '68F',
-    },
+    temperatures: initialTempSettings,
     processes: [
-      { step: 'Autolyse', time: ''},
-      { step: 'Start', time: ''},
-      { step: 'Pull', time: ''},
-      { step: 'Preshape', time: ''},
-      { step: 'Fridge', time: ''},
+      { step: 'Autolyse', time: null },
+      { step: 'Start', time: null },
+      { step: 'Pull', time: null },
+      { step: 'Preshape', time: null },
+      { step: 'Fridge', time: null },
     ],
     notes: '',
   });
@@ -49,9 +57,30 @@ const BreadApp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [value, setValue] = React.useState<Dayjs | null>(null);
 
-  // Handle input changes
+  // Toggle temperature unit
+  const toggleTemperatureUnit = (unit: TemperatureUnit) => {
+    const currentUnit = formData.temperatures.unit;
+    if (unit === currentUnit) return;
+
+    const convertedTemps = {
+      roomTemp: convertTemperature(formData.temperatures.roomTemp, currentUnit, unit),
+      flourTemp: convertTemperature(formData.temperatures.flourTemp, currentUnit, unit),
+      prefermentTemp: convertTemperature(formData.temperatures.prefermentTemp, currentUnit, unit),
+      waterTemp: convertTemperature(formData.temperatures.waterTemp, currentUnit, unit),
+      doughTemp: convertTemperature(formData.temperatures.doughTemp, currentUnit, unit),
+    };
+
+    setFormData({
+      ...formData,
+      temperatures: {
+        ...formData.temperatures,
+        ...convertedTemps,
+        unit
+      }
+    });
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -60,74 +89,90 @@ const BreadApp = () => {
     }));
   };
 
-  // Handle temperature field changes
-  const handleTempChange = (field: keyof BreadFormData['temperatures'], value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      temperatures: {
-        ...prev.temperatures,
-        [field]: value,
-      },
-    }));
-  };
-
-  // Handle process field changes
-  const handleProcessChange = (index: number, field: keyof DoughProcess, value: string) => {
-    setFormData((prev) => {
-      const updatedProcesses = [...prev.processes];
-      updatedProcesses[index] = {
-        ...updatedProcesses[index],
-        [field]: value,
-      };
-      return {
-        ...prev,
-        processes: updatedProcesses,
-      };
+  const handleDateChange = (newDate: Dayjs | null) => {
+    setFormData({
+      ...formData,
+      date: newDate
     });
   };
 
-  // Show time picker
-  const showTimePicker = (index: number) => {
-    <TimePicker label="Basic time picker" />
-    // In a real implementation, this would open a time picker
-    // alert(`Show time picker for ${formData.processes[index].step}`);
+  const handleTempChange = (field: keyof Omit<TemperatureSettings, 'unit'>, value: string) => {
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) || value === '') {
+      setFormData((prev) => ({
+        ...prev,
+        temperatures: {
+          ...prev.temperatures,
+          [field]: value === '' ? '' : numValue,
+        },
+      }));
+    }
   };
 
-  // Submit form data
+  const handleTimeChange = (index: number, newTime: Dayjs | null) => {
+    const updatedProcesses = [...formData.processes];
+    updatedProcesses[index] = {
+      ...updatedProcesses[index],
+      time: newTime
+    };
+
+    setFormData({
+      ...formData,
+      processes: updatedProcesses
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
     // Determine API endpoint based on environment
     const isDevelopment = window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
-
+ 
     const apiBaseUrl = isDevelopment
-      ? 'http://localhost:8000'
+      ? 'http://localhost:8000/makes/2025/04/05/demi' //hardcoded, will need to update based on date and make
       : 'https://your-production-api.com';
-
+      
     const endpoint = `${apiBaseUrl}`;
+    // Create API payload
+    const apiPayload = {
+      // Combine date and time for each process step
+      autolyse_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Autolyse')?.time ?? null),
+      start_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Start')?.time ?? null),
+      pull_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Pull')?.time ?? null),
+      preshape_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Preshape')?.time ?? null),
+      fridge_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Fridge')?.time ?? null),
 
-    const requestBody = JSON.stringify(formData, null, 2);
-    console.log('Request Body: ', requestBody)
+      // Temperature values
+      room_temp: formData.temperatures.roomTemp,
+      flour_temp: formData.temperatures.flourTemp,
+      preferment_temp: formData.temperatures.prefermentTemp,
+      water_temp: formData.temperatures.waterTemp,
+      dough_temp: formData.temperatures.doughTemp,
+
+      // Include temperature unit
+      temp_unit: formData.temperatures.unit,
+
+      team_make: formData.teamMake,
+      notes: formData.notes
+    };
+
     try {
-      // Replace with your actual API endpoint
+      console.log('Submitting form data:', apiPayload);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'appliation/json',
         },
-        body: JSON.stringify(formData),
-      });
-      console.log('Response Status:', response.status);
-
+        body: JSON.stringify(apiPayload),
+      })
       if (response.ok) {
-        setSuccess(true);
-        // Optionally reset form or redirect
+      // API call would go here
+      setSuccess(true);
       } else {
-        throw new Error('Server responded with an error');
+        setError('Server responded with an error');
       }
     } catch (err) {
       setError('Failed to submit form. Please try again.');
@@ -137,23 +182,33 @@ const BreadApp = () => {
     }
   };
 
-  // Add new dough make
+  // Helper function to combine date and time into a timestamp for backend
+  const combineDateTime = (date: Dayjs | null, time: Dayjs | null): string | null => {
+    if (!date || !time) return null;
+
+    // Create a new Dayjs object with the date from formData.date and time from process.time
+    const combinedDateTime = date.hour(time.hour()).minute(time.minute()).second(0);
+
+    // Format as ISO string for the backend
+    return combinedDateTime.toISOString();
+  };
+
   const addNewDough = () => {
-    // Implementation for adding new dough records
     alert('Add new dough functionality would be implemented here');
   };
-  // TODO: API get call to retrieve list of makes.
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
+    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
       <form onSubmit={handleSubmit}>
         {/* Date and Team Make Row */}
         <div className="flex gap-4 mb-6">
           <div className="w-1/2">
             <label className="block text-sm font-medium mb-1">Date</label>
-            <div className="relative">
-              <DatePicker value={value} onChange={(newValue) => setValue(newValue)} />
-            </div>
+            <DatePicker
+              value={formData.date}
+              onChange={handleDateChange}
+              slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+            />
           </div>
 
           <div className="w-1/2">
@@ -170,7 +225,7 @@ const BreadApp = () => {
                 <option>Team Make #3</option>
               </select>
               <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </span>
@@ -185,8 +240,34 @@ const BreadApp = () => {
           </div>
         </div>
 
-        {/* Temperature Fields */}
-        <div className="mb-6">
+        {/* Temperature Fields with F/C toggle */}
+        <div className="mb-6 p-4 border rounded-lg">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-medium">Temperatures</h3>
+            <div className="inline-flex rounded-md shadow-sm" role="group">
+              <button
+                type="button"
+                onClick={() => toggleTemperatureUnit(TemperatureUnit.FAHRENHEIT)}
+                className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${formData.temperatures.unit === TemperatureUnit.FAHRENHEIT
+                    ? 'bg-gray-200 text-gray-700'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                F
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleTemperatureUnit(TemperatureUnit.CELSIUS)}
+                className={`px-4 py-2 text-sm font-medium rounded-r-lg border-t border-b border-r ${formData.temperatures.unit === TemperatureUnit.CELSIUS
+                    ? 'bg-gray-200 text-gray-700'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                C
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-5 gap-2">
             {/* Room Temp */}
             <div>
@@ -212,7 +293,7 @@ const BreadApp = () => {
 
             {/* Preferment Temp */}
             <div>
-              <label className="block text-sm font-medium mb-1 text-center">Preferment Temp</label>
+              <label className="block text-sm font-medium mb-1 text-center">Preferment</label>
               <input
                 type="text"
                 value={formData.temperatures.prefermentTemp}
@@ -245,18 +326,26 @@ const BreadApp = () => {
           </div>
         </div>
 
-        {/* Process Steps */}
+        {/* Process Steps - Realigned as per mockup */}
         <div className="space-y-6 mb-6">
           {formData.processes.map((process, index) => (
-            <div key={index} className="flex items-center">
-              <div className="w-1/4">
-                <span className="font-medium">{process.step}:</span>
+            <div key={index} className="flex justify-between items-center">
+              <div className="w-1/3">
+                <span className="font-medium">{process.step}</span>
               </div>
 
-              <div className="w-1/2 pr-2">
-                <div className="relative">
-                  <TimePicker label="Basic time picker" />
-                </div>
+              <div className="w-2/3">
+                <TimePicker
+                  label="Time"
+                  value={process.time}
+                  onChange={(newTime) => handleTimeChange(index, newTime)}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      fullWidth: true
+                    }
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -269,7 +358,7 @@ const BreadApp = () => {
             name="notes"
             value={formData.notes}
             onChange={handleInputChange}
-            className="w-full border rounded p-2 h-24"
+            className="w-full border rounded p-2 h-24 resize-none"
           />
         </div>
 
@@ -282,7 +371,7 @@ const BreadApp = () => {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-200 hover:bg-blue-300 text-blue-800 font-medium py-2 px-6 rounded"
+            className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
           >
             {loading ? 'Submitting...' : 'SUBMIT'}
           </button>
@@ -291,5 +380,15 @@ const BreadApp = () => {
     </div>
   );
 };
+
+function convertTemperature(value: number, from: TemperatureUnit, to: TemperatureUnit): number {
+  if (from === to) return value;
+
+  if (from === TemperatureUnit.CELSIUS && to === TemperatureUnit.FAHRENHEIT) {
+    return Math.round((value * 9 / 5) + 32);
+  } else {
+    return Math.round((value - 32) * 5 / 9);
+  }
+}
 
 export default BreadApp;
