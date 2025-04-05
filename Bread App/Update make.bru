@@ -1,0 +1,17 @@
+meta {
+  name: Update make
+  type: http
+  seq: 4
+}
+
+patch {
+  url: http://localhost:8000/makes/2025/02/19/team/3
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "final_shape_ts": "2025-02-18T09:45:00"
+  }
+}

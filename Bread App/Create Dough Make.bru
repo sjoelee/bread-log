@@ -1,0 +1,27 @@
+meta {
+  name: Create Dough Make
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:8000/makes/2025/2/28/demi
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "autolyse_ts": "2025-02-28 04:45:00",
+    "start_ts": "2025-02-28 05:49:00",
+    "pull_ts": "2025-02-28 08:05:00",
+    "preshape_ts": "2025-02-28 08:45:00",
+    "final_shape_ts": "2025-02-28 09:30:00",
+    "fridge_ts": "2025-02-28 11:45:00",
+    "room_temp": 72,
+    "preferment_temp": 80,
+    "water_temp": 75,
+    "flour_temp": 70,
+    "notes": "Perfect spring day for baking"
+  }
+}
