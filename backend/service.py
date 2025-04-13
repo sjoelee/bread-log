@@ -173,7 +173,7 @@ def validate_date(year: int, month: int, day: int) -> date:
 
 def validate_dough_make(make: DoughMake) -> bool:
   def validate_timestamp_order(ts1, ts2, earlier_name, later_name):
-      if ts1 >= ts2:
+      if ts1 > ts2:
           raise ValueError(f"{earlier_name} time must occur before {later_name} time")
 
   def validate_timestamps(autolyse_ts, start_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts):

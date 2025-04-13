@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -30,6 +30,17 @@ interface BreadFormData {
   notes: string;
 }
 
+interface TeamMake {
+  displayName: string;
+  key: string;
+}
+
+const DEFAULT_TEAM_MAKES: TeamMake[] = [
+  { displayName: 'Hoagie', key: 'hoagie' },
+  { displayName: 'Demi', key: 'demi' },
+  { displayName: 'Ube', key: 'ube' }
+];
+
 const initialTempSettings: TemperatureSettings = {
   unit: TemperatureUnit.FAHRENHEIT,
   roomTemp: 65,
@@ -42,15 +53,15 @@ const initialTempSettings: TemperatureSettings = {
 const BreadApp = () => {
   const [formData, setFormData] = useState<BreadFormData>({
     date: dayjs(),
-    teamMake: 'Team Make #1',
+    teamMake: 'Hoagie',
     temperatures: initialTempSettings,
     processes: [
-      { step: 'Autolyse', time: null },
-      { step: 'Start', time: null },
-      { step: 'Pull', time: null },
-      { step: 'Preshape', time: null },
-      { step: 'Final Shape', time: null },
-      { step: 'Fridge', time: null },
+      { step: 'Autolyse', time: dayjs() },
+      { step: 'Start', time: dayjs() },
+      { step: 'Pull', time: dayjs() },
+      { step: 'Preshape', time: dayjs() },
+      { step: 'Final Shape', time: dayjs() },
+      { step: 'Fridge', time: dayjs() },
     ],
     notes: '',
   });
@@ -58,6 +69,47 @@ const BreadApp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [teamMakes, setTeamMakes] = useState<TeamMake[]>([]);
+  const [isLoadingMakes, setIsLoadingMakes] = useState(false);
+
+  // fetch team makes when component mounts
+  useEffect(() => {
+    const fetchTeamMakes = async () => {
+      // Check localStorage first
+      const cachedMakes = localStorage.getItem('teamMakes');
+      if (cachedMakes) {
+        setTeamMakes(JSON.parse(cachedMakes));
+        return;
+      }
+
+      setIsLoadingMakes(true);
+      try {
+        const isDevelopment = window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1';
+
+        const apiBaseUrl = isDevelopment
+          ? 'http://localhost:8000'
+          : 'https://your-production-api.com';
+
+        const response = await fetch(`${apiBaseUrl}/makes`);
+
+        if (response.ok) {
+          const data = await response.json();
+          setTeamMakes(data);
+          localStorage.setItem('teamMakes', JSON.stringify(data));
+        } else {
+          setTeamMakes(DEFAULT_TEAM_MAKES);
+        }
+      } catch (error) {
+        console.error('Error fetching team makes:', error);
+        setTeamMakes(DEFAULT_TEAM_MAKES);
+      } finally {
+        setIsLoadingMakes(false);
+      }
+    };
+
+    fetchTeamMakes();
+  }, []);
 
   // Toggle temperature unit
   const toggleTemperatureUnit = (unit: TemperatureUnit) => {
@@ -128,13 +180,25 @@ const BreadApp = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
+
+    // Get selected team make key
+    const selectedMake = teamMakes.find(make => make.key === formData.teamMake);
+    if (!selectedMake) {
+      setError('Invalid team make selected. Please choose a valid option.');
+      setLoading(false);
+      return;
+    }
+    const makeKey = selectedMake.key;
+
+    // Format date from Dayjs
+    const formattedDate = formData.date ? formData.date.format('YYYY/MM/DD') : '';
     // Determine API endpoint based on environment
     const isDevelopment = window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
  
     const apiBaseUrl = isDevelopment
-      ? 'http://localhost:8000/makes/2025/04/05/demi' //hardcoded, will need to update based on date and make
-      : 'https://your-production-api.com';
+      ? `http://localhost:8000/makes/${formattedDate}/${makeKey}` //hardcoded, will need to update based on date and make
+      : `https://your-production-api.com/${formattedDate}/${makeKey}`;
       
     const endpoint = `${apiBaseUrl}`;
     // Create API payload
@@ -222,9 +286,15 @@ const BreadApp = () => {
                 onChange={handleInputChange}
                 className="w-full border rounded p-2 appearance-none pr-8"
               >
-                <option>Team Make #1</option>
-                <option>Team Make #2</option>
-                <option>Team Make #3</option>
+                {isLoadingMakes ? (
+                  <option>Loading...</option>
+                ) : (
+                  teamMakes.map((make) => (
+                    <option key={make.key} value={make.key}>
+                      {make.displayName}
+                    </option>
+                  ))
+                )}
               </select>
               <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                 <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
