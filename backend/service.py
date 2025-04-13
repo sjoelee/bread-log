@@ -1,12 +1,24 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
 from models import DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES
 
+import json
 import logging
 
 app = FastAPI()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development only - replace with specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 DBNAME = 'bread_makes'
 db_conn = DBConnector(dbname=DBNAME)
 
@@ -24,8 +36,13 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
     date=date,
     **dough_make_req.model_dump()
   )
+  field_values = {
+    field: getattr(dough_make, field)
+    for field in dough_make.__fields__.keys()
+  }
 
-  logger.info(f"Inserting dough make: {dough_make.name}")
+  logger.info(f"Inserting dough make: {dough_make.name}, {dough_make}")
+  logger.info(f"Dough make details: {json.dumps(field_values, default=str, indent=2)}")
   try: 
     validate_dough_make(dough_make)
     db_conn.insert_dough_make(dough_make)

@@ -49,6 +49,7 @@ const BreadApp = () => {
       { step: 'Start', time: null },
       { step: 'Pull', time: null },
       { step: 'Preshape', time: null },
+      { step: 'Final Shape', time: null },
       { step: 'Fridge', time: null },
     ],
     notes: '',
@@ -143,6 +144,7 @@ const BreadApp = () => {
       start_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Start')?.time ?? null),
       pull_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Pull')?.time ?? null),
       preshape_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Preshape')?.time ?? null),
+      final_shape_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Final Shape')?.time ?? null),
       fridge_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Fridge')?.time ?? null),
 
       // Temperature values
@@ -155,16 +157,16 @@ const BreadApp = () => {
       // Include temperature unit
       temp_unit: formData.temperatures.unit,
 
-      team_make: formData.teamMake,
       notes: formData.notes
     };
 
     try {
+      //update endpoint to be the date and make
       console.log('Submitting form data:', apiPayload);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'appliation/json',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(apiPayload),
       })
@@ -189,8 +191,8 @@ const BreadApp = () => {
     // Create a new Dayjs object with the date from formData.date and time from process.time
     const combinedDateTime = date.hour(time.hour()).minute(time.minute()).second(0);
 
-    // Format as ISO string for the backend
-    return combinedDateTime.toISOString();
+    // Format as "YYYY-MM-DD HH:MM:SS" for the backend
+    return combinedDateTime.format('YYYY-MM-DD HH:mm:ss');
   };
 
   const addNewDough = () => {

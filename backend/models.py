@@ -28,6 +28,8 @@ class DoughMakeUpdate(BaseModel):
   preferment_temp: Optional[float] = None
   water_temp: Optional[float] = None
   flour_temp: Optional[float] = None
+  dough_temp: Optional[float] = None
+  temp_unit: Optional[str] = None
 
 # New request
 class DoughMakeRequest(BaseModel):
@@ -44,6 +46,9 @@ class DoughMakeRequest(BaseModel):
   preferment_temp: int | None = None
   water_temp: int | None = None
   flour_temp: int | None = None
+  dough_temp: int | None = None
+  
+  temp_unit: str | None = None
 
 class DoughMake(DoughMakeRequest):
   name: str
