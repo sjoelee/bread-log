@@ -4,6 +4,7 @@ from exceptions import DatabaseError
 from models import DoughMake
 from psycopg_pool import ConnectionPool
 from typing import Optional
+from uuid import UUID
 
 import logging
 
@@ -21,13 +22,13 @@ class DatabasePool:
       max_size=max_size
     )
     self.pool.open()
-  
+
   @classmethod
   def get_instance(cls, dbname: str, user: str) -> 'DatabasePool':
     if cls._instance is None:
       cls._instance = DatabasePool(dbname, user)
     return cls._instance
-  
+
   @contextmanager
   def get_connection(self):
     conn = self.pool.getconn()
@@ -40,7 +41,7 @@ class DatabasePool:
     finally:
         logger.debug(f"Returning connection to pool: {conn}")
         self.pool.putconn(conn)
-    
+
   def close(self):
     self.pool.close()
 
@@ -98,14 +99,14 @@ class DBConnector:
         WHERE make_date = %s AND dough_name = %s AND make_num = %s;
     """
     values = (make_date, make_name, make_num)
-    try: 
+    try:
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
           cur.execute(sql, values)
           res = cur.fetchone()
     except Exception as e:
       logger.error(f"Error getting entry: {str(e)}")
-    
+
     if not res:
       raise DatabaseError(f"Dough make {make_name} #{make_num} on {make_date} doesn't exist")
     (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts) = res
@@ -130,7 +131,7 @@ class DBConnector:
   def update_dough_make(self, make_date: date, make_name: str, make_num: int, updates: dict):
     """
     Updates only the specified fields for a dough make.
-    
+
     Args:
         make_name: Name of the dough make
         make_date: Date of the make
@@ -139,16 +140,16 @@ class DBConnector:
     """
     # Construct the SET clause dynamically based on what fields are being updated
     set_clause = ", ".join(f"{key} = %s" for key in updates.keys())
-    
+
     # Build the query with only the fields being updated
     query = f"""
-        UPDATE dough_makes 
+        UPDATE dough_makes
         SET {set_clause}, updated_at = CURRENT_TIMESTAMP
-        WHERE dough_name = %s 
-        AND make_date = %s 
+        WHERE dough_name = %s
+        AND make_date = %s
         AND make_num = %s
     """
-    
+
     # Create parameter list with update values followed by WHERE clause values
     params = list(updates.values()) + [make_name, make_date, make_num]
     logger.debug(f'SQL Command\n {query}')
@@ -160,7 +161,7 @@ class DBConnector:
     except Exception as e:
       logger.error(f"Error updating dough make: {str(e)}")
       raise DatabaseError(f"Error updating dough make: {e}")
-  
+
 
   def delete_dough_make(self, make_date: date, make_name: str, make_num: int):
     """
@@ -183,6 +184,36 @@ class DBConnector:
           conn.commit()
     except Exception as e:
       raise DatabaseError(f"{e}")
+
+  def get_account_makes(self, account_id: UUID) -> list:
+    """
+    Retrieves all makes for a specific account ID
+    """
+    sql = """
+        SELECT make_name, make_key
+        FROM account_makes
+        WHERE account_id = %s
+        ORDER BY make_name;
+    """
+
+    try:
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, [account_id])
+                results = cur.fetchall()
+
+                # Convert results to list of dictionaries
+                account_makes = []
+                for row in results:
+                    account_makes.append({
+                        "make_name": row[0],
+                        "make_key": row[1]
+                    })
+
+                return account_makes
+    except Exception as e:
+        logger.error(f"Error retrieving account makes: {str(e)}")
+        raise DatabaseError(f"Error retrieving account makes: {e}")
 
 
 # testing
