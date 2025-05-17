@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import Modal from '@mui/material/Modal';
+import Box from '@mui/material/Box';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
 
 enum TemperatureUnit {
   CELSIUS = 'C',
@@ -50,6 +54,23 @@ const initialTempSettings: TemperatureSettings = {
   doughTemp: 76,
 };
 
+interface Make {
+  key: string;
+  display_name: string;
+  // other properties...
+}
+
+interface FormattedMake {
+  key: string;
+  displayName: string;
+  // other properties with camelCase...
+}
+
+// Add new interface for create make request
+interface CreateMakeRequest {
+  display_name: string;
+}
+
 const BreadApp = () => {
   const [formData, setFormData] = useState<BreadFormData>({
     date: dayjs(),
@@ -71,16 +92,20 @@ const BreadApp = () => {
   const [success, setSuccess] = useState(false);
   const [teamMakes, setTeamMakes] = useState<TeamMake[]>([]);
   const [isLoadingMakes, setIsLoadingMakes] = useState(false);
+  const [isAddMakeModalOpen, setIsAddMakeModalOpen] = useState(false);
+  const [newMakeName, setNewMakeName] = useState('');
+  const [isAddingMake, setIsAddingMake] = useState(false);
+  const [addMakeError, setAddMakeError] = useState<string | null>(null);
 
   // fetch team makes when component mounts
   useEffect(() => {
     const fetchTeamMakes = async () => {
       // Check localStorage first
       const cachedMakes = localStorage.getItem('teamMakes');
-      if (cachedMakes) {
-        setTeamMakes(JSON.parse(cachedMakes));
-        return;
-      }
+      // if (cachedMakes) {
+      //   setTeamMakes(JSON.parse(cachedMakes));
+      //   return;
+      // }
 
       setIsLoadingMakes(true);
       try {
@@ -91,12 +116,24 @@ const BreadApp = () => {
           ? 'http://localhost:8000'
           : 'https://your-production-api.com';
 
-        const response = await fetch(`${apiBaseUrl}/makes`);
+        const response = await fetch(`${apiBaseUrl}/makes`, {
+          headers: {
+            'Authorization': 'Bearer test-token', // TODO: Replace with token
+            'Content-Type': 'application/json'
+          }
+        });
 
         if (response.ok) {
           const data = await response.json();
-          setTeamMakes(data);
-          localStorage.setItem('teamMakes', JSON.stringify(data));
+          // Map the data to transform display_name to displayName
+          const formattedMakes = data.map((make) => ({
+            key: make.key,
+            displayName: make.display_name,
+            // map other properties as needed
+          }));
+
+          setTeamMakes(formattedMakes);
+          localStorage.setItem('teamMakes', JSON.stringify(formattedMakes));
         } else {
           setTeamMakes(DEFAULT_TEAM_MAKES);
         }
@@ -109,7 +146,7 @@ const BreadApp = () => {
     };
 
     fetchTeamMakes();
-  }, []);
+  }, []);;
 
   // Toggle temperature unit
   const toggleTemperatureUnit = (unit: TemperatureUnit) => {
@@ -175,6 +212,90 @@ const BreadApp = () => {
     });
   };
 
+  // Update addNewDough function to open modal
+  const addNewDough = () => {
+    setIsAddMakeModalOpen(true);
+    setNewMakeName('');
+    setAddMakeError(null);
+  };
+
+  // Function to handle modal close
+  const handleModalClose = () => {
+    setIsAddMakeModalOpen(false);
+  };
+
+  // Function to create a new make
+  const handleCreateMake = async () => {
+    if (!newMakeName.trim()) {
+      setAddMakeError('Please enter a make name');
+      return;
+    }
+
+    setIsAddingMake(true);
+    setAddMakeError(null);
+
+    try {
+      // Generate key from the display name (convert to kebab-case)
+      const key = newMakeName.trim()
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')  // Remove special characters
+        .replace(/\s+/g, '-');     // Replace spaces with hyphense
+
+      const isDevelopment = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      const apiBaseUrl = isDevelopment
+        ? 'http://localhost:8000'
+        : 'https://your-production-api.com';
+
+      const response = await fetch(`${apiBaseUrl}/makes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-token', // TODO: Replace with token
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          display_name: newMakeName,
+          key: key
+        } as CreateMakeRequest)
+      });
+
+      if (response.ok) {
+        const newMake = await response.json();
+
+        // Map the response to our frontend model
+        const formattedMake: TeamMake = {
+          key: newMake.key,
+          displayName: newMake.display_name
+        };
+
+        // Update the makes list with the new item
+        const updatedMakes = [...teamMakes, formattedMake];
+        setTeamMakes(updatedMakes);
+
+        // Update localStorage
+        localStorage.setItem('teamMakes', JSON.stringify(updatedMakes));
+
+        // Set the form to use the new make
+        setFormData({
+          ...formData,
+          teamMake: formattedMake.key
+        });
+
+        // Close the modal
+        setIsAddMakeModalOpen(false);
+      } else {
+        const errorData = await response.json();
+        setAddMakeError(errorData.detail || 'Failed to create make');
+      }
+    } catch (error) {
+      console.error('Error creating make:', error);
+      setAddMakeError('An error occurred while creating the make');
+    } finally {
+      setIsAddingMake(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -195,11 +316,11 @@ const BreadApp = () => {
     // Determine API endpoint based on environment
     const isDevelopment = window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
- 
+
     const apiBaseUrl = isDevelopment
       ? `http://localhost:8000/makes/${formattedDate}/${makeKey}` //hardcoded, will need to update based on date and make
       : `https://your-production-api.com/${formattedDate}/${makeKey}`;
-      
+
     const endpoint = `${apiBaseUrl}`;
     // Create API payload
     const apiPayload = {
@@ -259,10 +380,6 @@ const BreadApp = () => {
     return combinedDateTime.format('YYYY-MM-DD HH:mm:ss');
   };
 
-  const addNewDough = () => {
-    alert('Add new dough functionality would be implemented here');
-  };
-
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
       <form onSubmit={handleSubmit}>
@@ -278,7 +395,7 @@ const BreadApp = () => {
           </div>
 
           <div className="w-1/2">
-            <label className="block text-sm font-medium mb-1">Team Make</label>
+            <label className="block text-sm font-medium mb-1">Make Name</label>
             <div className="relative">
               <select
                 name="teamMake"
@@ -307,7 +424,7 @@ const BreadApp = () => {
               onClick={addNewDough}
               className="mt-1 text-sm text-red-500 hover:text-red-700"
             >
-              + Add new dough
+              + Add new make
             </button>
           </div>
         </div>
@@ -449,6 +566,58 @@ const BreadApp = () => {
           </button>
         </div>
       </form>
+      <Modal
+        open={isAddMakeModalOpen}
+        onClose={handleModalClose}
+        aria-labelledby="add-make-modal-title"
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 400,
+          bgcolor: 'background.paper',
+          boxShadow: 24,
+          p: 4,
+          borderRadius: 2
+        }}>
+          <h2 id="add-make-modal-title" className="text-xl font-medium mb-4">Add New Make</h2>
+
+          {addMakeError && (
+            <div className="text-red-500 mb-4">{addMakeError}</div>
+          )}
+
+          <TextField
+            label="Name Of New Make"
+            variant="outlined"
+            fullWidth
+            value={newMakeName}
+            onChange={(e) => setNewMakeName(e.target.value)}
+            margin="normal"
+            disabled={isAddingMake}
+            placeholder="Enter a name for the new dough type"
+          />
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              onClick={handleModalClose}
+              variant="outlined"
+              disabled={isAddingMake}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateMake}
+              variant="contained"
+              disabled={isAddingMake || !newMakeName.trim()}
+              sx={{ bgcolor: 'rgb(96, 165, 250)', '&:hover': { bgcolor: 'rgb(59, 130, 246)' } }}
+            >
+              {isAddingMake ? 'Adding...' : 'Add New Make'}
+            </Button>
+          </div>
+        </Box>
+      </Modal>
     </div>
   );
 };

@@ -1,9 +1,9 @@
 from contextlib import contextmanager
 from datetime import date
 from exceptions import DatabaseError
-from models import DoughMake
+from models import DoughMake, SimpleMake
 from psycopg_pool import ConnectionPool
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 import logging
@@ -190,10 +190,10 @@ class DBConnector:
     Retrieves all makes for a specific account ID
     """
     sql = """
-        SELECT make_name, make_key
+        SELECT display_name, key
         FROM account_makes
         WHERE account_id = %s
-        ORDER BY make_name;
+        ORDER BY display_name;
     """
 
     try:
@@ -206,8 +206,8 @@ class DBConnector:
                 account_makes = []
                 for row in results:
                     account_makes.append({
-                        "make_name": row[0],
-                        "make_key": row[1]
+                        "display_name": row[0],
+                        "key": row[1]
                     })
 
                 return account_makes
@@ -215,6 +215,26 @@ class DBConnector:
         logger.error(f"Error retrieving account makes: {str(e)}")
         raise DatabaseError(f"Error retrieving account makes: {e}")
 
+  def add_account_make(self, account_id: str, account_name: str, display_name: str, key: str):
+    # Execute SQL to insert new make
+    sql = """
+        INSERT INTO account_makes (account_id, account_name, display_name, key, created_at)
+        VALUES (%s, %s, %s, %s, NOW())
+        RETURNING account_id, account_name, display_name, key, created_at
+    """
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql, (account_id, account_name, display_name, key))
+
+          result = cur.fetchone()
+          conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding makes: {str(key)}")
+        raise DatabaseError(f"Error adding make: {e}")
+
+    # Return as a SimpleMake object
+    return SimpleMake(display_name=result[2], key=result[3])
 
 # testing
 if __name__ == '__main__':

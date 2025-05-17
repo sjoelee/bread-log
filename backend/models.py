@@ -70,5 +70,10 @@ class AccountMake(BaseModel):
 
 # Simplified response model for account make
 class SimpleMake(BaseModel):
-   make_name: str
-   make_key: str
+   display_name: str
+   key: str
+
+# New model for creating a make
+class CreateMakeRequest(BaseModel):
+    display_name: str
+    key: str

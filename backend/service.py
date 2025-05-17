@@ -4,12 +4,13 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
-from models import AccountMake, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, SimpleMake
+from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, SimpleMake
 from typing import List
 from uuid import UUID
 
 import json
 import logging
+import re
 
 app = FastAPI()
 
@@ -42,33 +43,34 @@ class UserContext:
 
 # Dependency to get the current user context
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
-    """
-    Verify the authentication token and return user context
-    In a real implementation, you would:
-    1. Validate the JWT token
-    2. Extract user_id from token
-    3. Look up user and account information
-    """
-    try:
-      # Mock implementation - in reality, you'd decode the JWT and look up user info
-      # This would be replaced with actual token validation and user lookup
-      user_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example user ID
-      account_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example account ID
-      account_name = "Rize Up"
+  """
+  Verify the authentication token and return user context
+  In a real implementation, you would:
+  1. Validate the JWT token
+  2. Extract user_id from token
+  3. Look up user and account information
+  """
+  try:
+    # Mock implementation - in reality, you'd decode the JWT and look up user info
+    # This would be replaced with actual token validation and user lookup
+    user_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example user ID
+    account_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example account ID
+    account_name = "Rize Up"
 
-      return UserContext(
-        user_id=user_id,
-        account_id=account_id,
-        account_name=account_name
-      )
-    except Exception as e:
-        logger.error(f"Authentication error: {str(e)}")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    return UserContext(
+      user_id=user_id,
+      account_id=account_id,
+      account_name=account_name
+    )
+  except Exception as e:
+    logger.error(f"Authentication error: {str(e)}")
+    raise HTTPException(
+      status_code=401,
+      detail="Invalid authentication credentials",
+      headers={"WWW-Authenticate": "Bearer"},
+    )
 
+# Getting and retrieving dough makes for the acccount
 @app.get("/makes", response_model=List[SimpleMake])
 def get_makes_for_account(user: UserContext=Depends(get_current_user)):
   try:
@@ -76,6 +78,32 @@ def get_makes_for_account(user: UserContext=Depends(get_current_user)):
   except Exception as e:
     logger.error("Error ocurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/makes", response_model=SimpleMake)
+def create_make_for_account(make: CreateMakeRequest, user: UserContext=Depends(get_current_user)):
+    logger.info(f"Received POST request to /makes with data: {make}")
+    try:
+        # Check if the key already exists for this account
+        existing_makes = db_conn.get_account_makes(user.account_id)
+        existing_makes = [SimpleMake(**make) for make in existing_makes]
+        if any(existing_make.key == make.key for existing_make in existing_makes):
+            raise HTTPException(status_code=400, detail="A make with a similar name already exists")
+
+        # Add the make to the database
+        new_make = db_conn.add_account_make(
+            account_id=user.account_id,
+            account_name=user.account_name,
+            display_name=make.display_name,
+            key=make.key
+        )
+
+        return new_make
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error occurred while creating make: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Create make entries within the DB table
 @app.post("/makes/{year}/{month}/{day}/{make_name}")
