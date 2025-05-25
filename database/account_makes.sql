@@ -4,5 +4,5 @@ CREATE TABLE account_makes (
     display_name VARCHAR(255) NOT NULL,
     key VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (account_id, make_key)
+    PRIMARY KEY (account_id, key)
 );

@@ -5,7 +5,7 @@ CREATE TABLE dough_makes (
     dough_name VARCHAR(100) NOT NULL,
     make_date DATE NOT NULL,
     -- make_num autoincrements for the same day, and reset to 1 for a new day, see implementaion in daily_make_num.sql
-    make_num INTEGER nextval('daily_make_num'),
+    make_num INTEGER DEFAULT nextval('daily_make_num'),
 
     -- Temperature measurements in Fahrenheit
     -- DECIMAL(5,1) allows for numbers like 100.5, -10.5, etc.
