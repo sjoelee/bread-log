@@ -84,7 +84,11 @@ interface CreateMakeRequest {
   display_name: string;
 }
 
+// Add tab type
+type TabType = 'create' | 'saved';
+
 const BreadApp = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('create');
   const [formData, setFormData] = useState<BreadFormData>({
     date: dayjs(),
     teamMake: 'Hoagie',
@@ -463,280 +467,382 @@ const BreadApp = () => {
     return combinedDateTime.format('YYYY-MM-DD HH:mm:ss');
   };
 
-  return (
-    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
-      <form onSubmit={handleSubmit}>
-        {/* Date and Team Make Row */}
-        <div className="flex gap-4 mb-6">
-          <div className="w-1/2">
-            <label className="block text-sm font-medium mb-1">Date</label>
-            <DatePicker
-              value={formData.date}
-              onChange={handleDateChange}
-              slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-            />
-          </div>
-
-          <div className="w-1/2">
-            <label className="block text-sm font-medium mb-1">Make Name</label>
-            <div className="relative">
-              <select
-                name="teamMake"
-                value={formData.teamMake}
-                onChange={handleInputChange}
-                className="w-full border rounded p-2 appearance-none pr-8 bg-white"
-              >
-                {isLoadingMakes ? (
-                  <option>Loading...</option>
-                ) : (
-                  teamMakes.map((make) => (
-                    <option key={make.key} value={make.key}>
-                      {make.displayName}
-                    </option>
-                  ))
-                )}
-              </select>
-              <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
-            </div>
+  // Render Create Tab Content
+  const renderCreateContent = () => (
+    <form onSubmit={handleSubmit}>
+      {/* Temperature Fields with F/C toggle */}
+      <div className="mb-6 p-4 border rounded-lg">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-medium">Temperatures</h3>
+          <div className="inline-flex rounded-md shadow-sm" role="group">
             <button
               type="button"
-              onClick={addNewDough}
-              className="mt-1 text-sm text-red-500 hover:text-red-700"
+              onClick={() => toggleTemperatureUnit(TemperatureUnit.FAHRENHEIT)}
+              className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${formData.temperatures.unit === TemperatureUnit.FAHRENHEIT
+                  ? 'bg-gray-200 text-gray-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
             >
-              + Add new make
+              F
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleTemperatureUnit(TemperatureUnit.CELSIUS)}
+              className={`px-4 py-2 text-sm font-medium rounded-r-lg border-t border-b border-r ${formData.temperatures.unit === TemperatureUnit.CELSIUS
+                  ? 'bg-gray-200 text-gray-700'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+            >
+              C
             </button>
           </div>
         </div>
 
-        {/* Temperature Fields with F/C toggle */}
-        <div className="mb-6 p-4 border rounded-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-medium">Temperatures</h3>
-            <div className="inline-flex rounded-md shadow-sm" role="group">
-              <button
-                type="button"
-                onClick={() => toggleTemperatureUnit(TemperatureUnit.FAHRENHEIT)}
-                className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${formData.temperatures.unit === TemperatureUnit.FAHRENHEIT
-                    ? 'bg-gray-200 text-gray-700'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                F
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleTemperatureUnit(TemperatureUnit.CELSIUS)}
-                className={`px-4 py-2 text-sm font-medium rounded-r-lg border-t border-b border-r ${formData.temperatures.unit === TemperatureUnit.CELSIUS
-                    ? 'bg-gray-200 text-gray-700'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                C
-              </button>
-            </div>
+        <div className="grid grid-cols-5 gap-2">
+          {/* Room Temp */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-center">Room Temp</label>
+            <input
+              type="text"
+              value={formData.temperatures.roomTemp}
+              onChange={(e) => handleTempChange('roomTemp', e.target.value)}
+              className="w-full border rounded p-2 text-center"
+            />
           </div>
 
-          <div className="grid grid-cols-5 gap-2">
-            {/* Room Temp */}
-            <div>
-              <label className="block text-sm font-medium mb-1 text-center">Room Temp</label>
-              <input
-                type="text"
-                value={formData.temperatures.roomTemp}
-                onChange={(e) => handleTempChange('roomTemp', e.target.value)}
-                className="w-full border rounded p-2 text-center"
-              />
-            </div>
+          {/* Flour Temp */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-center">Flour Temp</label>
+            <input
+              type="text"
+              value={formData.temperatures.flourTemp}
+              onChange={(e) => handleTempChange('flourTemp', e.target.value)}
+              className="w-full border rounded p-2 text-center"
+            />
+          </div>
 
-            {/* Flour Temp */}
-            <div>
-              <label className="block text-sm font-medium mb-1 text-center">Flour Temp</label>
-              <input
-                type="text"
-                value={formData.temperatures.flourTemp}
-                onChange={(e) => handleTempChange('flourTemp', e.target.value)}
-                className="w-full border rounded p-2 text-center"
-              />
-            </div>
+          {/* Preferment Temp */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-center">Preferment</label>
+            <input
+              type="text"
+              value={formData.temperatures.prefermentTemp}
+              onChange={(e) => handleTempChange('prefermentTemp', e.target.value)}
+              className="w-full border rounded p-2 text-center"
+            />
+          </div>
 
-            {/* Preferment Temp */}
-            <div>
-              <label className="block text-sm font-medium mb-1 text-center">Preferment</label>
-              <input
-                type="text"
-                value={formData.temperatures.prefermentTemp}
-                onChange={(e) => handleTempChange('prefermentTemp', e.target.value)}
-                className="w-full border rounded p-2 text-center"
-              />
-            </div>
+          {/* Water Temp */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-center">Water Temp</label>
+            <input
+              type="text"
+              value={formData.temperatures.waterTemp}
+              onChange={(e) => handleTempChange('waterTemp', e.target.value)}
+              className="w-full border rounded p-2 text-center"
+            />
+          </div>
 
-            {/* Water Temp */}
-            <div>
-              <label className="block text-sm font-medium mb-1 text-center">Water Temp</label>
-              <input
-                type="text"
-                value={formData.temperatures.waterTemp}
-                onChange={(e) => handleTempChange('waterTemp', e.target.value)}
-                className="w-full border rounded p-2 text-center"
-              />
-            </div>
-
-            {/* Dough Temp */}
-            <div>
-              <label className="block text-sm font-medium mb-1 text-center">Dough Temp</label>
-              <input
-                type="text"
-                value={formData.temperatures.doughTemp}
-                onChange={(e) => handleTempChange('doughTemp', e.target.value)}
-                className="w-full border rounded p-2 text-center"
-              />
-            </div>
+          {/* Dough Temp */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-center">Dough Temp</label>
+            <input
+              type="text"
+              value={formData.temperatures.doughTemp}
+              onChange={(e) => handleTempChange('doughTemp', e.target.value)}
+              className="w-full border rounded p-2 text-center"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Process Steps - Modified to include stretch and folds */}
-        <div className="space-y-6 mb-6">
-          {formData.processes.map((process, index) => (
-            <div key={index}>
-              <div className="flex justify-between items-center">
-                <div className="w-1/3">
-                  <span className="font-medium">{process.step}</span>
-                </div>
-
-                <div className="w-2/3">
-                  <TimePicker
-                    label="Time"
-                    value={process.time}
-                    onChange={(newTime) => handleTimeChange(index, newTime)}
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        fullWidth: true
-                      }
-                    }}
-                  />
-                </div>
+      {/* Process Steps - Modified to include stretch and folds */}
+      <div className="space-y-6 mb-6">
+        {formData.processes.map((process, index) => (
+          <div key={index}>
+            <div className="flex justify-between items-center">
+              <div className="w-1/3">
+                <span className="font-medium">{process.step}</span>
               </div>
 
-              {/* Insert Stretch & Folds section after Pull */}
-              {process.step === 'Pull' && (
-                <div className="mt-4 border rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => setIsStretchFoldsExpanded(!isStretchFoldsExpanded)}
-                    className="w-full p-3 text-left font-medium bg-gray-50 hover:bg-gray-100 rounded-t-lg flex justify-between items-center"
-                  >
-                    <span>Stretch & Folds</span>
-                    <svg
-                      className={`h-5 w-5 transform transition-transform ${isStretchFoldsExpanded ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {isStretchFoldsExpanded && (
-                    <div className="p-4 space-y-3">
-                      {formData.stretchFolds.map((stretchFold) => (
-                        <div key={stretchFold.id} className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id={`stretch-fold-${stretchFold.id}`}
-                              checked={stretchFold.performed}
-                              onChange={(e) => handleStretchFoldCheck(stretchFold.id, e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                            <label htmlFor={`stretch-fold-${stretchFold.id}`} className="text-sm font-medium min-w-[60px]">
-                              Fold {stretchFold.id}
-                            </label>
-                          </div>
-
-                          <div className="flex-1">
-                            <TimePicker
-                              label="Time"
-                              value={stretchFold.time}
-                              onChange={(newTime) => handleStretchFoldTimeChange(stretchFold.id, newTime)}
-                              disabled={!stretchFold.performed}
-                              slotProps={{
-                                textField: {
-                                  size: 'small',
-                                  fullWidth: true,
-                                  disabled: !stretchFold.performed
-                                }
-                              }}
-                            />
-                          </div>
-
-                          {/* Remove button - only show if more than 1 row */}
-                          {formData.stretchFolds.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeStretchFoldRow(stretchFold.id)}
-                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                              title="Remove this fold"
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      
-                      {/* Add new fold button */}
-                      <div className="pt-2 border-t border-gray-200">
-                        <button
-                          type="button"
-                          onClick={addStretchFoldRow}
-                          className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full border border-blue-300 hover:border-blue-400"
-                          title="Add another fold"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="w-2/3">
+                <TimePicker
+                  label="Time"
+                  value={process.time}
+                  onChange={(newTime) => handleTimeChange(index, newTime)}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      fullWidth: true
+                    }
+                  }}
+                />
+              </div>
             </div>
-          ))}
+
+            {/* Insert Stretch & Folds section after Pull */}
+            {process.step === 'Pull' && (
+              <div className="mt-4 border rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setIsStretchFoldsExpanded(!isStretchFoldsExpanded)}
+                  className="w-full p-3 text-left font-medium bg-gray-50 hover:bg-gray-100 rounded-t-lg flex justify-between items-center"
+                >
+                  <span>Stretch & Folds</span>
+                  <svg
+                    className={`h-5 w-5 transform transition-transform ${isStretchFoldsExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isStretchFoldsExpanded && (
+                  <div className="p-4 space-y-3">
+                    {formData.stretchFolds.map((stretchFold) => (
+                      <div key={stretchFold.id} className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`stretch-fold-${stretchFold.id}`}
+                            checked={stretchFold.performed}
+                            onChange={(e) => handleStretchFoldCheck(stretchFold.id, e.target.checked)}
+                            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                          />
+                          <label htmlFor={`stretch-fold-${stretchFold.id}`} className="text-sm font-medium min-w-[60px]">
+                            Fold {stretchFold.id}
+                          </label>
+                        </div>
+
+                        <div className="flex-1">
+                          <TimePicker
+                            label="Time"
+                            value={stretchFold.time}
+                            onChange={(newTime) => handleStretchFoldTimeChange(stretchFold.id, newTime)}
+                            disabled={!stretchFold.performed}
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                                fullWidth: true,
+                                disabled: !stretchFold.performed
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {/* Remove button - only show if more than 1 row */}
+                        {formData.stretchFolds.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeStretchFoldRow(stretchFold.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                            title="Remove this fold"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Add new fold button */}
+                    <div className="pt-2 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={addStretchFoldRow}
+                        className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full border border-blue-300 hover:border-blue-400"
+                        title="Add another fold"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Notes */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium mb-1">Notes</label>
+        <textarea
+          name="notes"
+          value={formData.notes}
+          onChange={handleInputChange}
+          className="w-full border rounded p-2 h-24 resize-none"
+        />
+      </div>
+
+      {/* Error and Success Messages */}
+      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {success && <div className="text-green-500 mb-4">Form submitted successfully!</div>}
+
+      {/* Submit Button */}
+      <div className="flex justify-center">
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
+        >
+          {loading ? 'Submitting...' : 'SUBMIT'}
+        </button>
+      </div>
+    </form>
+  );
+
+  // Render Saved Tab Content
+  const renderSavedContent = () => {
+    const selectedMake = teamMakes.find(make => make.key === formData.teamMake);
+    const formattedDate = formData.date ? formData.date.format('YYYY-MM-DD') : '';
+    
+    // TODO: Replace with actual API call to fetch saved make data
+    // This would be something like: GET /makes/{date}/{makeKey}
+    const hasSavedData = false; // This will be determined by API response
+    
+    if (!hasSavedData) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <svg
+            className="mx-auto h-12 w-12 text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <div className="space-y-2">
+            <p className="font-medium">No saved data found</p>
+            <p className="text-sm">
+              {selectedMake?.displayName} for {formattedDate || 'selected date'}
+            </p>
+            <p className="text-sm mt-4">
+              Switch to the Create tab to start a new make
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // When saved data exists, show read-only form with saved values
+    return (
+      <div className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-blue-800 font-medium">
+              Viewing saved data for {selectedMake?.displayName} on {formattedDate}
+            </p>
+          </div>
+          <p className="text-blue-700 text-sm mt-1">
+            This data is read-only. To edit, switch to the Create tab.
+          </p>
         </div>
 
-        {/* Notes */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-1">Notes</label>
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleInputChange}
-            className="w-full border rounded p-2 h-24 resize-none"
+        {/* TODO: Display saved form data here when API is connected */}
+        {/* This would show the same form structure but with saved values and disabled inputs */}
+        <div className="text-center py-8 text-gray-500">
+          <p>Saved data display will be implemented when API is connected</p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
+      {/* Date and Team Make Row */}
+      <div className="flex gap-4 mb-6">
+        <div className="w-1/2">
+          <label className="block text-sm font-medium mb-1">Date</label>
+          <DatePicker
+            value={formData.date}
+            onChange={handleDateChange}
+            slotProps={{ textField: { fullWidth: true, size: 'small' } }}
           />
         </div>
 
-        {/* Error and Success Messages */}
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        {success && <div className="text-green-500 mb-4">Form submitted successfully!</div>}
-
-        {/* Submit Button */}
-        <div className="flex justify-center">
+        <div className="w-1/2">
+          <label className="block text-sm font-medium mb-1">Make Name</label>
+          <div className="relative">
+            <select
+              name="teamMake"
+              value={formData.teamMake}
+              onChange={handleInputChange}
+              className="w-full border rounded p-2 appearance-none pr-8 bg-white"
+            >
+              {isLoadingMakes ? (
+                <option>Loading...</option>
+              ) : (
+                teamMakes.map((make) => (
+                  <option key={make.key} value={make.key}>
+                    {make.displayName}
+                  </option>
+                ))
+              )}
+            </select>
+            <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </div>
           <button
-            type="submit"
-            disabled={loading}
-            className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
+            type="button"
+            onClick={addNewDough}
+            className="mt-1 text-sm text-red-500 hover:text-red-700"
           >
-            {loading ? 'Submitting...' : 'SUBMIT'}
+            + Add new make
           </button>
         </div>
-      </form>
+      </div>
+
+      {/* Folder Tabs */}
+      <div className="mb-6">
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => setActiveTab('create')}
+            className={`relative px-6 py-3 font-medium text-sm rounded-t-lg border-l border-t border-r transition-all ${
+              activeTab === 'create'
+                ? 'bg-white text-gray-900 border-gray-300 z-10 -mb-px'
+                : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+            }`}
+            style={{
+              marginRight: '-1px'
+            }}
+          >
+            Create
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('saved')}
+            className={`relative px-6 py-3 font-medium text-sm rounded-t-lg border-l border-t border-r transition-all ${
+              activeTab === 'saved'
+                ? 'bg-white text-gray-900 border-gray-300 z-10 -mb-px'
+                : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            Saved
+          </button>
+        </div>
+        {/* Tab content border */}
+        <div className="border-t border-gray-300 -mt-px"></div>
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-96">
+        {activeTab === 'create' ? renderCreateContent() : renderSavedContent()}
+      </div>
+
+      {/* Modal for adding new makes */}
       <Modal
         open={isAddMakeModalOpen}
         onClose={handleModalClose}
