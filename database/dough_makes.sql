@@ -1,5 +1,7 @@
 DROP TABLE IF EXISTS dough_makes;
 DROP SEQUENCE IF EXISTS daily_make_num;
+DROP TYPE IF EXISTS temperature_unit_type;
+CREATE TYPE temperature_unit_type AS ENUM ('Fahrenheit', 'Celsius');
 CREATE SEQUENCE daily_make_num;
 CREATE TABLE dough_makes (
     dough_name VARCHAR(100) NOT NULL,
@@ -13,6 +15,7 @@ CREATE TABLE dough_makes (
     water_temp DECIMAL(5,1),
     flour_temp DECIMAL(5,1),
     preferment_temp DECIMAL(5,1),
+    temperature_unit temperature_unit_type DEFAULT 'Fahrenheit',
     
     -- Timestamps for each stage of the process
     autolyse_ts TIMESTAMP,
