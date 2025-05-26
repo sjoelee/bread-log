@@ -479,8 +479,8 @@ const BreadApp = () => {
               type="button"
               onClick={() => toggleTemperatureUnit(TemperatureUnit.FAHRENHEIT)}
               className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${formData.temperatures.unit === TemperatureUnit.FAHRENHEIT
-                  ? 'bg-gray-200 text-gray-700'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               F
@@ -489,8 +489,8 @@ const BreadApp = () => {
               type="button"
               onClick={() => toggleTemperatureUnit(TemperatureUnit.CELSIUS)}
               className={`px-4 py-2 text-sm font-medium rounded-r-lg border-t border-b border-r ${formData.temperatures.unit === TemperatureUnit.CELSIUS
-                  ? 'bg-gray-200 text-gray-700'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               C
