@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from enum import Enum
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
+import json
 
 class MakeNames(Enum):
   # Sticks
@@ -13,7 +14,15 @@ class MakeNames(Enum):
   UBE = "ube"
   TEAM = "team"
 
+class TempUnit(Enum):
+  FAHRENHEIT = "Fahrenheit"
+  CELSIUS = "Celsius"
+
 MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
+
+class StretchFoldCreate(BaseModel):
+  fold_number: int
+  timestamp: datetime
 
 # Updates
 class DoughMakeUpdate(BaseModel):
@@ -31,6 +40,10 @@ class DoughMakeUpdate(BaseModel):
   flour_temp: Optional[float] = None
   dough_temp: Optional[float] = None
   temp_unit: Optional[str] = None
+  
+  # Add new fields
+  stretch_folds: Optional[List[StretchFoldCreate]] = None
+  notes: Optional[str] = None
 
 # New request
 class DoughMakeRequest(BaseModel):
@@ -42,14 +55,17 @@ class DoughMakeRequest(BaseModel):
   final_shape_ts: datetime
   fridge_ts: datetime
 
+  temp_unit: str = TempUnit.FAHRENHEIT.value
+
   # Temps for each of the components
   room_temp: int
   preferment_temp: int | None = None
   water_temp: int | None = None
   flour_temp: int | None = None
   dough_temp: int | None = None
-
-  temp_unit: str | None = None
+  
+  stretch_folds: List[StretchFoldCreate] = []
+  notes: Optional[str] = None
 
 class DoughMake(DoughMakeRequest):
   name: str
@@ -57,23 +73,23 @@ class DoughMake(DoughMakeRequest):
 
 # Request model for creating a new account make
 class AccountMakeRequest(BaseModel):
-    make_name: str
-    make_key: str
+  make_name: str
+  make_key: str
 
 # Response model for account make
 class AccountMake(BaseModel):
-    account_id: UUID
-    account_name: str
-    make_name: str
-    make_key: str
-    created_at: datetime
+  account_id: UUID
+  account_name: str
+  make_name: str
+  make_key: str
+  created_at: datetime
 
 # Simplified response model for account make
 class SimpleMake(BaseModel):
-   display_name: str
-   key: str
+  display_name: str
+  key: str
 
 # New model for creating a make
 class CreateMakeRequest(BaseModel):
-    display_name: str
-    key: str
+  display_name: str
+  key: str

@@ -62,12 +62,9 @@ const initialTempSettings: TemperatureSettings = {
   doughTemp: 76,
 };
 
-// Initialize default stretch and folds (typically 3-4 sets)
+// Initialize with just one stretch and fold row
 const initialStretchFolds: StretchFold[] = [
   { id: 1, performed: false, time: null },
-  { id: 2, performed: false, time: null },
-  { id: 3, performed: false, time: null },
-  { id: 4, performed: false, time: null },
 ];
 
 interface Make {
@@ -258,6 +255,33 @@ const BreadApp = () => {
     });
   };
 
+  // Add new stretch and fold row
+  const addStretchFoldRow = () => {
+    const newId = Math.max(...formData.stretchFolds.map(sf => sf.id)) + 1;
+    const newStretchFold: StretchFold = {
+      id: newId,
+      performed: false,
+      time: null
+    };
+
+    setFormData({
+      ...formData,
+      stretchFolds: [...formData.stretchFolds, newStretchFold]
+    });
+  };
+
+  // Remove stretch and fold row
+  const removeStretchFoldRow = (id: number) => {
+    if (formData.stretchFolds.length <= 1) return; // Keep at least one row
+    
+    const updatedStretchFolds = formData.stretchFolds.filter(sf => sf.id !== id);
+    
+    setFormData({
+      ...formData,
+      stretchFolds: updatedStretchFolds
+    });
+  };
+
   // Update addNewDough function to open modal
   const addNewDough = () => {
     setIsAddMakeModalOpen(true);
@@ -347,6 +371,7 @@ const BreadApp = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    console.log("SUBMITTING FORM ", teamMakes);
 
     // Get selected team make key
     const selectedMake = teamMakes.find(make => make.key === formData.teamMake);
@@ -459,7 +484,7 @@ const BreadApp = () => {
                 name="teamMake"
                 value={formData.teamMake}
                 onChange={handleInputChange}
-                className="w-full border rounded p-2 appearance-none pr-8"
+                className="w-full border rounded p-2 appearance-none pr-8 bg-white"
               >
                 {isLoadingMakes ? (
                   <option>Loading...</option>
@@ -648,8 +673,36 @@ const BreadApp = () => {
                               }}
                             />
                           </div>
+
+                          {/* Remove button - only show if more than 1 row */}
+                          {formData.stretchFolds.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeStretchFoldRow(stretchFold.id)}
+                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                              title="Remove this fold"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       ))}
+                      
+                      {/* Add new fold button */}
+                      <div className="pt-2 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={addStretchFoldRow}
+                          className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full border border-blue-300 hover:border-blue-400"
+                          title="Add another fold"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

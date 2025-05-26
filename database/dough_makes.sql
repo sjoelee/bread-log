@@ -24,6 +24,8 @@ CREATE TABLE dough_makes (
     preshape_ts TIMESTAMP NOT NULL,
     final_shape_ts TIMESTAMP NOT NULL,
     fridge_ts TIMESTAMP NOT NULL,
+    ADD COLUMN stretch_folds JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN notes TEXT;
     
     -- Audit fields for record keeping
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

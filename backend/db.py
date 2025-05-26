@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 from datetime import date
 from exceptions import DatabaseError
-from models import DoughMake, SimpleMake
+from models import DoughMake, SimpleMake, StretchFoldCreate
 from psycopg_pool import ConnectionPool
 from typing import List, Optional
 from uuid import UUID
 
+import json
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -55,6 +56,19 @@ class DBConnector:
 
   def insert_dough_make(self, dough_make: DoughMake) -> None:
     table = 'dough_makes'
+    
+    # Convert stretch_folds to JSON
+    stretch_folds_json = None
+    if dough_make.stretch_folds:
+      stretch_folds_data = [
+        {
+          "fold_number": sf.fold_number,
+          "timestamp": sf.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        for sf in dough_make.stretch_folds
+      ]
+      stretch_folds_json = json.dumps(stretch_folds_data)
+    
     insert_data = {
       'dough_name': dough_make.name,
       'make_date': dough_make.date,
@@ -62,18 +76,23 @@ class DBConnector:
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
       'preferment_temp': dough_make.preferment_temp,
+      'temperature_unit': dough_make.temp_unit,
       'autolyse_ts': dough_make.autolyse_ts,
       'start_ts': dough_make.start_ts,
       'pull_ts': dough_make.pull_ts,
       'preshape_ts': dough_make.preshape_ts,
       'final_shape_ts': dough_make.final_shape_ts,
       'fridge_ts': dough_make.fridge_ts,
+      'stretch_folds': stretch_folds_json,
+      'notes': dough_make.notes,
     }
-    # maybe add first fermentation and second fermentation
+    
+    # Filter out None values
     insert_data = {k: v for k, v in insert_data.items() if v is not None}
     columns = ', '.join(insert_data.keys())
     placeholders = ', '.join(['%s'] * len(insert_data))
     values = list(insert_data.values())
+    
     sql = f"""
       INSERT INTO {table} ({columns})
       VALUES ({placeholders})
@@ -87,14 +106,13 @@ class DBConnector:
           conn.commit()
     except Exception as e:
       logger.error(f"Error inserting dough make: {str(e)}")
-      raise  # Re-raise the exception after printing it
-
+      raise
 
   def get_dough_make(self, make_date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
     sql = """
         SELECT dough_name, make_date, room_temp, water_temp,
-               flour_temp, preferment_temp, start_ts, autolyse_ts,
-               pull_ts, preshape_ts, final_shape_ts, fridge_ts
+               flour_temp, preferment_temp, temperature_unit, start_ts, autolyse_ts,
+               pull_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes
         FROM dough_makes
         WHERE make_date = %s AND dough_name = %s AND make_num = %s;
     """
@@ -106,12 +124,30 @@ class DBConnector:
           res = cur.fetchone()
     except Exception as e:
       logger.error(f"Error getting entry: {str(e)}")
-
+  
     if not res:
       raise DatabaseError(f"Dough make {make_name} #{make_num} on {make_date} doesn't exist")
-    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts) = res
+    
+    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, 
+     temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, 
+     fridge_ts, stretch_folds_json, notes) = res
+    
     logger.info(f"Retrieved make {make_name} for {make_date}")
-
+  
+    # Parse stretch_folds JSON
+    stretch_folds = []
+    if stretch_folds_json:
+      try:
+        stretch_folds_data = json.loads(stretch_folds_json)
+        for sf_data in stretch_folds_data:
+          stretch_folds.append(StretchFoldCreate(
+            fold_number=sf_data["fold_number"],
+            timestamp=datetime.strptime(sf_data["timestamp"], "%Y-%m-%d %H:%M:%S")
+          ))
+      except (json.JSONDecodeError, KeyError) as e:
+        logger.warning(f"Error parsing stretch_folds JSON: {e}")
+        stretch_folds = []
+  
     return DoughMake(
       name=dough_name,
       date=make_date,
@@ -124,23 +160,31 @@ class DBConnector:
       room_temp=int(room_temp) if room_temp else None,
       preferment_temp=int(preferment_temp) if preferment_temp else None,
       water_temp=int(water_temp) if water_temp else None,
-      flour_temp=int(flour_temp) if flour_temp else None
+      flour_temp=int(flour_temp) if flour_temp else None,
+      temp_unit=temperature_unit or 'Fahrenheit',
+      stretch_folds=stretch_folds,
+      notes=notes
     )
+  
 
-  # if there are any updates needed to be made
   def update_dough_make(self, make_date: date, make_name: str, make_num: int, updates: dict):
     """
     Updates only the specified fields for a dough make.
-
-    Args:
-        make_name: Name of the dough make
-        make_date: Date of the make
-        make_num: Number of the make for that date
-        updates: Dictionary of field names and their new values
     """
+    # Handle stretch_folds conversion to JSON if present
+    if 'stretch_folds' in updates and updates['stretch_folds'] is not None:
+      stretch_folds_data = [
+        {
+          "fold_number": sf.fold_number,
+          "timestamp": sf.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        for sf in updates['stretch_folds']
+      ]
+      updates['stretch_folds'] = json.dumps(stretch_folds_data)
+    
     # Construct the SET clause dynamically based on what fields are being updated
     set_clause = ", ".join(f"{key} = %s" for key in updates.keys())
-
+  
     # Build the query with only the fields being updated
     query = f"""
         UPDATE dough_makes
@@ -149,7 +193,7 @@ class DBConnector:
         AND make_date = %s
         AND make_num = %s
     """
-
+  
     # Create parameter list with update values followed by WHERE clause values
     params = list(updates.values()) + [make_name, make_date, make_num]
     logger.debug(f'SQL Command\n {query}')
@@ -161,7 +205,6 @@ class DBConnector:
     except Exception as e:
       logger.error(f"Error updating dough make: {str(e)}")
       raise DatabaseError(f"Error updating dough make: {e}")
-
 
   def delete_dough_make(self, make_date: date, make_name: str, make_num: int):
     """
