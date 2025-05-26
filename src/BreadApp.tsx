@@ -26,11 +26,19 @@ interface DoughProcess {
   time: Dayjs | null;
 }
 
+// Add new interface for stretch and folds
+interface StretchFold {
+  id: number;
+  performed: boolean;
+  time: Dayjs | null;
+}
+
 interface BreadFormData {
   date: Dayjs | null;
   teamMake: string;
   temperatures: TemperatureSettings;
   processes: DoughProcess[];
+  stretchFolds: StretchFold[];
   notes: string;
 }
 
@@ -53,6 +61,14 @@ const initialTempSettings: TemperatureSettings = {
   waterTemp: 45,
   doughTemp: 76,
 };
+
+// Initialize default stretch and folds (typically 3-4 sets)
+const initialStretchFolds: StretchFold[] = [
+  { id: 1, performed: false, time: null },
+  { id: 2, performed: false, time: null },
+  { id: 3, performed: false, time: null },
+  { id: 4, performed: false, time: null },
+];
 
 interface Make {
   key: string;
@@ -84,6 +100,7 @@ const BreadApp = () => {
       { step: 'Final Shape', time: dayjs() },
       { step: 'Fridge', time: dayjs() },
     ],
+    stretchFolds: initialStretchFolds,
     notes: '',
   });
 
@@ -96,6 +113,9 @@ const BreadApp = () => {
   const [newMakeName, setNewMakeName] = useState('');
   const [isAddingMake, setIsAddingMake] = useState(false);
   const [addMakeError, setAddMakeError] = useState<string | null>(null);
+  
+  // Add state for collapsible stretch and folds section
+  const [isStretchFoldsExpanded, setIsStretchFoldsExpanded] = useState(false);
 
   // fetch team makes when component mounts
   useEffect(() => {
@@ -212,6 +232,32 @@ const BreadApp = () => {
     });
   };
 
+  // Handle stretch and fold checkbox change
+  const handleStretchFoldCheck = (id: number, performed: boolean) => {
+    const updatedStretchFolds = formData.stretchFolds.map(sf => 
+      sf.id === id 
+        ? { ...sf, performed, time: performed ? sf.time || dayjs() : null }
+        : sf
+    );
+
+    setFormData({
+      ...formData,
+      stretchFolds: updatedStretchFolds
+    });
+  };
+
+  // Handle stretch and fold time change
+  const handleStretchFoldTimeChange = (id: number, newTime: Dayjs | null) => {
+    const updatedStretchFolds = formData.stretchFolds.map(sf => 
+      sf.id === id ? { ...sf, time: newTime } : sf
+    );
+
+    setFormData({
+      ...formData,
+      stretchFolds: updatedStretchFolds
+    });
+  };
+
   // Update addNewDough function to open modal
   const addNewDough = () => {
     setIsAddMakeModalOpen(true);
@@ -322,6 +368,15 @@ const BreadApp = () => {
       : `https://your-production-api.com/${formattedDate}/${makeKey}`;
 
     const endpoint = `${apiBaseUrl}`;
+    
+    // Create stretch folds data for API
+    const stretchFoldsData = formData.stretchFolds
+      .filter(sf => sf.performed && sf.time)
+      .map(sf => ({
+        fold_number: sf.id,
+        timestamp: combineDateTime(formData.date, sf.time)
+      }));
+
     // Create API payload
     const apiPayload = {
       // Combine date and time for each process step
@@ -341,6 +396,9 @@ const BreadApp = () => {
 
       // Include temperature unit
       temp_unit: formData.temperatures.unit,
+
+      // Include stretch folds data
+      stretch_folds: stretchFoldsData,
 
       notes: formData.notes
     };
@@ -515,27 +573,87 @@ const BreadApp = () => {
           </div>
         </div>
 
-        {/* Process Steps - Realigned as per mockup */}
+        {/* Process Steps - Modified to include stretch and folds */}
         <div className="space-y-6 mb-6">
           {formData.processes.map((process, index) => (
-            <div key={index} className="flex justify-between items-center">
-              <div className="w-1/3">
-                <span className="font-medium">{process.step}</span>
+            <div key={index}>
+              <div className="flex justify-between items-center">
+                <div className="w-1/3">
+                  <span className="font-medium">{process.step}</span>
+                </div>
+
+                <div className="w-2/3">
+                  <TimePicker
+                    label="Time"
+                    value={process.time}
+                    onChange={(newTime) => handleTimeChange(index, newTime)}
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        fullWidth: true
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
-              <div className="w-2/3">
-                <TimePicker
-                  label="Time"
-                  value={process.time}
-                  onChange={(newTime) => handleTimeChange(index, newTime)}
-                  slotProps={{
-                    textField: {
-                      size: 'small',
-                      fullWidth: true
-                    }
-                  }}
-                />
-              </div>
+              {/* Insert Stretch & Folds section after Pull */}
+              {process.step === 'Pull' && (
+                <div className="mt-4 border rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setIsStretchFoldsExpanded(!isStretchFoldsExpanded)}
+                    className="w-full p-3 text-left font-medium bg-gray-50 hover:bg-gray-100 rounded-t-lg flex justify-between items-center"
+                  >
+                    <span>Stretch & Folds</span>
+                    <svg
+                      className={`h-5 w-5 transform transition-transform ${isStretchFoldsExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {isStretchFoldsExpanded && (
+                    <div className="p-4 space-y-3">
+                      {formData.stretchFolds.map((stretchFold) => (
+                        <div key={stretchFold.id} className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`stretch-fold-${stretchFold.id}`}
+                              checked={stretchFold.performed}
+                              onChange={(e) => handleStretchFoldCheck(stretchFold.id, e.target.checked)}
+                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                            <label htmlFor={`stretch-fold-${stretchFold.id}`} className="text-sm font-medium min-w-[60px]">
+                              Fold {stretchFold.id}
+                            </label>
+                          </div>
+
+                          <div className="flex-1">
+                            <TimePicker
+                              label="Time"
+                              value={stretchFold.time}
+                              onChange={(newTime) => handleStretchFoldTimeChange(stretchFold.id, newTime)}
+                              disabled={!stretchFold.performed}
+                              slotProps={{
+                                textField: {
+                                  size: 'small',
+                                  fullWidth: true,
+                                  disabled: !stretchFold.performed
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
