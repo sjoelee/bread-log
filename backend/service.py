@@ -239,15 +239,13 @@ def get_makes_for_date(date: str):
   pass
 
 def validate_date(year: int, month: int, day: int) -> date:
-  assert 1985 <= year, "Year must be valid"
-  assert 1 <= month <= 12, "Month must be valid"
-  assert 0 < day < 31, "Day must be valid"
-
-  # Custom checks
-  try:
-    return datetime(year, month, day).date()
-  except:
-    return False
+    """
+    Validate and return a date object.
+    """
+    try:
+        return date(year, month, day)
+    except ValueError as e:
+        raise ValueError(f"Invalid date {month}/{day}/{year}: {str(e)}")
 
 def validate_dough_make(make: DoughMake) -> bool:
   def validate_timestamp_order(ts1, ts2, earlier_name, later_name):
