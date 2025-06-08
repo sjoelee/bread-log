@@ -77,6 +77,7 @@ class DBConnector:
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
       'preferment_temp': dough_make.preferment_temp,
+      'dough_temp': dough_make.dough_temp,
       'temperature_unit': dough_make.temp_unit,
       'autolyse_ts': dough_make.autolyse_ts,
       'start_ts': dough_make.start_ts,
