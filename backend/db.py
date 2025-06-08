@@ -112,7 +112,7 @@ class DBConnector:
       raise
 
   def get_dough_makes(self, make_date: date) -> Optional[List[DoughMake]]:
-    sql = """"
+    sql = """
         SELECT dough_name, make_date, room_temp, water_temp,
                flour_temp, preferment_temp, dough_temp, temperature_unit, start_ts, autolyse_ts,
                pull_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes
@@ -177,7 +177,7 @@ class DBConnector:
   def get_dough_make(self, make_date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
     sql = """
         SELECT dough_name, make_date, 
-               room_temp, water_temp, flour_temp, preferment_temp, dough_temp
+               room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
                temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts,
                stretch_folds, notes
         FROM dough_makes
@@ -197,9 +197,10 @@ class DBConnector:
     if not res:
       raise DatabaseError(f"Make {make_name} #{make_num} on {make_date} doesn't exist")
     
-    (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
-     temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, 
-     fridge_ts, stretch_folds_json, notes) = res
+    (dough_name, make_date, 
+     room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
+     temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts, 
+     stretch_folds_json, notes) = res
     
     logger.info(f"Retrieved make {make_name} for {make_date}")
   

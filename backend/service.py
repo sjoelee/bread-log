@@ -76,7 +76,7 @@ def get_makes_for_account(user: UserContext=Depends(get_current_user)):
   try:
     return db_conn.get_account_makes(user.account_id)
   except Exception as e:
-    logger.error("Error ocurred: {e}")
+    logger.error(f"Error occurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/makes", response_model=SimpleMake)
@@ -186,9 +186,13 @@ def get_makes_date(year: int, month: int, day: int) -> List[DoughMake]:
   date = validate_date(year, month, day)
   try:
      dough_makes = db_conn.get_dough_makes(date)
-  except:
-     pass
-  return []
+     return dough_makes or []
+  except DatabaseError as e:
+     logger.error(f"Database error getting makes for date {date}: {e}")
+     raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+  except Exception as e:
+     logger.error(f"Unexpected error getting makes for date {date}: {e}")
+     raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.get("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
 def get_make(make_name: str, make_num: int, year: int, month: int, day: int) -> DoughMake | None:
