@@ -15,6 +15,7 @@ CREATE TABLE dough_makes (
     water_temp DECIMAL(5,1),
     flour_temp DECIMAL(5,1),
     preferment_temp DECIMAL(5,1),
+    dough_temp DECIMAL(5,1),
     temperature_unit temperature_unit_type DEFAULT 'Fahrenheit',
     
     -- Timestamps for each stage of the process

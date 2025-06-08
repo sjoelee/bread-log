@@ -7,7 +7,7 @@ import json
 
 class MakeNames(Enum):
   # Sticks
-  DEMI_BAGUETTE = "demi"
+  DEMI_BAGUETTE = "demi-baguette"
   HOAGIE = "hoagie"
 
   # Sourdough
@@ -59,10 +59,10 @@ class DoughMakeRequest(BaseModel):
 
   # Temps for each of the components
   room_temp: int
-  preferment_temp: int | None = None
-  water_temp: int | None = None
-  flour_temp: int | None = None
-  dough_temp: int | None = None
+  preferment_temp: int
+  water_temp: int
+  flour_temp: int
+  dough_temp: int
   
   stretch_folds: List[StretchFoldCreate] = []
   notes: Optional[str] = None

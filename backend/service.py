@@ -178,11 +178,22 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
       detail=f"Unexpected error occurred: {str(e)}"
     )
 
+@app.get("/makes/{year}/{month}/{day}")
+def get_makes_date(year: int, month: int, day: int) -> List[DoughMake]:
+  """
+  Retrieves the list of makes for a date
+  """
+  date = validate_date(year, month, day)
+  try:
+     dough_makes = db_conn.get_dough_makes(date)
+  except:
+     pass
+  return []
 
 @app.get("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
-def get_make(make_name: str, make_num: int, year: int, month: int, day: int):
+def get_make(make_name: str, make_num: int, year: int, month: int, day: int) -> DoughMake | None:
   """
-  Retrieves the dough_make that have {make_name} for made on {date}
+  Retrieves the dough_make that have {make_name} for make on {date}
   """
   date = validate_date(year, month, day)
 
