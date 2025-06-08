@@ -50,12 +50,12 @@ interface TeamMake {
 interface DoughMake {
   name: string;
   date: string;
-  autolyse_ts?: string;
-  start_ts?: string;
-  pull_ts?: string;
-  preshape_ts?: string;
-  final_shape_ts?: string;
-  fridge_ts?: string;
+  autolyse_ts?: Date;
+  start_ts?: Date;
+  pull_ts?: Date;
+  preshape_ts?: Date;
+  final_shape_ts?: Date;
+  fridge_ts?: Date;
   room_temp?: number;
   water_temp?: number;
   flour_temp?: number;
@@ -211,7 +211,17 @@ const BreadApp = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSavedMakes(data || []);
+        // Convert timestamp strings to Date objects
+        const processedMakes = (data || []).map((make: any) => ({
+          ...make,
+          autolyse_ts: make.autolyse_ts ? new Date(make.autolyse_ts) : undefined,
+          start_ts: make.start_ts ? new Date(make.start_ts) : undefined,
+          pull_ts: make.pull_ts ? new Date(make.pull_ts) : undefined,
+          preshape_ts: make.preshape_ts ? new Date(make.preshape_ts) : undefined,
+          final_shape_ts: make.final_shape_ts ? new Date(make.final_shape_ts) : undefined,
+          fridge_ts: make.fridge_ts ? new Date(make.fridge_ts) : undefined,
+        }));
+        setSavedMakes(processedMakes);
       } else {
         setSavedMakes([]);
       }
@@ -816,31 +826,37 @@ const BreadApp = () => {
         </div>
 
         <div className="space-y-3">
-          {savedMakes.map((make, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-              <button
-                onClick={() => handleViewMake(make)}
-                className="text-left w-full"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium text-blue-600 hover:text-blue-800">
-                      {make.name}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
-                    </p>
-                    <div className="text-xs text-gray-500 mt-2">
-                      {make.start_ts && `Started: ${new Date(make.start_ts).toLocaleTimeString()}`}
+          {savedMakes.map((make, index) => {
+            // Find the displayName for this make's key
+            const teamMake = teamMakes.find(tm => tm.key === make.name);
+            const displayName = teamMake?.displayName || make.name;
+            
+            return (
+              <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => handleViewMake(make)}
+                  className="text-left w-full"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-medium text-blue-600 hover:text-blue-800">
+                        {displayName}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
+                      </p>
+                      <div className="text-xs text-gray-500 mt-2">
+                        {make.start_ts && `Started: ${make.start_ts.toLocaleTimeString()}`}
+                      </div>
                     </div>
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </button>
-            </div>
-          ))}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
