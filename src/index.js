@@ -1,7 +1,6 @@
 import './index.css';
-import React from 'react';
 import ReactDOM from 'react-dom/client';
-import BreadApp from './BreadApp.tsx';
+import BreadApp from './BreadAppNew.tsx';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { NavigationProvider } from './context/navigation';
 import { LocalizationProvider } from '@mui/x-date-pickers';
