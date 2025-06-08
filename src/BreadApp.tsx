@@ -47,6 +47,25 @@ interface TeamMake {
   key: string;
 }
 
+interface DoughMake {
+  name: string;
+  date: string;
+  autolyse_ts?: string;
+  start_ts?: string;
+  pull_ts?: string;
+  preshape_ts?: string;
+  final_shape_ts?: string;
+  fridge_ts?: string;
+  room_temp?: number;
+  water_temp?: number;
+  flour_temp?: number;
+  preferment_temp?: number;
+  dough_temp?: number;
+  temp_unit?: string;
+  stretch_folds?: any[];
+  notes?: string;
+}
+
 const DEFAULT_TEAM_MAKES: TeamMake[] = [
   { displayName: 'Hoagie', key: 'hoagie' },
   { displayName: 'Demi', key: 'demi' },
@@ -113,6 +132,8 @@ const BreadApp = () => {
   const [isAddMakeModalOpen, setIsAddMakeModalOpen] = useState(false);
   const [newMakeName, setNewMakeName] = useState('');
   const [isAddingMake, setIsAddingMake] = useState(false);
+  const [savedMakes, setSavedMakes] = useState<DoughMake[]>([]);
+  const [isLoadingSavedMakes, setIsLoadingSavedMakes] = useState(false);
   const [addMakeError, setAddMakeError] = useState<string | null>(null);
   
   // Add state for collapsible stretch and folds section
@@ -168,6 +189,47 @@ const BreadApp = () => {
 
     fetchTeamMakes();
   }, []);;
+
+  // Function to fetch saved makes for a specific date
+  const fetchSavedMakes = async (date: string) => {
+    setIsLoadingSavedMakes(true);
+    try {
+      const isDevelopment = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      const apiBaseUrl = isDevelopment
+        ? 'http://localhost:8000'
+        : 'https://your-production-api.com';
+
+      const [year, month, day] = date.split('-');
+      const response = await fetch(`${apiBaseUrl}/makes/${year}/${month}/${day}`, {
+        headers: {
+          'Authorization': 'Bearer test-token',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSavedMakes(data || []);
+      } else {
+        setSavedMakes([]);
+      }
+    } catch (error) {
+      console.error('Error fetching saved makes:', error);
+      setSavedMakes([]);
+    } finally {
+      setIsLoadingSavedMakes(false);
+    }
+  };
+
+  // Effect to fetch saved makes when saved tab is viewed
+  useEffect(() => {
+    const formattedDate = formData.date ? formData.date.format('YYYY-MM-DD') : '';
+    if (activeTab === 'saved' && formattedDate) {
+      fetchSavedMakes(formattedDate);
+    }
+  }, [activeTab, formData.date]);
 
   // Toggle temperature unit
   const toggleTemperatureUnit = (unit: TemperatureUnit) => {
@@ -697,40 +759,49 @@ const BreadApp = () => {
     </form>
   );
 
+  // Handle viewing individual make
+  const handleViewMake = (make: DoughMake) => {
+    // For now, just log or show details - you can expand this later
+    console.log('Viewing make:', make);
+    // Could navigate to a detailed view or populate the form with this data
+    alert(`Viewing ${make.name} - implement detailed view here`);
+  };
+
   // Render Saved Tab Content
   const renderSavedContent = () => {
-    const selectedMake = teamMakes.find(make => make.key === formData.teamMake);
     const formattedDate = formData.date ? formData.date.format('YYYY-MM-DD') : '';
     
-    // TODO: Replace with actual API call to fetch saved make data
-    // This would be something like: GET /makes/{date}/{makeKey}
-    const hasSavedData = false; // This will be determined by API response
-    
-    if (!hasSavedData) {
+    if (!formattedDate) {
       return (
         <div className="text-center py-12 text-gray-500">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400 mb-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <p>Please select a date to view saved makes</p>
+        </div>
+      );
+    }
+
+    if (isLoadingSavedMakes) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <p>Loading saved makes...</p>
+        </div>
+      );
+    }
+
+    if (savedMakes.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <div className="space-y-2">
-            <p className="font-medium">No saved data found</p>
-            <p className="text-sm">
-              {selectedMake?.displayName} for {formattedDate || 'selected date'}
-            </p>
-            <p className="text-sm mt-4">
-              Switch to the Create tab to start a new make
-            </p>
+            <p className="font-medium">No saved makes found</p>
+            <p className="text-sm">for {formattedDate}</p>
+            <p className="text-sm mt-4">Switch to the Create tab to start a new make</p>
           </div>
         </div>
       );
     }
 
-    // When saved data exists, show read-only form with saved values
     return (
       <div className="space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -739,18 +810,37 @@ const BreadApp = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-blue-800 font-medium">
-              Viewing saved data for {selectedMake?.displayName} on {formattedDate}
+              Saved makes for {formattedDate}
             </p>
           </div>
-          <p className="text-blue-700 text-sm mt-1">
-            This data is read-only. To edit, switch to the Create tab.
-          </p>
         </div>
 
-        {/* TODO: Display saved form data here when API is connected */}
-        {/* This would show the same form structure but with saved values and disabled inputs */}
-        <div className="text-center py-8 text-gray-500">
-          <p>Saved data display will be implemented when API is connected</p>
+        <div className="space-y-3">
+          {savedMakes.map((make, index) => (
+            <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+              <button
+                onClick={() => handleViewMake(make)}
+                className="text-left w-full"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium text-blue-600 hover:text-blue-800">
+                      {make.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
+                    </p>
+                    <div className="text-xs text-gray-500 mt-2">
+                      {make.start_ts && `Started: ${new Date(make.start_ts).toLocaleTimeString()}`}
+                    </div>
+                  </div>
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     );
