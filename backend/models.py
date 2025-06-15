@@ -39,7 +39,7 @@ class DoughMakeUpdate(BaseModel):
   water_temp: Optional[float] = None
   flour_temp: Optional[float] = None
   dough_temp: Optional[float] = None
-  temp_unit: Optional[str] = None
+  temperature_unit: Optional[str] = None
   
   # Add new fields
   stretch_folds: Optional[List[StretchFoldCreate]] = None
@@ -55,7 +55,7 @@ class DoughMakeRequest(BaseModel):
   final_shape_ts: datetime
   fridge_ts: datetime
 
-  temp_unit: str = TempUnit.FAHRENHEIT.value
+  temperature_unit: str = TempUnit.FAHRENHEIT.value
 
   # Temps for each of the components
   room_temp: int
@@ -63,6 +63,8 @@ class DoughMakeRequest(BaseModel):
   water_temp: int
   flour_temp: int
   dough_temp: int
+  
+  created_at: datetime
   
   stretch_folds: List[StretchFoldCreate] = []
   notes: Optional[str] = None
@@ -73,15 +75,15 @@ class DoughMake(DoughMakeRequest):
 
 # Request model for creating a new account make
 class AccountMakeRequest(BaseModel):
-  make_name: str
-  make_key: str
+  name: str
+  key: str
 
 # Response model for account make
 class AccountMake(BaseModel):
   account_id: UUID
   account_name: str
-  make_name: str
-  make_key: str
+  name: str
+  key: str
   created_at: datetime
 
 # Simplified response model for account make

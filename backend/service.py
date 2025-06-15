@@ -106,11 +106,11 @@ def create_make_for_account(make: CreateMakeRequest, user: UserContext=Depends(g
 
 
 # Create make entries within the DB table
-@app.post("/makes/{year}/{month}/{day}/{make_name}")
-def create_make(year: int, month: int, day: int, make_name: str, dough_make_req: DoughMakeRequest) -> None:
+@app.post("/makes/{year}/{month}/{day}/{name}")
+def create_make(year: int, month: int, day: int, name: str, dough_make_req: DoughMakeRequest) -> None:
   date = validate_date(year, month, day)
   dough_make = DoughMake(
-    name=make_name,
+    name=name,
     date=date,
     **dough_make_req.model_dump()
   )
@@ -132,12 +132,18 @@ def create_make(year: int, month: int, day: int, make_name: str, dough_make_req:
   return
 
 
-@app.patch("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
-def update_make(make_name: str, make_num: int, year: int, month: int, day: int, updates: DoughMakeUpdate):
+@app.patch("/makes/{year}/{month}/{day}/{name}/{created_at}")
+def update_make(name: str, created_at: str, year: int, month: int, day: int, updates: DoughMakeUpdate):
   """
-  Updates the dough_make {make_name} that was made on {date}
+  Updates the dough_make {name} that was made on {date} with {created_at}
   """
   date = validate_date(year, month, day)
+  
+  # Parse the created_at timestamp
+  try:
+    created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+  except ValueError:
+    raise HTTPException(status_code=400, detail="Invalid created_at timestamp format")
 
   try:
     # Convert the updates to a dictionary, excluding None values
@@ -148,7 +154,7 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
         detail="No valid fields to update were provided"
       )
 
-    existing_make = get_make(make_name, make_num, year, month, day).model_dump(exclude_none=True)
+    existing_make = get_make(name, created_at, year, month, day).model_dump(exclude_none=True)
     # Add logging to see the data structure
     logger.info(f"Existing make data: {existing_make}")
     logger.info(f"Update data: {update_data}")
@@ -157,10 +163,10 @@ def update_make(make_name: str, make_num: int, year: int, month: int, day: int, 
     validate_dough_make(updated_make)
     logger.info(f"Updating make to {updated_make.model_dump()}")
     db_conn.update_dough_make(
-      make_date=date,
-      make_name=make_name,
-      make_num=make_num,
-      updates=update_data
+      date=date,
+      name=name,
+      created_at=created_at_dt,
+      updates=updated_make.model_dump()
     )
   except ValueError as e:  # Add this before DatabaseError
     raise HTTPException(
@@ -194,20 +200,24 @@ def get_makes_date(year: int, month: int, day: int) -> List[DoughMake]:
      logger.error(f"Unexpected error getting makes for date {date}: {e}")
      raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-@app.get("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
-def get_make(make_name: str, make_num: int, year: int, month: int, day: int) -> DoughMake | None:
+@app.get("/makes/{year}/{month}/{day}/{name}/{created_at}")
+def get_make(name: str, created_at: str, year: int, month: int, day: int) -> DoughMake | None:
   """
-  Retrieves the dough_make that have {make_name} for make on {date}
+  Retrieves the dough_make that have {name} for make on {date} with {created_at}
   """
   date = validate_date(year, month, day)
+  
+  # Parse the created_at timestamp
+  try:
+    created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+  except ValueError:
+    raise HTTPException(status_code=400, detail="Invalid created_at timestamp format")
 
   # separate the application logic from DB logic. This service app doesn't know how many makes there are for a specific dough on a given date. But it knows what's an allowed name.
-  if make_name not in MAKE_NAMES:
-    raise HTTPException(status_code=400, detail=f"The make name must be one of these {MAKE_NAMES}")
 
-  logger.info(f"Getting dough make: {make_name} #{make_num} for date: {str(date)}")
+  logger.info(f"Getting dough make: {name} created at {created_at} for date: {str(date)}")
   try:
-    dough_make = db_conn.get_dough_make(date, make_name, make_num)
+    dough_make = db_conn.get_dough_make(date, name, created_at_dt)
   except DatabaseError as e:
     raise HTTPException(
       status_code=400,
@@ -222,15 +232,21 @@ def get_make(make_name: str, make_num: int, year: int, month: int, day: int) -> 
   return dough_make
 
 
-@app.delete("/makes/{year}/{month}/{day}/{make_name}/{make_num}")
-def delete_make(make_name: str, make_num: int, year: int, month: int, day: int):
+@app.delete("/makes/{year}/{month}/{day}/{name}/{created_at}")
+def delete_make(name: str, created_at: str, year: int, month: int, day: int):
   date = validate_date(year, month, day)
-
-  logger.info(f"Deleting dough make: {make_name} #{make_num} for date: {str(date)}")
+  
+  # Parse the created_at timestamp
   try:
-    db_conn.delete_dough_make(date, make_name, make_num)
+    created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+  except ValueError:
+    raise HTTPException(status_code=400, detail="Invalid created_at timestamp format")
+
+  logger.info(f"Deleting dough make: {name} created at {created_at} for date: {str(date)}")
+  try:
+    db_conn.delete_dough_make(date, name, created_at_dt)
   except DatabaseError as e:
-    logger.error(f"Error deleting dough make ({make_name} #{make_num}): {str(e)}")
+    logger.error(f"Error deleting dough make ({name} created at {created_at}): {str(e)}")
     raise HTTPException(
       status_code=400,
       detail=f"Database error: {e.message}"
@@ -239,10 +255,10 @@ def delete_make(make_name: str, make_num: int, year: int, month: int, day: int):
 
 
 
-@app.get("/makes/{make_name}")
-def get_makes_for_name(make_name: str):
+@app.get("/makes/{name}")
+def get_makes_for_name(name: str):
   """
-  Retrieves a list of dough_makes that have {make_name}
+  Retrieves a list of dough_makes that have {name}
   """
   pass
 

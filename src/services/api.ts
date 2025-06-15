@@ -63,15 +63,22 @@ export const doughMakesApi = {
       if (response.ok) {
         const data = await response.json();
         // Convert timestamp strings to Date objects
-        return (data || []).map((make: any) => ({
-          ...make,
-          autolyse_ts: make.autolyse_ts ? new Date(make.autolyse_ts) : undefined,
-          start_ts: make.start_ts ? new Date(make.start_ts) : undefined,
-          pull_ts: make.pull_ts ? new Date(make.pull_ts) : undefined,
-          preshape_ts: make.preshape_ts ? new Date(make.preshape_ts) : undefined,
-          final_shape_ts: make.final_shape_ts ? new Date(make.final_shape_ts) : undefined,
-          fridge_ts: make.fridge_ts ? new Date(make.fridge_ts) : undefined,
-        }));
+        return (data || []).map((make: any) => {
+          if (!make.created_at) {
+            throw new Error('Backend did not return created_at timestamp');
+          }
+          return {
+            ...make,
+            created_at: new Date(make.created_at),
+            created_at_original: make.created_at, // Preserve original string
+            autolyse_ts: make.autolyse_ts ? new Date(make.autolyse_ts) : undefined,
+            start_ts: make.start_ts ? new Date(make.start_ts) : undefined,
+            pull_ts: make.pull_ts ? new Date(make.pull_ts) : undefined,
+            preshape_ts: make.preshape_ts ? new Date(make.preshape_ts) : undefined,
+            final_shape_ts: make.final_shape_ts ? new Date(make.final_shape_ts) : undefined,
+            fridge_ts: make.fridge_ts ? new Date(make.fridge_ts) : undefined,
+          };
+        });
       }
       return [];
     } catch (error) {
@@ -93,8 +100,8 @@ export const doughMakesApi = {
     }
   },
 
-  async update(year: number, month: number, day: number, makeName: string, makeNum: number, updates: any): Promise<void> {
-    const response = await fetch(`${getApiBaseUrl()}/makes/${year}/${month}/${day}/${makeName}/${makeNum}`, {
+  async update(year: number, month: number, day: number, makeName: string, createdAt: string, updates: any): Promise<void> {
+    const response = await fetch(`${getApiBaseUrl()}/makes/${year}/${month}/${day}/${makeName}/${encodeURIComponent(createdAt)}`, {
       method: 'PATCH',
       headers: getHeaders(),
       body: JSON.stringify(updates)
@@ -106,8 +113,8 @@ export const doughMakesApi = {
     }
   },
 
-  async delete(year: number, month: number, day: number, makeName: string, makeNum: number): Promise<void> {
-    const response = await fetch(`${getApiBaseUrl()}/makes/${year}/${month}/${day}/${makeName}/${makeNum}`, {
+  async delete(year: number, month: number, day: number, makeName: string, createdAt: string): Promise<void> {
+    const response = await fetch(`${getApiBaseUrl()}/makes/${year}/${month}/${day}/${makeName}/${encodeURIComponent(createdAt)}`, {
       method: 'DELETE',
       headers: getHeaders()
     });

@@ -24,7 +24,7 @@ const INITIAL_PROCESSES: DoughProcess[] = [
 
 const INITIAL_FORM_DATA: BreadFormData = {
   date: dayjs(),
-  teamMake: 'Hoagie',
+  teamMake: 'hoagie', // Use lowercase to match API keys
   temperatures: INITIAL_TEMP_SETTINGS,
   processes: INITIAL_PROCESSES,
   stretchFolds: INITIAL_STRETCH_FOLDS,
@@ -229,7 +229,7 @@ export const useBreadForm = () => {
     }
   };
 
-  const updateForm = async (makeNum: number) => {
+  const updateForm = async (selectedDough: DoughMake) => {
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -249,7 +249,9 @@ export const useBreadForm = () => {
       const submissionData = prepareSubmissionData();
       // Lowercase the make name for PATCH requests
       const lowerCaseMakeName = formData.teamMake.toLowerCase();
-      await doughMakesApi.update(year, month, day, lowerCaseMakeName, makeNum, submissionData);
+      // Use original timestamp string for the API to avoid timezone conversion
+      const createdAtString = selectedDough.created_at_original;
+      await doughMakesApi.update(year, month, day, lowerCaseMakeName, createdAtString, submissionData);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');

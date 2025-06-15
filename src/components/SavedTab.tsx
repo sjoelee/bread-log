@@ -26,7 +26,7 @@ interface SavedTabProps {
   onRemoveStretchFold: (id: number) => void;
   onUpdateStretchFold: (id: number, updates: any) => void;
   onSubmit: () => void;
-  onUpdate: (makeNum: number) => void;
+  onUpdate: (selectedDough: DoughMake) => void;
 }
 
 export const SavedTab: React.FC<SavedTabProps> = ({
@@ -87,9 +87,10 @@ export const SavedTab: React.FC<SavedTabProps> = ({
   // Create the update form handler
   const handleUpdateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Use the make_num from the selectedDough, fallback to 1 if not available
-    const makeNum = selectedDough?.make_num || 1;
-    onUpdate(makeNum);
+    // Pass the selectedDough to the update function
+    if (selectedDough) {
+      onUpdate(selectedDough);
+    }
   };
 
   return (

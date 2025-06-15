@@ -42,7 +42,8 @@ export interface TeamMake {
 export interface DoughMake {
   name: string;
   date: string;
-  make_num?: number;
+  created_at: Date;
+  created_at_original: string; // Keep original timestamp string for API calls
   autolyse_ts?: Date;
   start_ts?: Date;
   pull_ts?: Date;

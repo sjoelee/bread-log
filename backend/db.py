@@ -71,14 +71,14 @@ class DBConnector:
       stretch_folds_json = json.dumps(stretch_folds_data)
     
     insert_data = {
-      'dough_name': dough_make.name,
-      'make_date': dough_make.date,
+      'name': dough_make.name,
+      'date': dough_make.date,
       'room_temp': dough_make.room_temp,
       'water_temp': dough_make.water_temp,
       'flour_temp': dough_make.flour_temp,
       'preferment_temp': dough_make.preferment_temp,
       'dough_temp': dough_make.dough_temp,
-      'temperature_unit': dough_make.temp_unit,
+      'temperature_unit': dough_make.temperature_unit,
       'autolyse_ts': dough_make.autolyse_ts,
       'start_ts': dough_make.start_ts,
       'pull_ts': dough_make.pull_ts,
@@ -99,8 +99,7 @@ class DBConnector:
     
     query = sql.SQL("""
       INSERT INTO {} ({})
-      VALUES ({})
-      RETURNING make_num;
+      VALUES ({});
     """).format(sql.Identifier(table), columns, placeholders)
     logger.debug(f'SQL Command\n {query}')
     try:
@@ -112,15 +111,16 @@ class DBConnector:
       logger.error(f"Error inserting dough make: {str(e)}")
       raise
 
-  def get_dough_makes(self, make_date: date) -> Optional[List[DoughMake]]:
+  def get_dough_makes(self, date: date) -> Optional[List[DoughMake]]:
     sql = """
-        SELECT dough_name, make_date, room_temp, water_temp,
+        SELECT name, date, room_temp, water_temp,
                flour_temp, preferment_temp, dough_temp, temperature_unit, start_ts, autolyse_ts,
-               pull_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes
+               pull_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes, created_at
         FROM dough_makes
-        WHERE make_date = %s;
+        WHERE date = %s
+        ORDER BY created_at ASC;
     """
-    values = (make_date,)
+    values = (date,)
     try:
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
@@ -135,9 +135,9 @@ class DBConnector:
     
     dough_makes = []
     for row in res:
-      (dough_name, make_date, room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
+      (name, date, room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
        temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, 
-       fridge_ts, stretch_folds_json, notes) = row
+       fridge_ts, stretch_folds_json, notes, created_at) = row
       
       # Parse stretch_folds JSON
       stretch_folds = []
@@ -154,8 +154,9 @@ class DBConnector:
           stretch_folds = []
       
       dough_make = DoughMake(
-        name=dough_name,
-        date=make_date,
+        name=name,
+        date=date,
+        created_at=created_at,
         autolyse_ts=autolyse_ts,
         start_ts=start_ts,
         pull_ts=pull_ts,
@@ -167,7 +168,7 @@ class DBConnector:
         water_temp=water_temp,
         flour_temp=flour_temp,
         dough_temp=dough_temp,
-        temp_unit=temperature_unit or 'Fahrenheit',
+        temperature_unit=temperature_unit or 'Fahrenheit',
         stretch_folds=stretch_folds,
         notes=notes
       )
@@ -175,16 +176,16 @@ class DBConnector:
     
     return dough_makes
   
-  def get_dough_make(self, make_date: date, make_name: str, make_num: int) -> Optional[DoughMake]:
+  def get_dough_make(self, date: date, name: str, created_at: datetime) -> Optional[DoughMake]:
     sql = """
-        SELECT dough_name, make_date, 
+        SELECT name, date, 
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
                temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts,
-               stretch_folds, notes
+               stretch_folds, notes, created_at
         FROM dough_makes
-        WHERE make_date = %s AND dough_name = %s AND make_num = %s;
+        WHERE date = %s AND name = %s AND created_at = %s;
     """
-    values = (make_date, make_name, make_num)
+    values = (date, name, created_at)
     try:
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
@@ -196,14 +197,14 @@ class DBConnector:
       raise DatabaseError(f"Database error: {str(e)}") 
   
     if not res:
-      raise DatabaseError(f"Make {make_name} #{make_num} on {make_date} doesn't exist")
+      raise DatabaseError(f"Make {name} created at {created_at} on {date} doesn't exist")
     
-    (dough_name, make_date, 
+    (name, date, 
      room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
      temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts, 
-     stretch_folds_json, notes) = res
+     stretch_folds_json, notes, created_at) = res
     
-    logger.info(f"Retrieved make {make_name} for {make_date}")
+    logger.info(f"Retrieved make {name} for {date}")
   
     # Parse stretch_folds JSON
     stretch_folds = []
@@ -224,8 +225,9 @@ class DBConnector:
         stretch_folds = []
   
     return DoughMake(
-      name=dough_name,
-      date=make_date,
+      name=name,
+      date=date,
+      created_at=created_at,
       autolyse_ts=autolyse_ts,
       start_ts=start_ts,
       pull_ts=pull_ts,
@@ -237,13 +239,13 @@ class DBConnector:
       water_temp=water_temp,
       flour_temp=flour_temp,
       dough_temp=dough_temp,
-      temp_unit=temperature_unit or 'Fahrenheit',
+      temperature_unit=temperature_unit,
       stretch_folds=stretch_folds,
       notes=notes
     )
   
 
-  def update_dough_make(self, make_date: date, make_name: str, make_num: int, updates: dict):
+  def update_dough_make(self, date: date, name: str, created_at: datetime, updates: dict):
     """
     Updates only the specified fields for a dough make.
     """
@@ -266,13 +268,13 @@ class DBConnector:
     query = sql.SQL("""
         UPDATE dough_makes
         SET {}, updated_at = CURRENT_TIMESTAMP
-        WHERE dough_name = %s
-        AND make_date = %s
-        AND make_num = %s
+        WHERE name = %s
+        AND date = %s
+        AND created_at = %s
     """).format(set_clause)
   
     # Create parameter list with update values followed by WHERE clause values
-    params = list(updates.values()) + [make_name, make_date, make_num]
+    params = list(updates.values()) + [name, date, created_at]
     logger.debug(f'SQL Command\n {query}')
     try:
       with self.db_pool.get_connection() as conn:
@@ -283,24 +285,24 @@ class DBConnector:
       logger.error(f"Error updating dough make: {str(e)}")
       raise DatabaseError(f"Error updating dough make: {e}")
 
-  def delete_dough_make(self, make_date: date, make_name: str, make_num: int):
+  def delete_dough_make(self, date: date, name: str, created_at: datetime):
     """
-    Deletes a specific dough make by name, date, and num
+    Deletes a specific dough make by name, date, and created_at
     """
     query = f"""
         DELETE FROM dough_makes
-        WHERE dough_name = %s
-        AND make_date = %s
-        AND make_num = %s
+        WHERE name = %s
+        AND date = %s
+        AND created_at = %s
     """
-    params = [make_name, make_date, make_num]
+    params = [name, date, created_at]
     logger.debug(f'SQL Command\n {query}')
     try:
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
           cur.execute(query, params)
           if cur.rowcount == 0:
-            raise DatabaseError(f"No dough make found with name {make_name} #{make_num} on {make_date}")
+            raise DatabaseError(f"No dough make found with name {name} created at {created_at} on {date}")
           conn.commit()
     except Exception as e:
       raise DatabaseError(f"{e}")

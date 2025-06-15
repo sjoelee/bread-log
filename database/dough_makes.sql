@@ -4,8 +4,8 @@ DROP TYPE IF EXISTS temperature_unit_type;
 CREATE TYPE temperature_unit_type AS ENUM ('Fahrenheit', 'Celsius');
 CREATE SEQUENCE daily_make_num;
 CREATE TABLE dough_makes (
-    dough_name VARCHAR(100) NOT NULL,
-    make_date DATE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    date DATE NOT NULL,
     -- make_num autoincrements for the same day, and reset to 1 for a new day, see implementaion in daily_make_num.sql
     make_num INTEGER DEFAULT nextval('daily_make_num'),
 
@@ -32,5 +32,5 @@ CREATE TABLE dough_makes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    PRIMARY KEY (dough_name, make_date, make_num)
+    PRIMARY KEY (name, date, make_num)
 );
