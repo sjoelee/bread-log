@@ -6,6 +6,7 @@ import {
   TemperatureSettings,
   DoughProcess,
   StretchFold,
+  DoughMake,
   INITIAL_TEMP_SETTINGS,
   INITIAL_STRETCH_FOLDS
 } from '../types/bread.ts';
@@ -131,6 +132,76 @@ export const useBreadForm = () => {
     return null;
   };
 
+  const populateFormWithDough = (dough: DoughMake) => {
+    // Convert timestamps to dayjs objects
+    const convertToDayjs = (timestamp: Date | undefined) => 
+      timestamp ? dayjs(timestamp) : null;
+
+    // Convert temperature unit string to enum
+    const tempUnit = dough.temp_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
+
+    // Create updated processes array with times from dough
+    const updatedProcesses = [
+      { step: 'Autolyse', time: convertToDayjs(dough.autolyse_ts) },
+      { step: 'Start', time: convertToDayjs(dough.start_ts) },
+      { step: 'Pull', time: convertToDayjs(dough.pull_ts) },
+      { step: 'Preshape', time: convertToDayjs(dough.preshape_ts) },
+      { step: 'Final Shape', time: convertToDayjs(dough.final_shape_ts) },
+      { step: 'Fridge', time: convertToDayjs(dough.fridge_ts) },
+    ];
+
+    // Convert stretch folds data
+    let stretchFolds = INITIAL_STRETCH_FOLDS;
+    if (dough.stretch_folds && Array.isArray(dough.stretch_folds) && dough.stretch_folds.length > 0) {
+      stretchFolds = dough.stretch_folds.map((fold: any, index: number) => ({
+        id: index + 1,
+        performed: true,
+        time: fold.timestamp ? dayjs(fold.timestamp) : null
+      }));
+    }
+
+    // Update form data with dough data
+    setFormData({
+      date: dayjs(dough.date),
+      teamMake: dough.name,
+      temperatures: {
+        unit: tempUnit,
+        roomTemp: dough.room_temp ?? 0,
+        flourTemp: dough.flour_temp ?? 0,
+        prefermentTemp: dough.preferment_temp ?? 0,
+        waterTemp: dough.water_temp ?? 0,
+        doughTemp: dough.dough_temp ?? 0,
+      },
+      processes: updatedProcesses,
+      stretchFolds: stretchFolds,
+      notes: dough.notes || '',
+    });
+  };
+
+  const prepareSubmissionData = () => {
+    const date = formData.date!;
+    return {
+      date: date.format('YYYY-MM-DD'),
+      autolyse_ts: formData.processes.find(p => p.step === 'Autolyse')?.time?.toISOString(),
+      start_ts: formData.processes.find(p => p.step === 'Start')?.time?.toISOString(),
+      pull_ts: formData.processes.find(p => p.step === 'Pull')?.time?.toISOString(),
+      preshape_ts: formData.processes.find(p => p.step === 'Preshape')?.time?.toISOString(),
+      final_shape_ts: formData.processes.find(p => p.step === 'Final Shape')?.time?.toISOString(),
+      fridge_ts: formData.processes.find(p => p.step === 'Fridge')?.time?.toISOString(),
+      room_temp: formData.temperatures.roomTemp,
+      water_temp: formData.temperatures.waterTemp,
+      flour_temp: formData.temperatures.flourTemp,
+      preferment_temp: formData.temperatures.prefermentTemp,
+      dough_temp: formData.temperatures.doughTemp,
+      temp_unit: formData.temperatures.unit,
+      stretch_folds: formData.stretchFolds.filter(sf => sf.performed).map(sf => ({
+        fold_number: sf.id,
+        timestamp: sf.time?.toISOString()
+      })),
+      notes: formData.notes || null,
+    };
+  };
+
   const submitForm = async () => {
     const validationError = validateForm();
     if (validationError) {
@@ -148,29 +219,37 @@ export const useBreadForm = () => {
       const month = date.month() + 1; // dayjs months are 0-indexed
       const day = date.date();
 
-      // Prepare the data for API submission
-      const submissionData = {
-        date: date.format('YYYY-MM-DD'),
-        autolyse_ts: formData.processes.find(p => p.step === 'Autolyse')?.time?.toISOString(),
-        start_ts: formData.processes.find(p => p.step === 'Start')?.time?.toISOString(),
-        pull_ts: formData.processes.find(p => p.step === 'Pull')?.time?.toISOString(),
-        preshape_ts: formData.processes.find(p => p.step === 'Preshape')?.time?.toISOString(),
-        final_shape_ts: formData.processes.find(p => p.step === 'Final Shape')?.time?.toISOString(),
-        fridge_ts: formData.processes.find(p => p.step === 'Fridge')?.time?.toISOString(),
-        room_temp: formData.temperatures.roomTemp,
-        water_temp: formData.temperatures.waterTemp,
-        flour_temp: formData.temperatures.flourTemp,
-        preferment_temp: formData.temperatures.prefermentTemp,
-        dough_temp: formData.temperatures.doughTemp,
-        temp_unit: formData.temperatures.unit,
-        stretch_folds: formData.stretchFolds.filter(sf => sf.performed).map(sf => ({
-          fold_number: sf.id,
-          timestamp: sf.time?.toISOString()
-        })),
-        notes: formData.notes || null,
-      };
-
+      const submissionData = prepareSubmissionData();
       await doughMakesApi.create(year, month, day, formData.teamMake, submissionData);
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateForm = async (makeNum: number) => {
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const date = formData.date!;
+      const year = date.year();
+      const month = date.month() + 1; // dayjs months are 0-indexed
+      const day = date.date();
+
+      const submissionData = prepareSubmissionData();
+      // Lowercase the make name for PATCH requests
+      const lowerCaseMakeName = formData.teamMake.toLowerCase();
+      await doughMakesApi.update(year, month, day, lowerCaseMakeName, makeNum, submissionData);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -194,5 +273,7 @@ export const useBreadForm = () => {
     removeStretchFold,
     updateStretchFold,
     submitForm,
+    updateForm,
+    populateFormWithDough,
   };
 };

@@ -42,6 +42,7 @@ export interface TeamMake {
 export interface DoughMake {
   name: string;
   date: string;
+  make_num?: number;
   autolyse_ts?: Date;
   start_ts?: Date;
   pull_ts?: Date;

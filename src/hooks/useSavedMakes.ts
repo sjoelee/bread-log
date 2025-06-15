@@ -3,7 +3,13 @@ import { Dayjs } from 'dayjs';
 import { DoughMake, TabType } from '../types/bread.ts';
 import { doughMakesApi } from '../services/api.ts';
 
-export const useSavedMakes = (activeTab: TabType, selectedDate: Dayjs | null) => {
+export const useSavedMakes = (
+  activeTab: TabType, 
+  selectedDate: Dayjs | null,
+  selectedDough: DoughMake | null,
+  setSelectedDough: (dough: DoughMake | null) => void,
+  populateFormWithDough: (dough: DoughMake) => void
+) => {
   const [savedMakes, setSavedMakes] = useState<DoughMake[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,9 +35,8 @@ export const useSavedMakes = (activeTab: TabType, selectedDate: Dayjs | null) =>
   }, [activeTab, selectedDate]);
 
   const handleViewMake = (make: DoughMake) => {
-    // For now, just log or show details - can be expanded later
-    console.log('Viewing make:', make);
-    alert(`Viewing ${make.name} - implement detailed view here`);
+    populateFormWithDough(make);
+    setSelectedDough(make);
   };
 
   const refreshSavedMakes = () => {
@@ -58,5 +63,7 @@ export const useSavedMakes = (activeTab: TabType, selectedDate: Dayjs | null) =>
     isLoading,
     handleViewMake,
     refreshSavedMakes,
+    selectedDough,
+    setSelectedDough,
   };
 };
