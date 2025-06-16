@@ -28,6 +28,7 @@ const BreadApp: React.FC = () => {
     addStretchFold,
     removeStretchFold,
     updateStretchFold,
+    resetForm,
     submitForm,
     updateForm,
     populateFormWithDough,
@@ -125,6 +126,7 @@ const BreadApp: React.FC = () => {
           onClick={() => {
             setActiveTab('create');
             setSelectedDough(null);
+            resetForm();
           }}
           className={`px-4 py-2 font-medium ${
             activeTab === 'create'

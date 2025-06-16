@@ -122,6 +122,28 @@ export const useBreadForm = () => {
     }));
   };
 
+  const resetForm = () => {
+    const currentTime = dayjs();
+    setFormData({
+      date: dayjs(),
+      teamMake: 'hoagie', // Use lowercase to match API keys
+      temperatures: INITIAL_TEMP_SETTINGS,
+      processes: [
+        { step: 'Autolyse', time: currentTime },
+        { step: 'Start', time: currentTime },
+        { step: 'Pull', time: currentTime },
+        { step: 'Preshape', time: currentTime },
+        { step: 'Final Shape', time: currentTime },
+        { step: 'Fridge', time: currentTime },
+      ],
+      stretchFolds: INITIAL_STRETCH_FOLDS,
+      notes: '',
+    });
+    setError(null);
+    setSuccess(false);
+    setCustomSuccessMessage(null);
+  };
+
   const validateForm = (): string | null => {
     if (!formData.date) {
       return 'Date is required';
@@ -287,6 +309,7 @@ export const useBreadForm = () => {
     addStretchFold,
     removeStretchFold,
     updateStretchFold,
+    resetForm,
     submitForm,
     updateForm,
     populateFormWithDough,
