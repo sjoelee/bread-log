@@ -36,6 +36,7 @@ export const useBreadForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [customSuccessMessage, setCustomSuccessMessage] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -229,7 +230,7 @@ export const useBreadForm = () => {
     }
   };
 
-  const updateForm = async (selectedDough: DoughMake) => {
+  const updateForm = async (selectedDough: DoughMake, onUpdateSuccess?: () => void) => {
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -239,6 +240,7 @@ export const useBreadForm = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    setCustomSuccessMessage(null);
 
     try {
       const date = formData.date!;
@@ -252,7 +254,17 @@ export const useBreadForm = () => {
       // Use original timestamp string for the API to avoid timezone conversion
       const createdAtString = selectedDough.created_at_original;
       await doughMakesApi.update(year, month, day, lowerCaseMakeName, createdAtString, submissionData);
+      
+      // Find the display name for the success message
+      const displayName = selectedDough.name;
+      const createdAtFormatted = selectedDough.created_at.toLocaleString();
+      setCustomSuccessMessage(`Updated ${displayName} created at ${createdAtFormatted} successfully`);
       setSuccess(true);
+      
+      // Call the callback to clear selected dough and show the list again
+      if (onUpdateSuccess) {
+        onUpdateSuccess();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
@@ -266,6 +278,7 @@ export const useBreadForm = () => {
     loading,
     error,
     success,
+    customSuccessMessage,
     handleInputChange,
     handleDateChange,
     handleTemperatureChange,

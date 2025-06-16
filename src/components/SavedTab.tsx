@@ -16,6 +16,7 @@ interface SavedTabProps {
   loading: boolean;
   error: string | null;
   success: boolean;
+  customSuccessMessage: string | null;
   isStretchFoldsExpanded: boolean;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   onTemperatureChange: (field: keyof TemperatureSettings, value: string) => void;
@@ -41,6 +42,7 @@ export const SavedTab: React.FC<SavedTabProps> = ({
   loading,
   error,
   success,
+  customSuccessMessage,
   isStretchFoldsExpanded,
   onInputChange,
   onTemperatureChange,
@@ -95,56 +97,55 @@ export const SavedTab: React.FC<SavedTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Saved Makes List */}
-      <div className="space-y-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-blue-800 font-medium">
-              Saved makes for {formattedDate}
-            </p>
+      {/* Saved Makes List - Hidden when editing */}
+      {!selectedDough && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-blue-800 font-medium">
+                Saved makes for {formattedDate}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {savedMakes.map((make, index) => {
+              // Find the displayName for this make's key
+              const teamMake = teamMakes.find(tm => tm.key === make.name);
+              const displayName = teamMake?.displayName || make.name;
+              
+              return (
+                <div key={index} className="border rounded-lg p-4 transition-colors border-gray-200 hover:bg-gray-50">
+                  <button
+                    onClick={() => onViewMake(make)}
+                    className="text-left w-full"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-medium text-blue-600 hover:text-blue-800">
+                          {displayName}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
+                        </p>
+                        <div className="text-xs text-gray-500 mt-2">
+                          {make.start_ts && `Started: ${make.start_ts.toLocaleTimeString()}`}
+                        </div>
+                      </div>
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
-
-        <div className="space-y-3">
-          {savedMakes.map((make, index) => {
-            // Find the displayName for this make's key
-            const teamMake = teamMakes.find(tm => tm.key === make.name);
-            const displayName = teamMake?.displayName || make.name;
-            const isSelected = selectedDough?.name === make.name && selectedDough?.date === make.date;
-            
-            return (
-              <div key={index} className={`border rounded-lg p-4 transition-colors ${
-                isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <button
-                  onClick={() => onViewMake(make)}
-                  className="text-left w-full"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className={`font-medium ${isSelected ? 'text-blue-800' : 'text-blue-600 hover:text-blue-800'}`}>
-                        {displayName}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
-                      </p>
-                      <div className="text-xs text-gray-500 mt-2">
-                        {make.start_ts && `Started: ${make.start_ts.toLocaleTimeString()}`}
-                      </div>
-                    </div>
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
 
       {/* Show detailed form if a dough is selected */}
       {selectedDough && (
@@ -320,9 +321,8 @@ export const SavedTab: React.FC<SavedTabProps> = ({
               />
             </div>
 
-            {/* Error and Success Messages */}
+            {/* Error Messages */}
             {error && <div className="text-red-500 mb-4">{error}</div>}
-            {success && <div className="text-green-500 mb-4">Form updated successfully!</div>}
 
             {/* Update Button */}
             <div className="flex justify-center">
@@ -335,6 +335,18 @@ export const SavedTab: React.FC<SavedTabProps> = ({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Custom Success Message - Show at bottom when not editing */}
+      {!selectedDough && customSuccessMessage && (
+        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <p className="text-green-800 font-medium">{customSuccessMessage}</p>
+          </div>
         </div>
       )}
     </div>

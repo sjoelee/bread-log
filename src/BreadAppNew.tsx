@@ -19,6 +19,7 @@ const BreadApp: React.FC = () => {
     loading,
     error,
     success,
+    customSuccessMessage,
     handleInputChange,
     handleDateChange,
     handleTemperatureChange,
@@ -54,6 +55,12 @@ const BreadApp: React.FC = () => {
   // Local handlers
   const handleStretchFoldsToggle = () => {
     setIsStretchFoldsExpanded(!isStretchFoldsExpanded);
+  };
+
+  const handleUpdateWithCallback = (selectedDough: DoughMake) => {
+    updateForm(selectedDough, () => {
+      setSelectedDough(null); // Clear selected dough to show the list again
+    });
   };
 
   return (
@@ -179,6 +186,7 @@ const BreadApp: React.FC = () => {
           loading={loading}
           error={error}
           success={success}
+          customSuccessMessage={customSuccessMessage}
           isStretchFoldsExpanded={isStretchFoldsExpanded}
           onInputChange={handleInputChange}
           onTemperatureChange={handleTemperatureChange}
@@ -189,7 +197,7 @@ const BreadApp: React.FC = () => {
           onRemoveStretchFold={removeStretchFold}
           onUpdateStretchFold={updateStretchFold}
           onSubmit={submitForm}
-          onUpdate={updateForm}
+          onUpdate={handleUpdateWithCallback}
         />
       )}
     </div>
