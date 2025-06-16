@@ -132,7 +132,7 @@ export const SavedTab: React.FC<SavedTabProps> = ({
                           {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
                         </p>
                         <div className="text-xs text-gray-500 mt-2">
-                          {make.start_ts && `Started: ${make.start_ts.toLocaleTimeString()}`}
+                          Created: {make.created_at.toLocaleString()}
                         </div>
                       </div>
                       <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

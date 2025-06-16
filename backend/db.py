@@ -251,13 +251,25 @@ class DBConnector:
     """
     # Handle stretch_folds conversion to JSON if present
     if 'stretch_folds' in updates and updates['stretch_folds'] is not None:
-      stretch_folds_data = [
-        {
-          "fold_number": sf.fold_number,
-          "timestamp": sf.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        for sf in updates['stretch_folds']
-      ]
+      stretch_folds_data = []
+      for sf in updates['stretch_folds']:
+        # Handle both dict (from frontend) and object formats
+        if isinstance(sf, dict):
+          fold_number = sf['fold_number']
+          timestamp = sf['timestamp']
+          # Parse ISO timestamp string to datetime, then format
+          if isinstance(timestamp, str):
+            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+          timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+          # Handle object format (existing code)
+          fold_number = sf.fold_number
+          timestamp_str = sf.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        
+        stretch_folds_data.append({
+          "fold_number": fold_number,
+          "timestamp": timestamp_str
+        })
       updates['stretch_folds'] = json.dumps(stretch_folds_data)
     
     # Construct the SET clause dynamically based on what fields are being updated

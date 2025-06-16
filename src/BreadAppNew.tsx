@@ -50,6 +50,7 @@ const BreadApp: React.FC = () => {
     savedMakes,
     isLoading: isLoadingSavedMakes,
     handleViewMake,
+    refreshSavedMakes,
   } = useSavedMakes(activeTab, formData.date, selectedDough, setSelectedDough, populateFormWithDough);
 
   // Local handlers
@@ -60,6 +61,7 @@ const BreadApp: React.FC = () => {
   const handleUpdateWithCallback = (selectedDough: DoughMake) => {
     updateForm(selectedDough, () => {
       setSelectedDough(null); // Clear selected dough to show the list again
+      refreshSavedMakes(); // Refresh the list to get updated data
     });
   };
 
