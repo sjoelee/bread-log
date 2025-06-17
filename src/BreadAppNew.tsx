@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TabType, DoughMake } from './types/bread.ts';
@@ -12,10 +12,12 @@ const BreadApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('create');
   const [isStretchFoldsExpanded, setIsStretchFoldsExpanded] = useState(false);
   const [selectedDough, setSelectedDough] = useState<DoughMake | null>(null);
+  const [savedCreateFormData, setSavedCreateFormData] = useState<any>(null);
 
   // Custom hooks for state management
   const {
     formData,
+    setFormData,
     loading,
     error,
     success,
@@ -65,6 +67,18 @@ const BreadApp: React.FC = () => {
       refreshSavedMakes(); // Refresh the list to get updated data
     });
   };
+
+  const handleViewMakeWithClearSave = (make: DoughMake) => {
+    setSavedCreateFormData(null); // Clear saved Create data when viewing a saved make
+    handleViewMake(make);
+  };
+
+  // Clear saved Create data when form is successfully submitted
+  useEffect(() => {
+    if (success && activeTab === 'create') {
+      setSavedCreateFormData(null);
+    }
+  }, [success, activeTab]);
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
@@ -124,9 +138,17 @@ const BreadApp: React.FC = () => {
       <div className="flex mb-6 border-b">
         <button
           onClick={() => {
-            setActiveTab('create');
-            setSelectedDough(null);
-            resetForm();
+            if (activeTab === 'saved') {
+              // Switching from Saved to Create
+              setActiveTab('create');
+              setSelectedDough(null);
+              // Restore saved Create form data if it exists
+              if (savedCreateFormData) {
+                setFormData(savedCreateFormData);
+              } else {
+                resetForm(); // Only reset if no saved data
+              }
+            }
           }}
           className={`px-4 py-2 font-medium ${
             activeTab === 'create'
@@ -137,7 +159,13 @@ const BreadApp: React.FC = () => {
           Create
         </button>
         <button
-          onClick={() => setActiveTab('saved')}
+          onClick={() => {
+            if (activeTab === 'create') {
+              // Switching from Create to Saved - save the current form data
+              setSavedCreateFormData(formData);
+            }
+            setActiveTab('saved');
+          }}
           className={`px-4 py-2 font-medium ${
             activeTab === 'saved'
               ? 'text-blue-600 border-b-2 border-blue-600'
@@ -183,7 +211,7 @@ const BreadApp: React.FC = () => {
           isLoading={isLoadingSavedMakes}
           teamMakes={teamMakes}
           formattedDate={formData.date?.format('YYYY-MM-DD') || ''}
-          onViewMake={handleViewMake}
+          onViewMake={handleViewMakeWithClearSave}
           selectedDough={selectedDough}
           setSelectedDough={setSelectedDough}
           formData={formData}
