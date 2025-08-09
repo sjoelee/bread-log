@@ -72,8 +72,8 @@ export const doughMakesApi = {
             created_at: new Date(make.created_at),
             created_at_original: make.created_at, // Preserve original string
             autolyse_ts: make.autolyse_ts ? new Date(make.autolyse_ts) : undefined,
-            start_ts: make.start_ts ? new Date(make.start_ts) : undefined,
-            pull_ts: make.pull_ts ? new Date(make.pull_ts) : undefined,
+            mix_ts: make.mix_ts ? new Date(make.mix_ts) : undefined,
+            bulk_ts: make.bulk_ts ? new Date(make.bulk_ts) : undefined,
             preshape_ts: make.preshape_ts ? new Date(make.preshape_ts) : undefined,
             final_shape_ts: make.final_shape_ts ? new Date(make.final_shape_ts) : undefined,
             fridge_ts: make.fridge_ts ? new Date(make.fridge_ts) : undefined,

@@ -45,8 +45,8 @@ export interface DoughMake {
   created_at: Date;
   created_at_original: string; // Keep original timestamp string for API calls
   autolyse_ts?: Date;
-  start_ts?: Date;
-  pull_ts?: Date;
+  mix_ts?: Date;
+  bulk_ts?: Date;
   preshape_ts?: Date;
   final_shape_ts?: Date;
   fridge_ts?: Date;

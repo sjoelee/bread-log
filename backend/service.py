@@ -283,12 +283,12 @@ def validate_dough_make(make: DoughMake) -> bool:
     if ts1 > ts2:
       raise ValueError(f"{earlier_name} time must occur before {later_name} time")
 
-  def validate_timestamps(autolyse_ts, start_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts):
-    validate_timestamp_order(autolyse_ts, start_ts, "Autolyse", "Start")
-    validate_timestamp_order(start_ts, pull_ts, "Start", "Pull")
-    validate_timestamp_order(pull_ts, preshape_ts, "Pull", "Preshape")
+  def validate_timestamps(autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, fridge_ts):
+    validate_timestamp_order(autolyse_ts, mix_ts, "Autolyse", "Mix")
+    validate_timestamp_order(mix_ts, bulk_ts, "Mix", "Bulk")
+    validate_timestamp_order(bulk_ts, preshape_ts, "Bulk", "Preshape")
     validate_timestamp_order(preshape_ts, final_shape_ts, "Preshape", "Final shape")
     validate_timestamp_order(final_shape_ts, fridge_ts, "Final shape", "Fridge")
     return True
 
-  return True if validate_timestamps(make.autolyse_ts, make.start_ts, make.pull_ts, make.preshape_ts, make.final_shape_ts, make.fridge_ts) else False
+  return True if validate_timestamps(make.autolyse_ts, make.mix_ts, make.bulk_ts, make.preshape_ts, make.final_shape_ts, make.fridge_ts) else False

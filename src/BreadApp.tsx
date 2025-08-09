@@ -51,8 +51,8 @@ interface DoughMake {
   name: string;
   date: string;
   autolyse_ts?: Date;
-  start_ts?: Date;
-  pull_ts?: Date;
+  mix_ts?: Date;
+  bulk_ts?: Date;
   preshape_ts?: Date;
   final_shape_ts?: Date;
   fridge_ts?: Date;
@@ -114,8 +114,8 @@ const BreadApp = () => {
     temperatures: initialTempSettings,
     processes: [
       { step: 'Autolyse', time: dayjs() },
-      { step: 'Start', time: dayjs() },
-      { step: 'Pull', time: dayjs() },
+      { step: 'Mix', time: dayjs() },
+      { step: 'Bulk', time: dayjs() },
       { step: 'Preshape', time: dayjs() },
       { step: 'Final Shape', time: dayjs() },
       { step: 'Fridge', time: dayjs() },
@@ -215,8 +215,8 @@ const BreadApp = () => {
         const processedMakes = (data || []).map((make: any) => ({
           ...make,
           autolyse_ts: make.autolyse_ts ? new Date(make.autolyse_ts) : undefined,
-          start_ts: make.start_ts ? new Date(make.start_ts) : undefined,
-          pull_ts: make.pull_ts ? new Date(make.pull_ts) : undefined,
+          mix_ts: make.mix_ts ? new Date(make.mix_ts) : undefined,
+          bulk_ts: make.bulk_ts ? new Date(make.bulk_ts) : undefined,
           preshape_ts: make.preshape_ts ? new Date(make.preshape_ts) : undefined,
           final_shape_ts: make.final_shape_ts ? new Date(make.final_shape_ts) : undefined,
           fridge_ts: make.fridge_ts ? new Date(make.fridge_ts) : undefined,
@@ -482,8 +482,8 @@ const BreadApp = () => {
     const apiPayload = {
       // Combine date and time for each process step
       autolyse_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Autolyse')?.time ?? null),
-      start_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Start')?.time ?? null),
-      pull_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Pull')?.time ?? null),
+      mix_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Mix')?.time ?? null),
+      bulk_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Bulk')?.time ?? null),
       preshape_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Preshape')?.time ?? null),
       final_shape_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Final Shape')?.time ?? null),
       fridge_ts: combineDateTime(formData.date, formData.processes.find(p => p.step === 'Fridge')?.time ?? null),
@@ -652,8 +652,8 @@ const BreadApp = () => {
               </div>
             </div>
 
-            {/* Insert Stretch & Folds section after Pull */}
-            {process.step === 'Pull' && (
+            {/* Insert Stretch & Folds section after Bulk */}
+            {process.step === 'Bulk' && (
               <div className="mt-4 border rounded-lg">
                 <button
                   type="button"
@@ -846,7 +846,7 @@ const BreadApp = () => {
                         {make.notes ? make.notes.substring(0, 100) + '...' : 'No notes'}
                       </p>
                       <div className="text-xs text-gray-500 mt-2">
-                        {make.start_ts && `Started: ${make.start_ts.toLocaleTimeString()}`}
+                        {make.mix_ts && `Mixed: ${make.mix_ts.toLocaleTimeString()}`}
                       </div>
                     </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

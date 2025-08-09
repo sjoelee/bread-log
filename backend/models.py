@@ -28,8 +28,8 @@ class StretchFoldCreate(BaseModel):
 class DoughMakeUpdate(BaseModel):
   # Make all fields optional by using Optional
   autolyse_ts: Optional[datetime] = None
-  start_ts: Optional[datetime] = None
-  pull_ts: Optional[datetime] = None
+  mix_ts: Optional[datetime] = None
+  bulk_ts: Optional[datetime] = None
   preshape_ts: Optional[datetime] = None
   final_shape_ts: Optional[datetime] = None
   fridge_ts: Optional[datetime] = None
@@ -49,8 +49,8 @@ class DoughMakeUpdate(BaseModel):
 class DoughMakeRequest(BaseModel):
   # Times needed to store
   autolyse_ts: datetime
-  start_ts: datetime
-  pull_ts: datetime
+  mix_ts: datetime
+  bulk_ts: datetime
   preshape_ts: datetime
   final_shape_ts: datetime
   fridge_ts: datetime

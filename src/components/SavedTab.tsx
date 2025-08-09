@@ -183,7 +183,7 @@ export const SavedTab: React.FC<SavedTabProps> = ({
             <div className="space-y-4 p-4 border rounded-lg bg-blue-50">
               <h2 className="text-xl font-bold text-gray-800">Process</h2>
               
-              {/* First part: Autolyse, Start, Pull */}
+              {/* First part: Autolyse, Mix, Bulk */}
               <div className="space-y-4">
                 {formData.processes.slice(0, 3).map((process) => (
                   <div key={process.step} className="flex items-center gap-4">

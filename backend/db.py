@@ -80,8 +80,8 @@ class DBConnector:
       'dough_temp': dough_make.dough_temp,
       'temperature_unit': dough_make.temperature_unit,
       'autolyse_ts': dough_make.autolyse_ts,
-      'start_ts': dough_make.start_ts,
-      'pull_ts': dough_make.pull_ts,
+      'mix_ts': dough_make.mix_ts,
+      'bulk_ts': dough_make.bulk_ts,
       'preshape_ts': dough_make.preshape_ts,
       'final_shape_ts': dough_make.final_shape_ts,
       'fridge_ts': dough_make.fridge_ts,
@@ -114,8 +114,8 @@ class DBConnector:
   def get_dough_makes(self, date: date) -> Optional[List[DoughMake]]:
     sql = """
         SELECT name, date, room_temp, water_temp,
-               flour_temp, preferment_temp, dough_temp, temperature_unit, start_ts, autolyse_ts,
-               pull_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes, created_at
+               flour_temp, preferment_temp, dough_temp, temperature_unit, mix_ts, autolyse_ts,
+               bulk_ts, preshape_ts, final_shape_ts, fridge_ts, stretch_folds, notes, created_at
         FROM dough_makes
         WHERE date = %s
         ORDER BY created_at ASC;
@@ -136,7 +136,7 @@ class DBConnector:
     dough_makes = []
     for row in res:
       (name, date, room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
-       temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, 
+       temperature_unit, mix_ts, autolyse_ts, bulk_ts, preshape_ts, final_shape_ts, 
        fridge_ts, stretch_folds_json, notes, created_at) = row
       
       # Parse stretch_folds JSON
@@ -158,8 +158,8 @@ class DBConnector:
         date=date,
         created_at=created_at,
         autolyse_ts=autolyse_ts,
-        start_ts=start_ts,
-        pull_ts=pull_ts,
+        mix_ts=mix_ts,
+        bulk_ts=bulk_ts,
         preshape_ts=preshape_ts,
         final_shape_ts=final_shape_ts,
         fridge_ts=fridge_ts,
@@ -180,7 +180,7 @@ class DBConnector:
     sql = """
         SELECT name, date, 
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
-               temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts,
+               temperature_unit, mix_ts, autolyse_ts, bulk_ts, preshape_ts, final_shape_ts, fridge_ts,
                stretch_folds, notes, created_at
         FROM dough_makes
         WHERE date = %s AND name = %s AND created_at = %s;
@@ -201,7 +201,7 @@ class DBConnector:
     
     (name, date, 
      room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
-     temperature_unit, start_ts, autolyse_ts, pull_ts, preshape_ts, final_shape_ts, fridge_ts, 
+     temperature_unit, mix_ts, autolyse_ts, bulk_ts, preshape_ts, final_shape_ts, fridge_ts, 
      stretch_folds_json, notes, created_at) = res
     
     logger.info(f"Retrieved make {name} for {date}")
@@ -229,8 +229,8 @@ class DBConnector:
       date=date,
       created_at=created_at,
       autolyse_ts=autolyse_ts,
-      start_ts=start_ts,
-      pull_ts=pull_ts,
+      mix_ts=mix_ts,
+      bulk_ts=bulk_ts,
       preshape_ts=preshape_ts,
       final_shape_ts=final_shape_ts,
       fridge_ts=fridge_ts,

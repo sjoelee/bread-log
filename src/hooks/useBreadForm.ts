@@ -15,8 +15,8 @@ import { doughMakesApi } from '../services/api.ts';
 
 const INITIAL_PROCESSES: DoughProcess[] = [
   { step: 'Autolyse', time: dayjs() },
-  { step: 'Start', time: dayjs() },
-  { step: 'Pull', time: dayjs() },
+  { step: 'Mix', time: dayjs() },
+  { step: 'Bulk', time: dayjs() },
   { step: 'Preshape', time: dayjs() },
   { step: 'Final Shape', time: dayjs() },
   { step: 'Fridge', time: dayjs() },
@@ -130,8 +130,8 @@ export const useBreadForm = () => {
       temperatures: INITIAL_TEMP_SETTINGS,
       processes: [
         { step: 'Autolyse', time: currentTime },
-        { step: 'Start', time: currentTime },
-        { step: 'Pull', time: currentTime },
+        { step: 'Mix', time: currentTime },
+        { step: 'Bulk', time: currentTime },
         { step: 'Preshape', time: currentTime },
         { step: 'Final Shape', time: currentTime },
         { step: 'Fridge', time: currentTime },
@@ -166,8 +166,8 @@ export const useBreadForm = () => {
     // Create updated processes array with times from dough
     const updatedProcesses = [
       { step: 'Autolyse', time: convertToDayjs(dough.autolyse_ts) },
-      { step: 'Start', time: convertToDayjs(dough.start_ts) },
-      { step: 'Pull', time: convertToDayjs(dough.pull_ts) },
+      { step: 'Mix', time: convertToDayjs(dough.mix_ts) },
+      { step: 'Bulk', time: convertToDayjs(dough.bulk_ts) },
       { step: 'Preshape', time: convertToDayjs(dough.preshape_ts) },
       { step: 'Final Shape', time: convertToDayjs(dough.final_shape_ts) },
       { step: 'Fridge', time: convertToDayjs(dough.fridge_ts) },
@@ -206,8 +206,8 @@ export const useBreadForm = () => {
     return {
       date: date.format('YYYY-MM-DD'),
       autolyse_ts: formData.processes.find(p => p.step === 'Autolyse')?.time?.toISOString(),
-      start_ts: formData.processes.find(p => p.step === 'Start')?.time?.toISOString(),
-      pull_ts: formData.processes.find(p => p.step === 'Pull')?.time?.toISOString(),
+      mix_ts: formData.processes.find(p => p.step === 'Mix')?.time?.toISOString(),
+      bulk_ts: formData.processes.find(p => p.step === 'Bulk')?.time?.toISOString(),
       preshape_ts: formData.processes.find(p => p.step === 'Preshape')?.time?.toISOString(),
       final_shape_ts: formData.processes.find(p => p.step === 'Final Shape')?.time?.toISOString(),
       fridge_ts: formData.processes.find(p => p.step === 'Fridge')?.time?.toISOString(),
