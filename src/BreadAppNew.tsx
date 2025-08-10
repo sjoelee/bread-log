@@ -7,6 +7,7 @@ import { useTeamMakes } from './hooks/useTeamMakes.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
 import { SavedTab } from './components/SavedTab.tsx';
+import { AddMakeModal } from './components/AddMakeModal.tsx';
 
 const BreadApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('create');
@@ -196,14 +197,6 @@ const BreadApp: React.FC = () => {
           onRemoveStretchFold={removeStretchFold}
           onUpdateStretchFold={updateStretchFold}
           onSubmit={submitForm}
-          isAddMakeModalOpen={isAddMakeModalOpen}
-          newMakeName={newMakeName}
-          onNewMakeNameChange={setNewMakeName}
-          onOpenAddMakeModal={openAddMakeModal}
-          onCloseAddMakeModal={closeAddMakeModal}
-          onAddMake={handleAddMake}
-          isAddingMake={isAddingMake}
-          addMakeError={addMakeError}
         />
       ) : (
         <SavedTab
@@ -232,6 +225,17 @@ const BreadApp: React.FC = () => {
           onUpdate={handleUpdateWithCallback}
         />
       )}
+      
+      {/* Add Make Modal */}
+      <AddMakeModal
+        isOpen={isAddMakeModalOpen}
+        newMakeName={newMakeName}
+        onNameChange={setNewMakeName}
+        onClose={closeAddMakeModal}
+        onAdd={handleAddMake}
+        isAdding={isAddingMake}
+        error={addMakeError}
+      />
     </div>
   );
 };

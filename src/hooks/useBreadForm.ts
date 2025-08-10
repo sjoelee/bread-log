@@ -216,7 +216,7 @@ export const useBreadForm = () => {
       flour_temp: formData.temperatures.flourTemp,
       preferment_temp: formData.temperatures.prefermentTemp,
       dough_temp: formData.temperatures.doughTemp,
-      temp_unit: formData.temperatures.unit,
+      temperature_unit: formData.temperatures.unit,
       stretch_folds: formData.stretchFolds.filter(sf => sf.performed).map(sf => ({
         fold_number: sf.id,
         timestamp: sf.time?.toISOString()

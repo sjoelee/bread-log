@@ -64,7 +64,7 @@ class DoughMakeRequest(BaseModel):
   flour_temp: int
   dough_temp: int
   
-  created_at: datetime
+  created_at: Optional[datetime] = None
   
   stretch_folds: List[StretchFoldCreate] = []
   notes: Optional[str] = None

@@ -70,8 +70,12 @@ export const useTeamMakes = () => {
     setAddMakeError(null);
 
     try {
+      const displayName = newMakeName.trim();
+      const key = displayName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
       const request: CreateMakeRequest = {
-        display_name: newMakeName.trim()
+        display_name: displayName,
+        key: key
       };
 
       const newMake = await teamMakesApi.create(request);

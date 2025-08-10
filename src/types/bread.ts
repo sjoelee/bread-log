@@ -72,6 +72,7 @@ export interface FormattedMake {
 
 export interface CreateMakeRequest {
   display_name: string;
+  key: string;
 }
 
 export type TabType = 'create' | 'saved';

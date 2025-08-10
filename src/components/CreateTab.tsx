@@ -4,7 +4,6 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { Dayjs } from 'dayjs';
 import { BreadFormData, TeamMake, TemperatureSettings } from '../types/bread.ts';
 import { TemperatureSection } from './TemperatureSection.tsx';
-import { AddMakeModal } from './AddMakeModal.tsx';
 
 interface CreateTabProps {
   formData: BreadFormData;
@@ -24,15 +23,6 @@ interface CreateTabProps {
   onRemoveStretchFold: (id: number) => void;
   onUpdateStretchFold: (id: number, updates: any) => void;
   onSubmit: () => void;
-  // Modal props
-  isAddMakeModalOpen: boolean;
-  newMakeName: string;
-  onNewMakeNameChange: (name: string) => void;
-  onOpenAddMakeModal: () => void;
-  onCloseAddMakeModal: () => void;
-  onAddMake: () => void;
-  isAddingMake: boolean;
-  addMakeError: string | null;
 }
 
 export const CreateTab: React.FC<CreateTabProps> = ({
@@ -53,14 +43,6 @@ export const CreateTab: React.FC<CreateTabProps> = ({
   onRemoveStretchFold,
   onUpdateStretchFold,
   onSubmit,
-  isAddMakeModalOpen,
-  newMakeName,
-  onNewMakeNameChange,
-  onOpenAddMakeModal,
-  onCloseAddMakeModal,
-  onAddMake,
-  isAddingMake,
-  addMakeError,
 }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,16 +216,6 @@ export const CreateTab: React.FC<CreateTabProps> = ({
         </button>
       </div>
 
-      {/* Add Make Modal */}
-      <AddMakeModal
-        isOpen={isAddMakeModalOpen}
-        newMakeName={newMakeName}
-        onNameChange={onNewMakeNameChange}
-        onClose={onCloseAddMakeModal}
-        onAdd={onAddMake}
-        isAdding={isAddingMake}
-        error={addMakeError}
-      />
     </form>
   );
 };

@@ -109,6 +109,11 @@ def create_make_for_account(make: CreateMakeRequest, user: UserContext=Depends(g
 @app.post("/makes/{year}/{month}/{day}/{name}")
 def create_make(year: int, month: int, day: int, name: str, dough_make_req: DoughMakeRequest) -> None:
   date = validate_date(year, month, day)
+  
+  # Set created_at server-side if not provided
+  if dough_make_req.created_at is None:
+    dough_make_req.created_at = datetime.now()
+  
   dough_make = DoughMake(
     name=name,
     date=date,
