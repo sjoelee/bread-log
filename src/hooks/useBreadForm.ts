@@ -161,7 +161,7 @@ export const useBreadForm = () => {
       timestamp ? dayjs(timestamp) : null;
 
     // Convert temperature unit string to enum
-    const tempUnit = dough.temp_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
+    const tempUnit = dough.temperature_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
 
     // Create updated processes array with times from dough
     const updatedProcesses = [

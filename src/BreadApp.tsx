@@ -61,7 +61,7 @@ interface DoughMake {
   flour_temp?: number;
   preferment_temp?: number;
   dough_temp?: number;
-  temp_unit?: string;
+  temperature_unit?: string;
   stretch_folds?: any[];
   notes?: string;
 }
@@ -496,7 +496,7 @@ const BreadApp = () => {
       dough_temp: formData.temperatures.doughTemp,
 
       // Include temperature unit
-      temp_unit: formData.temperatures.unit,
+      temperature_unit: formData.temperatures.unit,
 
       // Include stretch folds data
       stretch_folds: stretchFoldsData,
