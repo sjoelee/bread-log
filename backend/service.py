@@ -284,16 +284,51 @@ def validate_date(year: int, month: int, day: int) -> date:
         raise ValueError(f"Invalid date {month}/{day}/{year}: {str(e)}")
 
 def validate_dough_make(make: DoughMake) -> bool:
-  def validate_timestamp_order(ts1, ts2, earlier_name, later_name):
-    if ts1 > ts2:
-      raise ValueError(f"{earlier_name} time must occur before {later_name} time")
+  def adjust_for_day_boundaries(timestamps):
+    """
+    Detect day boundary crossings and adjust timestamps accordingly.
+    If we see a significant backwards jump in time, assume it's the next day.
+    """
+    adjusted = []
+    days_added = 0
+    
+    for i, ts in enumerate(timestamps):
+      if i == 0:
+        adjusted.append(ts)
+        continue
+        
+      prev_ts = adjusted[-1]
+      current_ts = ts
+      
+      # If current timestamp is significantly earlier than previous (more than 12 hours backwards),
+      # assume it's the next day
+      if current_ts < prev_ts:
+        hours_backwards = (prev_ts - current_ts).total_seconds() / 3600
+        if hours_backwards > 12:  # Crossed midnight boundary
+          days_added += 1
+      
+      # Add accumulated days to current timestamp
+      if days_added > 0:
+        from datetime import timedelta
+        current_ts = current_ts + timedelta(days=days_added)
+      
+      adjusted.append(current_ts)
+    
+    return adjusted
 
   def validate_timestamps(autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, fridge_ts):
-    validate_timestamp_order(autolyse_ts, mix_ts, "Autolyse", "Mix")
-    validate_timestamp_order(mix_ts, bulk_ts, "Mix", "Bulk")
-    validate_timestamp_order(bulk_ts, preshape_ts, "Bulk", "Preshape")
-    validate_timestamp_order(preshape_ts, final_shape_ts, "Preshape", "Final shape")
-    validate_timestamp_order(final_shape_ts, fridge_ts, "Final shape", "Fridge")
+    # Create list of timestamps with their names for validation
+    timestamps = [autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, fridge_ts]
+    names = ["Autolyse", "Mix", "Bulk", "Preshape", "Final shape", "Fridge"]
+    
+    # Adjust timestamps to handle day boundary crossings
+    adjusted_timestamps = adjust_for_day_boundaries(timestamps)
+    
+    # Now validate that adjusted timestamps are in order
+    for i in range(len(adjusted_timestamps) - 1):
+      if adjusted_timestamps[i] > adjusted_timestamps[i + 1]:
+        raise ValueError(f"{names[i]} time must occur before {names[i + 1]} time")
+    
     return True
 
   return True if validate_timestamps(make.autolyse_ts, make.mix_ts, make.bulk_ts, make.preshape_ts, make.final_shape_ts, make.fridge_ts) else False
