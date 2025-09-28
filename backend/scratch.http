@@ -6,6 +6,48 @@ GET http://localhost:8000/makes/2025/05/26/demi-baguette/4
 GET http://localhost:8000/makes/2025/06/08/
 
 ###
+GET http://localhost:8000/recipes/0a6916d5-bf61-4c34-95c9-3a60f2dd236b
+
+###
+PATCH http://localhost:8000/recipes/0a6916d5-bf61-4c34-95c9-3a60f2dd236b
+Content-Type: application/json
+
+{
+    "ingredients": [
+        {
+            "name": "bread flour",
+            "amount": 1056.0,
+            "unit": "grams",
+            "notes": "high protein flour"
+        },
+        {
+            "name": "water",
+            "amount": 845.0,
+            "unit": "grams",
+            "notes": "filtered water"
+        },
+        {
+            "name": "levain",
+            "amount": 211.0,
+            "unit": "grams",
+            "notes": "ripe sourdough starter"
+        },
+        {
+            "name": "salt",
+            "amount": 17.0,
+            "unit": "grams",
+            "notes": "fine sea salt"
+        },
+        {
+            "name": "olive oil",
+            "amount": 71.0,
+            "unit": "grams",
+            "notes": "can be any olive oil. I use costco's olive oil"
+        }
+    ]
+}
+
+###
 POST http://localhost:8000/recipes/
 
 {

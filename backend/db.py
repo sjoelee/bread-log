@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from datetime import date, datetime
 from exceptions import DatabaseError
-from models import DoughMake, SimpleMake, StretchFoldCreate
+from models import DoughMake, Recipe, RecipeStep, Ingredient, SimpleMake, StretchFoldCreate
 from psycopg_pool import ConnectionPool
 from psycopg import sql
 from typing import List, Optional
@@ -407,3 +407,83 @@ class DBConnector:
     except Exception as e:
       logger.error(f"Error creating recipe: {str(e)}")
       raise DatabaseError(f"Error creating recipe: {e}")
+
+  def get_recipe(self, recipe_id: UUID) -> Optional[Recipe]:
+    """
+    Get a recipe by ID
+    """
+    query = """
+      SELECT id, name, description, instructions, ingredients, created_at, updated_at
+      FROM recipes
+      WHERE id = %s
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [recipe_id])
+          result = cur.fetchone()
+    except Exception as e:
+      logger.error(f"Error getting recipe: {str(e)}")
+      raise DatabaseError(f"Error getting recipe: {e}")
+    
+    if not result:
+      return None
+    
+    (id, name, description, instructions_json, ingredients_json, created_at, updated_at) = result
+    
+    # Parse JSON data
+    instructions = [RecipeStep(**step) for step in instructions_json]
+    ingredients = [Ingredient(**ingredient) for ingredient in ingredients_json]
+    
+    return Recipe(
+      id=id,
+      name=name,
+      description=description,
+      instructions=instructions,
+      ingredients=ingredients,
+      created_at=created_at,
+      updated_at=updated_at
+    )
+
+  def update_recipe(self, recipe_id: UUID, updates: dict):
+    """
+    Update a recipe with the provided fields
+    """
+    # Handle JSON conversion for instructions and ingredients
+    if 'instructions' in updates and updates['instructions'] is not None:
+      updates['instructions'] = json.dumps(updates['instructions'])
+    
+    if 'ingredients' in updates and updates['ingredients'] is not None:
+      updates['ingredients'] = json.dumps(updates['ingredients'])
+    
+    # Filter out None values
+    updates = {k: v for k, v in updates.items() if v is not None}
+    
+    if not updates:
+      raise DatabaseError("No valid fields to update")
+    
+    # Construct the SET clause dynamically
+    set_assignments = [sql.SQL("{} = %s").format(sql.Identifier(key)) for key in updates.keys()]
+    set_clause = sql.SQL(", ").join(set_assignments)
+    
+    query = sql.SQL("""
+      UPDATE recipes
+      SET {}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = %s
+    """).format(set_clause)
+    
+    # Create parameter list with update values followed by WHERE clause values
+    params = list(updates.values()) + [recipe_id]
+    
+    logger.debug(f'SQL Command\n {query}')
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          if cur.rowcount == 0:
+            raise DatabaseError(f"Recipe with ID {recipe_id} not found")
+          conn.commit()
+    except Exception as e:
+      logger.error(f"Error updating recipe: {str(e)}")
+      raise DatabaseError(f"Error updating recipe: {e}")

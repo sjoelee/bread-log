@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
-from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, RecipeRequest, SimpleMake
+from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, SimpleMake
 from typing import List
 from uuid import UUID, uuid4
 
@@ -299,6 +299,59 @@ def create_recipe(recipe: RecipeRequest):
     
   except Exception as e:
     logger.error(f"Error creating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recipes/{recipe_id}", response_model=Recipe)
+def get_recipe(recipe_id: UUID):
+  """
+  Get a recipe by ID
+  """
+  try:
+    recipe = db_conn.get_recipe(recipe_id)
+    if not recipe:
+      raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    return recipe
+    
+  except DatabaseError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+  except Exception as e:
+    logger.error(f"Error getting recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/recipes/{recipe_id}", response_model=Recipe)
+def update_recipe(recipe_id: UUID, updates: RecipeUpdateRequest):
+  """
+  Update a recipe
+  """
+  try:
+    # Convert RecipeUpdateRequest to dict format for database update
+    update_data = updates.model_dump(exclude_none=True)
+    
+    # Convert nested objects to dicts for JSON serialization
+    if 'instructions' in update_data:
+      update_data['instructions'] = [step.model_dump() for step in updates.instructions]
+    
+    if 'ingredients' in update_data:
+      update_data['ingredients'] = [ingredient.model_dump() for ingredient in updates.ingredients]
+    
+    if not update_data:
+      raise HTTPException(status_code=400, detail="No valid fields to update were provided")
+    
+    # Update the recipe
+    db_conn.update_recipe(recipe_id, update_data)
+    
+    # Return the updated recipe
+    updated_recipe = db_conn.get_recipe(recipe_id)
+    if not updated_recipe:
+      raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    return updated_recipe
+    
+  except DatabaseError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+  except Exception as e:
+    logger.error(f"Error updating recipe: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
 def validate_date(year: int, month: int, day: int) -> date:
