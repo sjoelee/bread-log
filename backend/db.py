@@ -372,3 +372,38 @@ class DBConnector:
 
     # Return as a SimpleMake object
     return SimpleMake(display_name=result[2], key=result[3])
+
+  def create_recipe(self, recipe_data: dict):
+    """
+    Create a new recipe in the database
+    """
+    insert_data = {
+      'id': recipe_data['id'],
+      'name': recipe_data['name'],
+      'description': recipe_data['description'],
+      'instructions': json.dumps(recipe_data['instructions']),
+      'ingredients': json.dumps(recipe_data['ingredients'])
+    }
+    
+    # Filter out None values
+    insert_data = {k: v for k, v in insert_data.items() if v is not None}
+    
+    # Build query using psycopg.sql for safety
+    columns = sql.SQL(', ').join([sql.Identifier(k) for k in insert_data.keys()])
+    placeholders = sql.SQL(', ').join([sql.Placeholder() for _ in insert_data])
+    values = list(insert_data.values())
+    
+    query = sql.SQL("""
+      INSERT INTO recipes ({})
+      VALUES ({});
+    """).format(columns, placeholders)
+    
+    logger.debug(f'SQL Command\n {query}')
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, values)
+          conn.commit()
+    except Exception as e:
+      logger.error(f"Error creating recipe: {str(e)}")
+      raise DatabaseError(f"Error creating recipe: {e}")

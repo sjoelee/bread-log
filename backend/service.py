@@ -4,9 +4,9 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
-from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, SimpleMake
+from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, RecipeRequest, SimpleMake
 from typing import List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import json
 import logging
@@ -273,6 +273,33 @@ def get_makes_for_date(date: str):
   Retrieves a list of makes for that date
   """
   pass
+
+@app.post("/recipes/")
+def create_recipe(recipe: RecipeRequest):
+  """
+  Create a new recipe
+  """
+  try:
+    # Generate UUID for the recipe
+    recipe_id = uuid4()
+    
+    # Convert RecipeRequest to dict format for database insertion
+    recipe_data = {
+      "id": recipe_id,
+      "name": recipe.name,
+      "description": recipe.description,
+      "instructions": [step.model_dump() for step in recipe.instructions],
+      "ingredients": [ingredient.model_dump() for ingredient in recipe.ingredients]
+    }
+    
+    # Insert into database
+    db_conn.create_recipe(recipe_data)
+    
+    return {"id": recipe_id, "message": "Recipe created successfully"}
+    
+  except Exception as e:
+    logger.error(f"Error creating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
 
 def validate_date(year: int, month: int, day: int) -> date:
     """

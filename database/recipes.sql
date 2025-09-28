@@ -4,11 +4,10 @@
 
 -- Main recipes table
 CREATE TABLE recipes (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    instructions TEXT NOT NULL,
-    cook_time_minutes INTEGER,
+    instructions JSONB NOT NULL,
     
     -- JSONB column for flexible ingredient storage
     ingredients JSONB NOT NULL,
@@ -40,10 +39,16 @@ CREATE INDEX idx_recipes_ingredient_names ON recipes USING GIN (ingredient_names
 CREATE INDEX idx_recipes_ingredients ON recipes USING GIN (ingredients);
 
 -- Example data insert
--- INSERT INTO recipes (name, description, instructions, cook_time_minutes, ingredients) VALUES
+-- INSERT INTO recipes (name, description, instructions, ingredients) VALUES
 -- ('Basic Sourdough Bread', 'A classic sourdough bread recipe', 
--- '1. Mix flour and water for autolyse\n2. Add starter and salt\n3. Bulk fermentation with folds\n4. Pre-shape and final shape\n5. Cold ferment overnight\n6. Bake with steam', 
--- 45, 
+-- '[
+--   {"instruction": "Mix flour and water for autolyse"},
+--   {"instruction": "Add starter and salt"},
+--   {"instruction": "Bulk fermentation with folds"},
+--   {"instruction": "Pre-shape and final shape"},
+--   {"instruction": "Cold ferment overnight"},
+--   {"instruction": "Bake with steam for 45 minutes"}
+-- ]'::jsonb,
 -- '[
 --   {"name": "bread flour", "amount": 500, "unit": "grams", "notes": "high protein flour"},
 --   {"name": "water", "amount": 375, "unit": "grams", "notes": "filtered water"},

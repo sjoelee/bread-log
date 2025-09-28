@@ -4,3 +4,61 @@ GET http://localhost:8000/makes/2025/05/26/demi-baguette/4
 
 ###
 GET http://localhost:8000/makes/2025/06/08/
+
+###
+POST http://localhost:8000/recipes/
+
+{
+    "name": "Focaccia",
+    "description": "Classic Italian focaccia with olive oil and herbs",
+    "instructions": [
+      {"instruction": "Create ripe levain"},
+      {"instruction": "When levain is ripe, scale all the ingredients"},
+      {"instruction": "Mix all the ingredients together, except for the olive oil. Desired dough temp is about 80°F"},
+      {"instruction": "Once fully mixed, perform a Riebaud method (or slap-and-fold) for 3-5 minutes"},
+      {"instruction": "Once enough gluten has developed then add the olive oil. Mix together and Riebaud for 3-5 minutes"},
+      {"instruction": "Bulk fermentation for 3 hours. Coil fold every 20-30 minutes"},
+      {"instruction": "Apply nonstick paste to baking sheet. Move dough to baking sheet"},
+      {"instruction": "Spread dough every 30 minutes"},
+      {"instruction": "Once fully spread, move to fridge for cold ferment"},
+      {"instruction": "The night before baking, take the dough out of the fridge and let it proof on counter over night"},
+      {"instruction": "The following morning preheat oven at 450°F"},
+      {"instruction": "Dough should have proofed to about 90-100% of the pan"},
+      {"instruction": "Sprinkle salt on top. Add olive oil. Dimple dough"},
+      {"instruction": "Bake for 30-40 minutes until golden brown. Internal temp should be about 210°F"},
+      {"instruction": "Let the focaccia sit for 10 minutes in the pan"},
+      {"instruction": "Take the focaccia out of the pan and let it cool on the cooling rack"}
+    ],
+    "ingredients": [
+      {
+        "name": "bread flour",
+        "amount": 1056,
+        "unit": "grams",
+        "notes": "high protein flour"
+      },
+      {
+        "name": "water",
+        "amount": 845,
+        "unit": "grams",
+        "notes": "filtered water"
+      },
+      {
+        "name": "levain",
+        "amount": 211,
+        "unit": "grams",
+        "notes": "ripe sourdough starter"
+      },
+      {
+        "name": "salt",
+        "amount": 17,
+        "unit": "grams",
+        "notes": "fine sea salt"
+      },
+      {
+        "name": "olive oil",
+        "amount": 71,
+        "unit": "grams",
+        "notes": "extra virgin olive oil"
+      }
+    ]
+}

@@ -95,3 +95,19 @@ class SimpleMake(BaseModel):
 class CreateMakeRequest(BaseModel):
   display_name: str
   key: str
+
+# Recipe models
+class Ingredient(BaseModel):
+  name: str
+  amount: float
+  unit: str
+  notes: Optional[str] = None
+
+class RecipeStep(BaseModel):
+  instruction: str
+
+class RecipeRequest(BaseModel):
+  name: str
+  description: Optional[str] = None
+  instructions: List[RecipeStep]
+  ingredients: List[Ingredient]
