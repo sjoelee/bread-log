@@ -382,7 +382,8 @@ class DBConnector:
       'name': recipe_data['name'],
       'description': recipe_data['description'],
       'instructions': json.dumps(recipe_data['instructions']),
-      'ingredients': json.dumps(recipe_data['ingredients'])
+      'flour_ingredients': json.dumps(recipe_data['flour_ingredients']),
+      'other_ingredients': json.dumps(recipe_data['other_ingredients'])
     }
     
     # Filter out None values
@@ -413,7 +414,7 @@ class DBConnector:
     Get a recipe by ID
     """
     query = """
-      SELECT id, name, description, instructions, ingredients, created_at, updated_at
+      SELECT id, name, description, instructions, flour_ingredients, other_ingredients, created_at, updated_at
       FROM recipes
       WHERE id = %s
     """
@@ -430,18 +431,20 @@ class DBConnector:
     if not result:
       return None
     
-    (id, name, description, instructions_json, ingredients_json, created_at, updated_at) = result
+    (id, name, description, instructions_json, flour_ingredients_json, other_ingredients_json, created_at, updated_at) = result
     
     # Parse JSON data
     instructions = [RecipeStep(**step) for step in instructions_json]
-    ingredients = [Ingredient(**ingredient) for ingredient in ingredients_json]
+    flour_ingredients = [Ingredient(**ingredient) for ingredient in flour_ingredients_json]
+    other_ingredients = [Ingredient(**ingredient) for ingredient in other_ingredients_json]
     
     return Recipe(
       id=id,
       name=name,
       description=description,
       instructions=instructions,
-      ingredients=ingredients,
+      flour_ingredients=flour_ingredients,
+      other_ingredients=other_ingredients,
       created_at=created_at,
       updated_at=updated_at
     )

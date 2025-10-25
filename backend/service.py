@@ -289,7 +289,8 @@ def create_recipe(recipe: RecipeRequest):
       "name": recipe.name,
       "description": recipe.description,
       "instructions": [step.model_dump() for step in recipe.instructions],
-      "ingredients": [ingredient.model_dump() for ingredient in recipe.ingredients]
+      "flour_ingredients": [ingredient.model_dump() for ingredient in recipe.flour_ingredients],
+      "other_ingredients": [ingredient.model_dump() for ingredient in recipe.other_ingredients]
     }
     
     # Insert into database
@@ -330,10 +331,10 @@ def update_recipe(recipe_id: UUID, updates: RecipeUpdateRequest):
     
     # Convert nested objects to dicts for JSON serialization
     if 'instructions' in update_data:
-      update_data['instructions'] = [step.model_dump() for step in updates.instructions]
+      update_data['instructions'] = [step.model_dump() for step in updates.instructions] if updates.instructions else None
     
     if 'ingredients' in update_data:
-      update_data['ingredients'] = [ingredient.model_dump() for ingredient in updates.ingredients]
+      update_data['flour_ingredients'] = [ingredient.model_dump() for ingredient in updates.flour_ingredients] if updates.flour_ingredients else None
     
     if not update_data:
       raise HTTPException(status_code=400, detail="No valid fields to update were provided")

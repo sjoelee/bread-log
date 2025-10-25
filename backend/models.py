@@ -110,19 +110,22 @@ class RecipeRequest(BaseModel):
   name: str
   description: Optional[str] = None
   instructions: List[RecipeStep]
-  ingredients: List[Ingredient]
+  flour_ingredients: List[Ingredient]
+  other_ingredients: List[Ingredient]
 
 class RecipeUpdateRequest(BaseModel):
   name: Optional[str] = None
   description: Optional[str] = None
   instructions: Optional[List[RecipeStep]] = None
-  ingredients: Optional[List[Ingredient]] = None
+  flour_ingredients: Optional[List[Ingredient]] = None
+  other_ingredients: Optional[List[Ingredient]] = None
 
 class Recipe(BaseModel):
   id: UUID
   name: str
   description: Optional[str] = None
   instructions: List[RecipeStep]
-  ingredients: List[Ingredient]
+  flour_ingredients: List[Ingredient]
+  other_ingredients: List[Ingredient]
   created_at: datetime
   updated_at: datetime
