@@ -68,8 +68,8 @@ Content-Type: application/json
       }
     ]
   }
-###
-  
+
+###  
 PATCH http://localhost:8000/recipes/e0cb8066-8ec0-4e43-b101-ac4263f69b3f
 Content-Type: application/json
 
