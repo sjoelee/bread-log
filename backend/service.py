@@ -326,15 +326,25 @@ def update_recipe(recipe_id: UUID, updates: RecipeUpdateRequest):
   Update a recipe
   """
   try:
-    # Convert RecipeUpdateRequest to dict format for database update
-    update_data = updates.model_dump(exclude_none=True)
+    # Start with basic fields from the update request
+    update_data = {}
     
-    # Convert nested objects to dicts for JSON serialization
-    if 'instructions' in update_data:
-      update_data['instructions'] = [step.model_dump() for step in updates.instructions] if updates.instructions else None
+    # Handle simple fields
+    if updates.name is not None:
+      update_data['name'] = updates.name
     
-    if 'ingredients' in update_data:
-      update_data['flour_ingredients'] = [ingredient.model_dump() for ingredient in updates.flour_ingredients] if updates.flour_ingredients else None
+    if updates.description is not None:
+      update_data['description'] = updates.description
+    
+    # Handle complex fields - convert objects to dicts for JSON serialization
+    if updates.instructions is not None:
+      update_data['instructions'] = [step.model_dump() for step in updates.instructions]
+    
+    if updates.flour_ingredients is not None:
+      update_data['flour_ingredients'] = [ingredient.model_dump() for ingredient in updates.flour_ingredients]
+    
+    if updates.other_ingredients is not None:
+      update_data['other_ingredients'] = [ingredient.model_dump() for ingredient in updates.other_ingredients]
     
     if not update_data:
       raise HTTPException(status_code=400, detail="No valid fields to update were provided")

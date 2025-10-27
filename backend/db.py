@@ -454,11 +454,14 @@ class DBConnector:
     Update a recipe with the provided fields
     """
     # Handle JSON conversion for instructions and ingredients
-    if 'instructions' in updates and updates['instructions'] is not None:
+    if 'instructions' in updates:
       updates['instructions'] = json.dumps(updates['instructions'])
     
-    if 'ingredients' in updates and updates['ingredients'] is not None:
-      updates['ingredients'] = json.dumps(updates['ingredients'])
+    if 'flour_ingredients' in updates:
+      updates['flour_ingredients'] = json.dumps(updates['flour_ingredients'])
+    
+    if 'other_ingredients' in updates:
+      updates['other_ingredients'] = json.dumps(updates['other_ingredients'])
     
     # Filter out None values
     updates = {k: v for k, v in updates.items() if v is not None}

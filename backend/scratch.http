@@ -6,7 +6,7 @@ GET http://localhost:8000/makes/2025/05/26/demi-baguette/4
 GET http://localhost:8000/makes/2025/06/08/
 
 ###
-GET http://localhost:8000/recipes/0a6916d5-bf61-4c34-95c9-3a60f2dd236b
+GET http://localhost:8000/recipes/e0cb8066-8ec0-4e43-b101-ac4263f69b3f
 
 ###
 POST http://localhost:8000/recipes/
@@ -68,3 +68,11 @@ Content-Type: application/json
       }
     ]
   }
+###
+  
+PATCH http://localhost:8000/recipes/e0cb8066-8ec0-4e43-b101-ac4263f69b3f
+Content-Type: application/json
+
+{
+    "name": "Foccacia Ultimate"
+}
