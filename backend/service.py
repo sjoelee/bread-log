@@ -4,13 +4,16 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
-from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, SimpleMake
+from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersionRequest, RecipeListItem, RecipeVersion, SimpleMake
 from typing import List
 from uuid import UUID, uuid4
 
 import json
 import logging
 import re
+
+# Import recipe service
+from recipe_service import RecipeService
 
 app = FastAPI()
 
@@ -25,6 +28,7 @@ app.add_middleware(
 
 DBNAME = 'bread_makes'
 db_conn = DBConnector(dbname=DBNAME)
+recipe_service = RecipeService(db_conn)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('service')
@@ -274,41 +278,40 @@ def get_makes_for_date(date: str):
   """
   pass
 
-@app.post("/recipes/")
+# New versioned recipe endpoints
+@app.post("/recipes/", response_model=Recipe)
 def create_recipe(recipe: RecipeRequest):
   """
-  Create a new recipe
+  Create a new versioned recipe with initial version 1.0
   """
   try:
-    # Generate UUID for the recipe
-    recipe_id = uuid4()
-    
-    # Convert RecipeRequest to dict format for database insertion
-    recipe_data = {
-      "id": recipe_id,
-      "name": recipe.name,
-      "description": recipe.description,
-      "instructions": [step.model_dump() for step in recipe.instructions],
-      "flour_ingredients": [ingredient.model_dump() for ingredient in recipe.flour_ingredients],
-      "other_ingredients": [ingredient.model_dump() for ingredient in recipe.other_ingredients]
-    }
-    
-    # Insert into database
-    db_conn.create_recipe(recipe_data)
-    
-    return {"id": recipe_id, "message": "Recipe created successfully"}
+    recipe_obj = recipe_service.create_recipe(recipe)
+    return recipe_obj
     
   except Exception as e:
     logger.error(f"Error creating recipe: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/recipes/", response_model=List[RecipeListItem])
+def list_recipes(category: str = None, limit: int = 50, offset: int = 0):
+  """
+  List recipes with pagination and optional category filter
+  """
+  try:
+    recipes = recipe_service.list_recipes(category=category, limit=limit, offset=offset)
+    return recipes
+    
+  except Exception as e:
+    logger.error(f"Error listing recipes: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/recipes/{recipe_id}", response_model=Recipe)
 def get_recipe(recipe_id: UUID):
   """
-  Get a recipe by ID
+  Get a versioned recipe by ID with current version and baker's percentages
   """
   try:
-    recipe = db_conn.get_recipe(recipe_id)
+    recipe = recipe_service.get_recipe(recipe_id)
     if not recipe:
       raise HTTPException(status_code=404, detail="Recipe not found")
     
@@ -323,46 +326,67 @@ def get_recipe(recipe_id: UUID):
 @app.patch("/recipes/{recipe_id}", response_model=Recipe)
 def update_recipe(recipe_id: UUID, updates: RecipeUpdateRequest):
   """
-  Update a recipe
+  Update a recipe - creates new version if ingredients/instructions changed
   """
   try:
-    # Start with basic fields from the update request
-    update_data = {}
+    recipe = recipe_service.update_recipe(recipe_id, updates)
+    return recipe
     
-    # Handle simple fields
-    if updates.name is not None:
-      update_data['name'] = updates.name
-    
-    if updates.description is not None:
-      update_data['description'] = updates.description
-    
-    # Handle complex fields - convert objects to dicts for JSON serialization
-    if updates.instructions is not None:
-      update_data['instructions'] = [step.model_dump() for step in updates.instructions]
-    
-    if updates.flour_ingredients is not None:
-      update_data['flour_ingredients'] = [ingredient.model_dump() for ingredient in updates.flour_ingredients]
-    
-    if updates.other_ingredients is not None:
-      update_data['other_ingredients'] = [ingredient.model_dump() for ingredient in updates.other_ingredients]
-    
-    if not update_data:
-      raise HTTPException(status_code=400, detail="No valid fields to update were provided")
-    
-    # Update the recipe
-    db_conn.update_recipe(recipe_id, update_data)
-    
-    # Return the updated recipe
-    updated_recipe = db_conn.get_recipe(recipe_id)
-    if not updated_recipe:
-      raise HTTPException(status_code=404, detail="Recipe not found")
-    
-    return updated_recipe
-    
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   except DatabaseError as e:
     raise HTTPException(status_code=400, detail=str(e))
   except Exception as e:
     logger.error(f"Error updating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/recipes/{recipe_id}/versions", response_model=Recipe)
+def create_recipe_version(recipe_id: UUID, version_request: RecipeVersionRequest):
+  """
+  Manually create a new version of a recipe
+  """
+  try:
+    recipe = recipe_service.create_recipe_version(
+      recipe_id=recipe_id,
+      ingredients=version_request.ingredients,
+      instructions=version_request.instructions,
+      description=version_request.description,
+      force_major=version_request.force_major
+    )
+    return recipe
+    
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
+  except Exception as e:
+    logger.error(f"Error creating recipe version: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recipes/{recipe_id}/versions", response_model=List[RecipeVersion])
+def get_recipe_versions(recipe_id: UUID):
+  """
+  Get all versions of a recipe
+  """
+  try:
+    versions = recipe_service.get_recipe_versions(recipe_id)
+    return versions
+    
+  except Exception as e:
+    logger.error(f"Error getting recipe versions: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recipes/versions/{version_id_1}/diff/{version_id_2}")
+def get_version_diff(version_id_1: UUID, version_id_2: UUID):
+  """
+  Get diff between two recipe versions
+  """
+  try:
+    diff = recipe_service.get_recipe_version_diff(version_id_1, version_id_2)
+    return diff
+    
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
+  except Exception as e:
+    logger.error(f"Error getting version diff: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
 def validate_date(year: int, month: int, day: int) -> date:

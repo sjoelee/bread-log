@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from datetime import date, datetime
 from exceptions import DatabaseError
-from models import DoughMake, Recipe, RecipeStep, Ingredient, SimpleMake, StretchFoldCreate
+from models import DoughMake, Recipe, RecipeStep, Ingredient, SimpleMake, StretchFoldCreate, RecipeVersion, RecipeListItem, BakersPercentages
 from psycopg_pool import ConnectionPool
 from psycopg import sql
 from typing import List, Optional
@@ -493,3 +493,339 @@ class DBConnector:
     except Exception as e:
       logger.error(f"Error updating recipe: {str(e)}")
       raise DatabaseError(f"Error updating recipe: {e}")
+
+  # New versioned recipe methods
+  def create_versioned_recipe(self, recipe_data: dict) -> dict:
+    """
+    Create a new versioned recipe with initial version 1.0
+    """
+    recipe_id = recipe_data['id']
+    version_id = recipe_data.get('version_id')
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          # Insert into recipes table
+          cur.execute("""
+            INSERT INTO recipes (id, name, description, category, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+          """, [
+            recipe_id,
+            recipe_data['name'],
+            recipe_data.get('description'),
+            recipe_data.get('category'),
+            datetime.now(),
+            datetime.now()
+          ])
+          
+          # Insert initial version (v1.0)
+          cur.execute("""
+            INSERT INTO recipe_versions (id, recipe_id, version_major, version_minor, 
+                                       description, ingredients, instructions, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+          """, [
+            version_id,
+            recipe_id,
+            1, 0,
+            recipe_data.get('version_description', 'Initial version'),
+            json.dumps({"ingredients": recipe_data['ingredients']}),
+            json.dumps({"instructions": recipe_data['instructions']}),
+            datetime.now()
+          ])
+          
+          # Update current_version_id
+          cur.execute("""
+            UPDATE recipes SET current_version_id = %s WHERE id = %s
+          """, [version_id, recipe_id])
+          
+          # Insert baker's percentages if provided
+          if recipe_data.get('bakers_percentages'):
+            bp = recipe_data['bakers_percentages']
+            cur.execute("""
+              INSERT INTO bakers_percentages (id, recipe_id, recipe_version_id, 
+                                            total_flour_weight, flour_ingredients, other_ingredients)
+              VALUES (%s, %s, %s, %s, %s, %s)
+            """, [
+              recipe_data.get('bp_id'),
+              recipe_id,
+              version_id,
+              bp['total_flour_weight'],
+              json.dumps(bp['flour_ingredients']),
+              json.dumps(bp['other_ingredients'])
+            ])
+          
+          conn.commit()
+          return {"recipe_id": recipe_id, "version_id": version_id}
+          
+    except Exception as e:
+      logger.error(f"Error creating versioned recipe: {str(e)}")
+      raise DatabaseError(f"Error creating versioned recipe: {e}")
+
+  def create_recipe_version(self, version_data: dict) -> dict:
+    """
+    Create a new version of an existing recipe
+    """
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          # Insert new version
+          cur.execute("""
+            INSERT INTO recipe_versions (id, recipe_id, version_major, version_minor,
+                                       description, ingredients, instructions, created_at, change_summary)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+          """, [
+            version_data['id'],
+            version_data['recipe_id'],
+            version_data['version_major'],
+            version_data['version_minor'],
+            version_data.get('description'),
+            json.dumps({"ingredients": version_data['ingredients']}),
+            json.dumps({"instructions": version_data['instructions']}),
+            datetime.now(),
+            json.dumps(version_data.get('change_summary', {}))
+          ])
+          
+          # Update current_version_id
+          cur.execute("""
+            UPDATE recipes SET current_version_id = %s, updated_at = %s WHERE id = %s
+          """, [version_data['id'], datetime.now(), version_data['recipe_id']])
+          
+          # Insert baker's percentages if provided
+          if version_data.get('bakers_percentages'):
+            bp = version_data['bakers_percentages']
+            cur.execute("""
+              INSERT INTO bakers_percentages (id, recipe_id, recipe_version_id,
+                                            total_flour_weight, flour_ingredients, other_ingredients)
+              VALUES (%s, %s, %s, %s, %s, %s)
+            """, [
+              version_data.get('bp_id'),
+              version_data['recipe_id'],
+              version_data['id'],
+              bp['total_flour_weight'],
+              json.dumps(bp['flour_ingredients']),
+              json.dumps(bp['other_ingredients'])
+            ])
+          
+          conn.commit()
+          return {"version_id": version_data['id']}
+          
+    except Exception as e:
+      logger.error(f"Error creating recipe version: {str(e)}")
+      raise DatabaseError(f"Error creating recipe version: {e}")
+
+  def get_versioned_recipe(self, recipe_id: UUID) -> Optional[Recipe]:
+    """
+    Get a versioned recipe with current version and baker's percentages
+    """
+    query = """
+      SELECT r.id, r.name, r.description, r.category, r.current_version_id, r.created_at, r.updated_at,
+             rv.id, rv.version_major, rv.version_minor, rv.description, rv.ingredients, rv.instructions, rv.created_at,
+             bp.total_flour_weight, bp.flour_ingredients, bp.other_ingredients
+      FROM recipes r
+      LEFT JOIN recipe_versions rv ON r.current_version_id = rv.id
+      LEFT JOIN bakers_percentages bp ON rv.id = bp.recipe_version_id
+      WHERE r.id = %s
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [recipe_id])
+          result = cur.fetchone()
+    except Exception as e:
+      logger.error(f"Error getting versioned recipe: {str(e)}")
+      raise DatabaseError(f"Error getting versioned recipe: {e}")
+    
+    if not result:
+      return None
+    
+    (r_id, r_name, r_description, r_category, r_current_version_id, r_created_at, r_updated_at,
+     rv_id, rv_major, rv_minor, rv_description, rv_ingredients, rv_instructions, rv_created_at,
+     bp_total_flour, bp_flour_ingredients, bp_other_ingredients) = result
+    
+    # Parse ingredients and instructions
+    ingredients_data = rv_ingredients.get('ingredients', []) if rv_ingredients else []
+    instructions_data = rv_instructions.get('instructions', []) if rv_instructions else []
+    
+    ingredients = [Ingredient(**ing) for ing in ingredients_data]
+    instructions = [RecipeStep(**step) for step in instructions_data]
+    
+    # Create current version
+    current_version = RecipeVersion(
+      id=rv_id,
+      recipe_id=r_id,
+      version_major=rv_major,
+      version_minor=rv_minor,
+      description=rv_description,
+      ingredients=ingredients,
+      instructions=instructions,
+      created_at=rv_created_at
+    )
+    
+    # Create baker's percentages if available
+    bakers_percentages = None
+    if bp_total_flour is not None:
+      bakers_percentages = BakersPercentages(
+        total_flour_weight=bp_total_flour,
+        flour_ingredients=bp_flour_ingredients,
+        other_ingredients=bp_other_ingredients
+      )
+    
+    return Recipe(
+      id=r_id,
+      name=r_name,
+      description=r_description,
+      category=r_category,
+      current_version_id=r_current_version_id,
+      current_version=current_version,
+      bakers_percentages=bakers_percentages,
+      created_at=r_created_at,
+      updated_at=r_updated_at
+    )
+
+  def list_recipes(self, category: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[RecipeListItem]:
+    """
+    List recipes with basic info and current version
+    """
+    base_query = """
+      SELECT r.id, r.name, r.category, r.created_at, r.updated_at,
+             rv.version_major, rv.version_minor,
+             jsonb_array_length(rv.ingredients->'ingredients') as ingredient_count,
+             jsonb_array_length(rv.instructions->'instructions') as step_count
+      FROM recipes r
+      LEFT JOIN recipe_versions rv ON r.current_version_id = rv.id
+    """
+    
+    conditions = []
+    params = []
+    
+    if category:
+      conditions.append("r.category = %s")
+      params.append(category)
+    
+    if conditions:
+      query = base_query + " WHERE " + " AND ".join(conditions)
+    else:
+      query = base_query
+    
+    query += " ORDER BY r.updated_at DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          results = cur.fetchall()
+    except Exception as e:
+      logger.error(f"Error listing recipes: {str(e)}")
+      raise DatabaseError(f"Error listing recipes: {e}")
+    
+    recipes = []
+    for result in results:
+      (r_id, r_name, r_category, r_created_at, r_updated_at,
+       rv_major, rv_minor, ingredient_count, step_count) = result
+      
+      version_str = f"{rv_major}.{rv_minor}" if rv_major is not None else "1.0"
+      
+      recipes.append(RecipeListItem(
+        id=r_id,
+        name=r_name,
+        category=r_category,
+        version=version_str,
+        ingredient_count=ingredient_count or 0,
+        step_count=step_count or 0,
+        created_at=r_created_at,
+        updated_at=r_updated_at
+      ))
+    
+    return recipes
+
+  def get_recipe_versions(self, recipe_id: UUID) -> List[RecipeVersion]:
+    """
+    Get all versions of a recipe ordered by version number
+    """
+    query = """
+      SELECT id, recipe_id, version_major, version_minor, description, 
+             ingredients, instructions, created_at, change_summary
+      FROM recipe_versions
+      WHERE recipe_id = %s
+      ORDER BY version_major DESC, version_minor DESC
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [recipe_id])
+          results = cur.fetchall()
+    except Exception as e:
+      logger.error(f"Error getting recipe versions: {str(e)}")
+      raise DatabaseError(f"Error getting recipe versions: {e}")
+    
+    versions = []
+    for result in results:
+      (rv_id, rv_recipe_id, rv_major, rv_minor, rv_description,
+       rv_ingredients, rv_instructions, rv_created_at, rv_change_summary) = result
+      
+      ingredients_data = rv_ingredients.get('ingredients', []) if rv_ingredients else []
+      instructions_data = rv_instructions.get('instructions', []) if rv_instructions else []
+      
+      ingredients = [Ingredient(**ing) for ing in ingredients_data]
+      instructions = [RecipeStep(**step) for step in instructions_data]
+      
+      versions.append(RecipeVersion(
+        id=rv_id,
+        recipe_id=rv_recipe_id,
+        version_major=rv_major,
+        version_minor=rv_minor,
+        description=rv_description,
+        ingredients=ingredients,
+        instructions=instructions,
+        created_at=rv_created_at,
+        change_summary=rv_change_summary
+      ))
+    
+    return versions
+
+  def get_recipe_version(self, version_id: UUID) -> Optional[RecipeVersion]:
+    """
+    Get a specific recipe version by ID
+    """
+    query = """
+      SELECT id, recipe_id, version_major, version_minor, description,
+             ingredients, instructions, created_at, change_summary
+      FROM recipe_versions
+      WHERE id = %s
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [version_id])
+          result = cur.fetchone()
+    except Exception as e:
+      logger.error(f"Error getting recipe version: {str(e)}")
+      raise DatabaseError(f"Error getting recipe version: {e}")
+    
+    if not result:
+      return None
+    
+    (rv_id, rv_recipe_id, rv_major, rv_minor, rv_description,
+     rv_ingredients, rv_instructions, rv_created_at, rv_change_summary) = result
+    
+    ingredients_data = rv_ingredients.get('ingredients', []) if rv_ingredients else []
+    instructions_data = rv_instructions.get('instructions', []) if rv_instructions else []
+    
+    ingredients = [Ingredient(**ing) for ing in ingredients_data]
+    instructions = [RecipeStep(**step) for step in instructions_data]
+    
+    return RecipeVersion(
+      id=rv_id,
+      recipe_id=rv_recipe_id,
+      version_major=rv_major,
+      version_minor=rv_minor,
+      description=rv_description,
+      ingredients=ingredients,
+      instructions=instructions,
+      created_at=rv_created_at,
+      change_summary=rv_change_summary
+    )

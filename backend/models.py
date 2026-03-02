@@ -96,36 +96,95 @@ class CreateMakeRequest(BaseModel):
   display_name: str
   key: str
 
-# Recipe models
+# Recipe models - Updated for versioning system
 class Ingredient(BaseModel):
+  id: Optional[str] = None
   name: str
   amount: float
   unit: str
+  type: str  # flour, liquid, preferment, other, etc.
   notes: Optional[str] = None
 
 class RecipeStep(BaseModel):
+  id: Optional[str] = None
+  order: int
   instruction: str
 
 class RecipeRequest(BaseModel):
   name: str
   description: Optional[str] = None
+  category: Optional[str] = None
+  ingredients: List[Ingredient]
   instructions: List[RecipeStep]
-  flour_ingredients: List[Ingredient]
-  other_ingredients: List[Ingredient]
+
+class RecipeVersionRequest(BaseModel):
+  ingredients: List[Ingredient]
+  instructions: List[RecipeStep]
+  description: Optional[str] = None
+  force_major: bool = False
 
 class RecipeUpdateRequest(BaseModel):
   name: Optional[str] = None
   description: Optional[str] = None
+  category: Optional[str] = None
+  ingredients: Optional[List[Ingredient]] = None
   instructions: Optional[List[RecipeStep]] = None
-  flour_ingredients: Optional[List[Ingredient]] = None
-  other_ingredients: Optional[List[Ingredient]] = None
+  force_major: Optional[bool] = False
+
+# Response models
+class RecipeVersion(BaseModel):
+  id: UUID
+  recipe_id: UUID
+  version_major: int
+  version_minor: int
+  description: Optional[str] = None
+  ingredients: List[Ingredient]
+  instructions: List[RecipeStep]
+  created_at: datetime
+  change_summary: Optional[dict] = None
+
+class BakersPercentages(BaseModel):
+  total_flour_weight: float
+  flour_ingredients: List[dict]
+  other_ingredients: List[dict]
 
 class Recipe(BaseModel):
   id: UUID
   name: str
   description: Optional[str] = None
-  instructions: List[RecipeStep]
-  flour_ingredients: List[Ingredient]
-  other_ingredients: List[Ingredient]
+  category: Optional[str] = None
+  current_version_id: UUID
+  current_version: RecipeVersion
+  bakers_percentages: Optional[BakersPercentages] = None
   created_at: datetime
   updated_at: datetime
+
+class RecipeListItem(BaseModel):
+  id: UUID
+  name: str
+  category: Optional[str] = None
+  version: str  # e.g., "1.2"
+  ingredient_count: int
+  step_count: int
+  created_at: datetime
+  updated_at: datetime
+
+class IngredientDiff(BaseModel):
+  added: List[Ingredient]
+  removed: List[Ingredient]
+  modified: List[dict]  # {"old": Ingredient, "new": Ingredient}
+  unchanged: List[Ingredient]
+
+class StepDiff(BaseModel):
+  added: List[RecipeStep]
+  removed: List[RecipeStep]
+  modified: List[dict]  # {"old": RecipeStep, "new": RecipeStep}
+  reordered: List[dict]  # {"step_id": str, "old_order": int, "new_order": int}
+  unchanged: List[RecipeStep]
+
+class RecipeVersionDiff(BaseModel):
+  from_version: str
+  to_version: str
+  ingredient_changes: IngredientDiff
+  step_changes: StepDiff
+  created_at: datetime
