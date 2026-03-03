@@ -268,23 +268,28 @@ const BreadApp: React.FC = () => {
                       body: JSON.stringify({
                         name: recipeData.name,
                         description: recipeData.description,
-                        instructions: recipeData.instructions,
-                        flour_ingredients: recipeData.flourIngredients,
-                        other_ingredients: recipeData.otherIngredients
+                        category: recipeData.category,
+                        ingredients: recipeData.ingredients,
+                        instructions: recipeData.instructions
                       }),
                     });
 
                     if (response.ok) {
                       const result = await response.json();
                       console.log('Recipe created successfully:', result);
-                      // TODO: Add success handling
+                      console.log('Version:', `${result.current_version.version_major}.${result.current_version.version_minor}`);
+                      if (result.bakers_percentages) {
+                        console.log('Baker\'s percentages calculated:', result.bakers_percentages);
+                      }
+                      // TODO: Add success handling UI feedback
                     } else {
-                      console.error('Failed to create recipe:', response.statusText);
-                      // TODO: Add error handling
+                      const errorText = await response.text();
+                      console.error('Failed to create recipe:', response.statusText, errorText);
+                      // TODO: Add error handling UI feedback
                     }
                   } catch (error) {
                     console.error('Error creating recipe:', error);
-                    // TODO: Add error handling
+                    // TODO: Add error handling UI feedback
                   }
                 }}
               />
