@@ -1,3 +1,5 @@
+from typing import Optional
+
 class DatabaseError(Exception):
     """
     Custom exception for database-related errors.
@@ -9,7 +11,7 @@ class DatabaseError(Exception):
         message: A human-readable explanation of what went wrong
         original_error: The underlying exception that caused this error (optional)
     """
-    def __init__(self, message: str, original_error: Exception | None = None):
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
         self.message = message
         self.original_error = original_error
         super().__init__(self.message)

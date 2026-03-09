@@ -4,8 +4,8 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
 from db import DBConnector
 from exceptions import DatabaseError
-from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersionRequest, RecipeListItem, RecipeVersion, SimpleMake
-from typing import List
+from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersionRequest, RecipeListItem, RecipeVersion, SimpleMake, RecipeCreateResponse
+from typing import List, Optional
 from uuid import UUID, uuid4
 
 import json
@@ -77,20 +77,24 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
 # Getting and retrieving dough makes for the acccount
 @app.get("/makes", response_model=List[SimpleMake])
 def get_makes_for_account(user: UserContext=Depends(get_current_user)):
+  logger.info(f"GET /makes - Getting account makes for user: {user.account_id}")
   try:
-    return db_conn.get_account_makes(user.account_id)
+    result = db_conn.get_account_makes(user.account_id)
+    logger.info(f"GET /makes - Successfully retrieved {len(result)} account makes")
+    return result
   except Exception as e:
-    logger.error(f"Error occurred: {e}")
+    logger.error(f"GET /makes - Error occurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/makes", response_model=SimpleMake)
 def create_make_for_account(make: CreateMakeRequest, user: UserContext=Depends(get_current_user)):
-    logger.info(f"Received POST request to /makes with data: {make}")
+    logger.info(f"POST /makes - Creating account make: {make.dict()}")
     try:
         # Check if the key already exists for this account
         existing_makes = db_conn.get_account_makes(user.account_id)
         existing_makes = [SimpleMake(**make) for make in existing_makes]
         if any(existing_make.key == make.key for existing_make in existing_makes):
+            logger.warning(f"POST /makes - Make with key '{make.key}' already exists")
             raise HTTPException(status_code=400, detail="A make with a similar name already exists")
 
         # Add the make to the database
@@ -101,17 +105,19 @@ def create_make_for_account(make: CreateMakeRequest, user: UserContext=Depends(g
             key=make.key
         )
 
+        logger.info(f"POST /makes - Successfully created make: {new_make.dict()}")
         return new_make
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error occurred while creating make: {e}")
+        logger.error(f"POST /makes - Error occurred while creating make: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # Create make entries within the DB table
 @app.post("/makes/{year}/{month}/{day}/{name}")
 def create_make(year: int, month: int, day: int, name: str, dough_make_req: DoughMakeRequest) -> None:
+  logger.info(f"POST /makes/{year}/{month}/{day}/{name} - Creating dough make with data: {dough_make_req.dict()}")
   date = validate_date(year, month, day)
   
   # Set created_at server-side if not provided
@@ -128,14 +134,14 @@ def create_make(year: int, month: int, day: int, name: str, dough_make_req: Doug
     for field in dough_make.__fields__.keys()
   }
 
-  logger.info(f"Inserting dough make: {dough_make.name}, {dough_make}")
-  logger.info(f"Dough make details: {json.dumps(field_values, default=str, indent=2)}")
+  logger.info(f"POST /makes/{year}/{month}/{day}/{name} - Inserting dough make: {dough_make.name}")
+  logger.debug(f"POST /makes/{year}/{month}/{day}/{name} - Dough make details: {json.dumps(field_values, default=str, indent=2)}")
   try:
     validate_dough_make(dough_make)
     db_conn.insert_dough_make(dough_make)
-    logger.info(f"Successfully inserted dough make")
+    logger.info(f"POST /makes/{year}/{month}/{day}/{name} - Successfully inserted dough make")
   except Exception as e:
-    logger.error("Error ocurred: {e}")
+    logger.error(f"POST /makes/{year}/{month}/{day}/{name} - Error occurred: {e}")
     raise HTTPException(status_code=500, detail=str(e))
 
   return
@@ -146,48 +152,56 @@ def update_make(name: str, created_at: str, year: int, month: int, day: int, upd
   """
   Updates the dough_make {name} that was made on {date} with {created_at}
   """
+  logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Updating dough make with data: {updates.dict()}")
   date = validate_date(year, month, day)
   
   # Parse the created_at timestamp
   try:
     created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+    logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Parsed created_at: {created_at_dt}")
   except ValueError:
+    logger.error(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Invalid created_at timestamp format: {created_at}")
     raise HTTPException(status_code=400, detail="Invalid created_at timestamp format")
 
   try:
     # Convert the updates to a dictionary, excluding None values
     update_data = updates.model_dump(exclude_none=True)
     if not update_data:
+      logger.warning(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - No valid fields to update provided")
       raise HTTPException(
         status_code=400,
         detail="No valid fields to update were provided"
       )
 
     existing_make = get_make(name, created_at, year, month, day).model_dump(exclude_none=True)
-    # Add logging to see the data structure
-    logger.info(f"Existing make data: {existing_make}")
-    logger.info(f"Update data: {update_data}")
-    logger.info(f"Combined data: {{**existing_make, **update_data}}")
+    logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Existing make data: {existing_make}")
+    logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Update data: {update_data}")
+    
     updated_make = DoughMake(**{**existing_make, **update_data})
     validate_dough_make(updated_make)
-    logger.info(f"Updating make to {updated_make.model_dump()}")
+    
+    logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Validated updated make")
     db_conn.update_dough_make(
       date=date,
       name=name,
       created_at=created_at_dt,
       updates=updated_make.model_dump()
     )
-  except ValueError as e:  # Add this before DatabaseError
+    logger.info(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Successfully updated dough make")
+  except ValueError as e:
+    logger.error(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Validation error: {str(e)}")
     raise HTTPException(
         status_code=400,
         detail=f"Validation error: {str(e)}"
     )
   except DatabaseError as e:
+    logger.error(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Database error: {e.message}")
     raise HTTPException(
       status_code=500,
       detail=f"Database error: {e.message}"
     )
   except Exception as e:
+    logger.error(f"PATCH /makes/{year}/{month}/{day}/{name}/{created_at} - Unexpected error: {str(e)}")
     raise HTTPException(
       status_code=500,
       detail=f"Unexpected error occurred: {str(e)}"
@@ -198,47 +212,56 @@ def get_makes_date(year: int, month: int, day: int) -> List[DoughMake]:
   """
   Retrieves the list of makes for a date
   """
+  logger.info(f"GET /makes/{year}/{month}/{day} - Getting makes for date")
   date = validate_date(year, month, day)
   try:
      dough_makes = db_conn.get_dough_makes(date)
-     return dough_makes or []
+     result = dough_makes or []
+     logger.info(f"GET /makes/{year}/{month}/{day} - Successfully retrieved {len(result)} makes for date {date}")
+     return result
   except DatabaseError as e:
-     logger.error(f"Database error getting makes for date {date}: {e}")
+     logger.error(f"GET /makes/{year}/{month}/{day} - Database error getting makes for date {date}: {e}")
      raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
   except Exception as e:
-     logger.error(f"Unexpected error getting makes for date {date}: {e}")
+     logger.error(f"GET /makes/{year}/{month}/{day} - Unexpected error getting makes for date {date}: {e}")
      raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.get("/makes/{year}/{month}/{day}/{name}/{created_at}")
-def get_make(name: str, created_at: str, year: int, month: int, day: int) -> DoughMake | None:
+def get_make(name: str, created_at: str, year: int, month: int, day: int) -> Optional[DoughMake]:
   """
   Retrieves the dough_make that have {name} for make on {date} with {created_at}
   """
+  logger.info(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Getting specific dough make")
   date = validate_date(year, month, day)
   
   # Parse the created_at timestamp
   try:
     created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+    logger.info(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Parsed created_at: {created_at_dt}")
   except ValueError:
+    logger.error(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Invalid created_at timestamp format: {created_at}")
     raise HTTPException(status_code=400, detail="Invalid created_at timestamp format")
 
-  # separate the application logic from DB logic. This service app doesn't know how many makes there are for a specific dough on a given date. But it knows what's an allowed name.
-
-  logger.info(f"Getting dough make: {name} created at {created_at} for date: {str(date)}")
+  logger.info(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Getting dough make: {name} created at {created_at} for date: {str(date)}")
   try:
     dough_make = db_conn.get_dough_make(date, name, created_at_dt)
+    if dough_make:
+      logger.info(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Successfully retrieved dough make")
+    else:
+      logger.info(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - No dough make found")
+    return dough_make
   except DatabaseError as e:
+    logger.error(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Database error: {e.message}")
     raise HTTPException(
       status_code=400,
       detail=f"Database error: {e.message}"
     )
   except Exception as e:
+    logger.error(f"GET /makes/{year}/{month}/{day}/{name}/{created_at} - Unexpected error: {str(e)}")
     raise HTTPException(
       status_code=500,
-      detail=f"Unexpected error ocurred: {str(e)}"
+      detail=f"Unexpected error occurred: {str(e)}"
     )
-  logger.info(f"Make retrieved")
-  return dough_make
 
 
 @app.delete("/makes/{year}/{month}/{day}/{name}/{created_at}")
@@ -262,6 +285,34 @@ def delete_make(name: str, created_at: str, year: int, month: int, day: int):
     )
   logger.info(f"Make deleted")
 
+@app.get("/makes/recent")
+def get_recent_makes(limit: int = 10, offset: int = 0):
+  """
+  Get recent dough makes for the account, sorted by creation date
+  TODO: Add authentication when implementing proper auth
+  """
+  logger.info(f"GET /makes/recent - Getting recent makes with limit={limit}, offset={offset}")
+  try:
+    # Use hardcoded account ID for now (same as in get_current_user mock)
+    mock_account_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+    logger.info(f"GET /makes/recent - Using mock account ID: {mock_account_id}")
+    
+    recent_makes = db_conn.get_recent_dough_makes(mock_account_id, limit=limit, offset=offset)
+    logger.info(f"GET /makes/recent - Successfully retrieved {len(recent_makes)} recent makes")
+    return recent_makes
+  except DatabaseError as e:
+    logger.error(f"GET /makes/recent - Database error: {str(e)}")
+    raise HTTPException(
+      status_code=500,
+      detail=f"Database error: {e.message}"
+    )
+  except Exception as e:
+    logger.error(f"GET /makes/recent - Unexpected error: {str(e)}")
+    raise HTTPException(
+      status_code=500,
+      detail=f"Unexpected error: {str(e)}"
+    )
+
 
 
 @app.get("/makes/{name}")
@@ -279,17 +330,24 @@ def get_makes_for_date(date: str):
   pass
 
 # New versioned recipe endpoints
-@app.post("/recipes/", response_model=Recipe)
+@app.post("/recipes/", response_model=RecipeCreateResponse)
 def create_recipe(recipe: RecipeRequest):
   """
   Create a new versioned recipe with initial version 1.0
   """
+  logger.info(f"POST /recipes/ - Creating recipe: {recipe.dict()}")
   try:
     recipe_obj = recipe_service.create_recipe(recipe)
-    return recipe_obj
+    response = RecipeCreateResponse(
+      recipe=recipe_obj,
+      message=f"Recipe '{recipe_obj.name}' created successfully with version {recipe_obj.current_version.version_major}.{recipe_obj.current_version.version_minor}",
+      success=True
+    )
+    logger.info(f"POST /recipes/ - Successfully created recipe '{recipe_obj.name}' with ID: {recipe_obj.id}")
+    return response
     
   except Exception as e:
-    logger.error(f"Error creating recipe: {str(e)}")
+    logger.error(f"POST /recipes/ - Error creating recipe: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
@@ -297,12 +355,14 @@ def list_recipes(category: str = None, limit: int = 50, offset: int = 0):
   """
   List recipes with pagination and optional category filter
   """
+  logger.info(f"GET /recipes/ - Listing recipes with category={category}, limit={limit}, offset={offset}")
   try:
     recipes = recipe_service.list_recipes(category=category, limit=limit, offset=offset)
+    logger.info(f"GET /recipes/ - Successfully retrieved {len(recipes)} recipes")
     return recipes
     
   except Exception as e:
-    logger.error(f"Error listing recipes: {str(e)}")
+    logger.error(f"GET /recipes/ - Error listing recipes: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/recipes/{recipe_id}", response_model=Recipe)

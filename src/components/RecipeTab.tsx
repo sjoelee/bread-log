@@ -64,6 +64,7 @@ interface RecipeTabProps {
   loading?: boolean;
   error?: string | null;
   success?: boolean;
+  successMessage?: string | null;
   recipe?: RecipeResponse | null; // For editing existing recipes
   onSubmit?: (data: RecipeFormData) => void;
 }
@@ -72,6 +73,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   loading = false,
   error = null,
   success = false,
+  successMessage = null,
   recipe = null,
   onSubmit
 }) => {
@@ -446,8 +448,8 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       {error && <div className="text-red-500 mb-4">{error}</div>}
       {success && (
         <div className="text-green-500 mb-4">
-          Recipe saved successfully!
-          {recipe && ` New version: v${recipe.current_version.version_major}.${recipe.current_version.version_minor}`}
+          {successMessage || 'Recipe saved successfully!'}
+          {recipe && !successMessage && ` New version: v${recipe.current_version.version_major}.${recipe.current_version.version_minor}`}
         </div>
       )}
 

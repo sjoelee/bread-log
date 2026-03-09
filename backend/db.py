@@ -349,6 +349,79 @@ class DBConnector:
         logger.error(f"Error retrieving account makes: {str(e)}")
         raise DatabaseError(f"Error retrieving account makes: {e}")
 
+  def get_recent_dough_makes(self, account_id: UUID, limit: int = 10, offset: int = 0) -> List[DoughMake]:
+    """
+    Get recent dough makes for an account, sorted by creation date
+    """
+    sql = """
+        SELECT dm.name, dm.date, dm.room_temp, dm.water_temp,
+               dm.flour_temp, dm.preferment_temp, dm.dough_temp, dm.temperature_unit, 
+               dm.mix_ts, dm.autolyse_ts, dm.bulk_ts, dm.preshape_ts, dm.final_shape_ts, 
+               dm.fridge_ts, dm.stretch_folds, dm.notes, dm.created_at
+        FROM dough_makes dm
+        JOIN account_makes am ON dm.name = am.key
+        WHERE am.account_id = %s
+        ORDER BY dm.created_at DESC
+        LIMIT %s OFFSET %s;
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql, (account_id, limit, offset))
+          res = cur.fetchall()
+    except Exception as e:
+      logger.error(f"Error getting recent dough makes: {str(e)}")
+      raise DatabaseError(f"Database error: {str(e)}")
+    
+    dough_makes = []
+    for row in res:
+      (name, date, room_temp, water_temp, flour_temp, preferment_temp, dough_temp,
+       temperature_unit, mix_ts, autolyse_ts, bulk_ts, preshape_ts, final_shape_ts, 
+       fridge_ts, stretch_folds_json, notes, created_at) = row
+      
+      # Parse stretch_folds JSON
+      stretch_folds = []
+      if stretch_folds_json:
+        try:
+          # Handle case where psycopg already parsed JSON as a list
+          if isinstance(stretch_folds_json, list):
+            stretch_folds_data = stretch_folds_json
+          else:
+            # Parse JSON string
+            stretch_folds_data = json.loads(stretch_folds_json)
+          
+          if isinstance(stretch_folds_data, list):
+            for fold in stretch_folds_data:
+              if isinstance(fold, dict):
+                stretch_folds.append(StretchFoldCreate(**fold))
+        except (json.JSONDecodeError, TypeError) as e:
+          logger.warning(f"Invalid JSON in stretch_folds for make {name}: {stretch_folds_json}, error: {e}")
+      
+      dough_make = DoughMake(
+        name=name,
+        date=date,
+        room_temp=room_temp,
+        water_temp=water_temp,
+        flour_temp=flour_temp,
+        preferment_temp=preferment_temp,
+        dough_temp=dough_temp,
+        temperature_unit=temperature_unit or 'fahrenheit',
+        mix_ts=mix_ts,
+        autolyse_ts=autolyse_ts,
+        bulk_ts=bulk_ts,
+        preshape_ts=preshape_ts,
+        final_shape_ts=final_shape_ts,
+        fridge_ts=fridge_ts,
+        stretch_folds=stretch_folds,
+        notes=notes,
+        created_at=created_at
+      )
+      
+      dough_makes.append(dough_make)
+    
+    return dough_makes
+
   def add_account_make(self, account_id: str, account_name: str, display_name: str, key: str):
     # Execute SQL to insert new make
     sql = """

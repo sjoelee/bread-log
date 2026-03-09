@@ -2,12 +2,14 @@
 -- Drop existing objects if they exist
 DROP TABLE IF EXISTS bakers_percentages CASCADE;
 DROP TABLE IF EXISTS recipe_versions CASCADE;
+DROP TABLE IF EXISTS recipes CASCADE;
 DROP TABLE IF EXISTS recipes_new CASCADE;
 
 -- Updated main recipes table (current version pointer)
-CREATE TABLE recipes_new (
+CREATE TABLE recipes (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    description TEXT,
     category VARCHAR(100),
     current_version_id UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -17,7 +19,7 @@ CREATE TABLE recipes_new (
 -- Recipe versions table (stores all versions with unified ingredients)
 CREATE TABLE recipe_versions (
     id UUID PRIMARY KEY,
-    recipe_id UUID REFERENCES recipes_new(id) ON DELETE CASCADE,
+    recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
     version_major INT NOT NULL,
     version_minor INT NOT NULL,
     description TEXT,
@@ -39,7 +41,7 @@ CREATE TABLE recipe_versions (
 -- Baker's percentages calculation table
 CREATE TABLE bakers_percentages (
     id UUID PRIMARY KEY,
-    recipe_id UUID REFERENCES recipes_new(id) ON DELETE CASCADE,
+    recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
     recipe_version_id UUID REFERENCES recipe_versions(id) ON DELETE CASCADE,
     
     -- Calculated flour totals and percentages
@@ -55,16 +57,16 @@ CREATE TABLE bakers_percentages (
 );
 
 -- Update foreign key constraint for current_version_id
-ALTER TABLE recipes_new ADD CONSTRAINT fk_recipes_current_version 
+ALTER TABLE recipes ADD CONSTRAINT fk_recipes_current_version 
     FOREIGN KEY (current_version_id) REFERENCES recipe_versions(id);
 
 -- Indexes for performance
 CREATE INDEX idx_recipe_versions_recipe_id ON recipe_versions(recipe_id);
 CREATE INDEX idx_recipe_versions_version ON recipe_versions(recipe_id, version_major DESC, version_minor DESC);
 CREATE INDEX idx_recipe_versions_created ON recipe_versions(created_at DESC);
-CREATE INDEX idx_recipes_category ON recipes_new(category);
-CREATE INDEX idx_recipes_name ON recipes_new(name);
-CREATE INDEX idx_recipes_updated ON recipes_new(updated_at DESC);
+CREATE INDEX idx_recipes_category ON recipes(category);
+CREATE INDEX idx_recipes_name ON recipes(name);
+CREATE INDEX idx_recipes_updated ON recipes(updated_at DESC);
 CREATE INDEX idx_bakers_percentages_recipe_version ON bakers_percentages(recipe_version_id);
 CREATE INDEX idx_bakers_percentages_recipe ON bakers_percentages(recipe_id);
 
@@ -83,7 +85,7 @@ $$ language 'plpgsql';
 
 -- Trigger to auto-update updated_at on recipes
 CREATE TRIGGER update_recipes_updated_at 
-    BEFORE UPDATE ON recipes_new 
+    BEFORE UPDATE ON recipes 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger to auto-update updated_at on baker's percentages
@@ -154,7 +156,7 @@ CREATE TRIGGER update_bakers_percentages_updated_at
 
 -- Get latest version of a recipe
 -- SELECT rv.* FROM recipe_versions rv
--- JOIN recipes_new r ON r.current_version_id = rv.id
+-- JOIN recipes r ON r.current_version_id = rv.id
 -- WHERE r.id = 'recipe-uuid';
 
 -- Get all versions of a recipe ordered by version
@@ -164,11 +166,11 @@ CREATE TRIGGER update_bakers_percentages_updated_at
 
 -- Search recipes by ingredient name
 -- SELECT DISTINCT r.id, r.name, rv.version_major, rv.version_minor
--- FROM recipes_new r
+-- FROM recipes r
 -- JOIN recipe_versions rv ON r.current_version_id = rv.id
 -- WHERE rv.ingredients @> '[{"name": "bread flour"}]';
 
 -- Get baker's percentages for current version
 -- SELECT bp.* FROM bakers_percentages bp
--- JOIN recipes_new r ON r.current_version_id = bp.recipe_version_id
+-- JOIN recipes r ON r.current_version_id = bp.recipe_version_id
 -- WHERE r.id = 'recipe-uuid';

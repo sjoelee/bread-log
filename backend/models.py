@@ -188,3 +188,8 @@ class RecipeVersionDiff(BaseModel):
   ingredient_changes: IngredientDiff
   step_changes: StepDiff
   created_at: datetime
+
+class RecipeCreateResponse(BaseModel):
+  recipe: Recipe
+  message: str
+  success: bool = True
