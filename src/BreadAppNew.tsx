@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TabType, DoughMake } from './types/bread.ts';
+import { TabType, DoughMake, DropdownOption } from './types/bread.ts';
 import { useBreadForm } from './hooks/useBreadForm.ts';
 import { useTeamMakes } from './hooks/useTeamMakes.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
@@ -38,6 +38,17 @@ const BreadApp: React.FC = () => {
   
   // State for viewing/editing a specific timing
   const [editingTiming, setEditingTiming] = useState<any | null>(null);
+  
+  // Combined dropdown options (Makes + Recipes + Recent usage)
+  const [dropdownOptions, setDropdownOptions] = useState<DropdownOption[]>([]);
+  
+  // Recipe preview state
+  const [selectedRecipePreview, setSelectedRecipePreview] = useState<any | null>(null);
+  const [isRecipePreviewExpanded, setIsRecipePreviewExpanded] = useState(false);
+  
+  // Dropdown state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [filteredOptions, setFilteredOptions] = useState<DropdownOption[]>([]);
 
   // Custom hooks for state management
   const {
@@ -183,6 +194,75 @@ const BreadApp: React.FC = () => {
     }
   };
 
+  // Build combined dropdown options from Makes, Recipes, and Recent usage
+  const buildDropdownOptions = () => {
+    const options: DropdownOption[] = [];
+    const usedNames = new Set<string>();
+    
+    // Create a set of recipe names for easy lookup
+    const recipeNames = new Set(savedRecipes.map(recipe => recipe.name.toLowerCase()));
+
+    // First, add recent timing entries (most important - shows actual usage)
+    recentTimings.forEach((timing) => {
+      if (timing.name && !usedNames.has(timing.name.toLowerCase())) {
+        const isRecipe = recipeNames.has(timing.name.toLowerCase());
+        options.push({
+          value: timing.name,
+          displayName: isRecipe ? `${timing.name} (Recipe)` : timing.name,
+          type: isRecipe ? 'recipe' : 'recent',
+          lastUsed: new Date(timing.created_at)
+        });
+        usedNames.add(timing.name.toLowerCase());
+      }
+    });
+
+    // Add recipes that haven't been used recently
+    savedRecipes.forEach((recipe) => {
+      if (recipe.name && !usedNames.has(recipe.name.toLowerCase())) {
+        options.push({
+          value: recipe.name,
+          displayName: `${recipe.name} (Recipe)`,
+          type: 'recipe',
+          lastUsed: new Date(recipe.updated_at || recipe.created_at)
+        });
+        usedNames.add(recipe.name.toLowerCase());
+      }
+    });
+
+    // Add team makes that haven't been used recently or as recipes
+    teamMakes.forEach((make) => {
+      if (make.displayName && make.key && !usedNames.has(make.displayName.toLowerCase())) {
+        // Skip the "Select a make..." placeholder
+        if (make.key === '') return;
+        
+        options.push({
+          value: make.displayName,
+          displayName: make.displayName,
+          type: 'make'
+        });
+        usedNames.add(make.displayName.toLowerCase());
+      }
+    });
+
+    // Sort by most recently used, then alphabetically
+    options.sort((a, b) => {
+      if (a.lastUsed && b.lastUsed) {
+        return b.lastUsed.getTime() - a.lastUsed.getTime();
+      }
+      if (a.lastUsed && !b.lastUsed) return -1;
+      if (!a.lastUsed && b.lastUsed) return 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    setDropdownOptions(options);
+  };
+
+  // Load recipes and recent timings on component mount for timing dropdown
+  React.useEffect(() => {
+    loadSavedRecipes();
+    loadRecentTimings(0, true);
+  }, []);
+
   // Load recipes when switching to saved tab
   React.useEffect(() => {
     if (activeMainTab === 'recipe' && activeRecipeTab === 'saved') {
@@ -221,10 +301,80 @@ const BreadApp: React.FC = () => {
     });
   };
 
-  // Clear saved Create data when form is successfully submitted
+  // Handle recipe selection for preview and suggestions
+  const handleRecipeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    
+    // Call the original handler
+    handleInputChange(e);
+    
+    // Filter suggestions based on input
+    const filtered = dropdownOptions.filter(option =>
+      option.displayName.toLowerCase().includes(inputValue.toLowerCase()) ||
+      option.value.toLowerCase().includes(inputValue.toLowerCase())
+    );
+    setFilteredOptions(filtered);
+    setShowSuggestions(inputValue.length > 0 && filtered.length > 0);
+    
+    // Check if selected value matches a saved recipe
+    const matchingRecipe = savedRecipes.find(recipe => recipe.name === inputValue);
+    
+    if (matchingRecipe) {
+      setSelectedRecipePreview(matchingRecipe);
+      setIsRecipePreviewExpanded(true);
+    } else {
+      setSelectedRecipePreview(null);
+      setIsRecipePreviewExpanded(false);
+    }
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (option: DropdownOption) => {
+    // Update the form data
+    setFormData(prev => ({
+      ...prev,
+      teamMake: option.value
+    }));
+    
+    // Hide suggestions
+    setShowSuggestions(false);
+    
+    // Check if it's a recipe for preview
+    const matchingRecipe = savedRecipes.find(recipe => recipe.name === option.value);
+    if (matchingRecipe) {
+      setSelectedRecipePreview(matchingRecipe);
+      setIsRecipePreviewExpanded(true);
+    } else {
+      setSelectedRecipePreview(null);
+      setIsRecipePreviewExpanded(false);
+    }
+  };
+
+  // Handle input focus - show all suggestions
+  const handleInputFocus = () => {
+    setFilteredOptions(dropdownOptions);
+    setShowSuggestions(dropdownOptions.length > 0);
+  };
+
+  // Handle input blur - hide suggestions after a small delay
+  const handleInputBlur = () => {
+    // Small delay to allow clicking on suggestions
+    setTimeout(() => {
+      setShowSuggestions(false);
+    }, 200);
+  };
+
+  // Build dropdown options when data sources change
+  useEffect(() => {
+    buildDropdownOptions();
+  }, [recentTimings, savedRecipes, teamMakes]);
+
+  // Clear saved Create data and recipe preview when form is successfully submitted
   useEffect(() => {
     if (success && activeTab === 'create') {
       setSavedCreateFormData(null);
+      setSelectedRecipePreview(null);
+      setIsRecipePreviewExpanded(false);
     }
   }, [success, activeTab]);
 
@@ -297,6 +447,11 @@ const BreadApp: React.FC = () => {
                     // Switching from Saved to Create
                     setActiveTab('create');
                     setSelectedDough(null);
+                    // Clear editing state when switching to Create tab
+                    setEditingTiming(null);
+                    // Clear recipe preview when switching to Create tab
+                    setSelectedRecipePreview(null);
+                    setIsRecipePreviewExpanded(false);
                     // Restore saved Create form data if it exists
                     if (savedCreateFormData) {
                       setFormData(savedCreateFormData);
@@ -375,30 +530,51 @@ const BreadApp: React.FC = () => {
                 />
               </div>
               <div className="w-1/2">
-                <label className="block text-sm font-medium mb-1">Make Name</label>
+                <label className="block text-sm font-medium mb-1">Bread</label>
                 <div className="relative">
-                  <select
+                  <input
+                    type="text"
                     name="teamMake"
                     value={formData.teamMake}
-                    onChange={handleInputChange}
-                    className="w-full border rounded p-2 appearance-none pr-8 bg-white"
-                    disabled={isLoadingMakes}
-                  >
-                    {isLoadingMakes ? (
-                      <option>Loading...</option>
-                    ) : (
-                      teamMakes.map((make) => (
-                        <option key={make.key} value={make.key}>
-                          {make.displayName}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    onChange={handleRecipeInputChange}
+                    onFocus={handleInputFocus}
+                    onBlur={handleInputBlur}
+                    placeholder={loadingRecipes || isLoadingMakes ? "Loading..." : "Select Bread"}
+                    className="w-full border rounded p-2 pr-8"
+                    disabled={loadingRecipes || isLoadingMakes}
+                    autoComplete="off"
+                  />
                   <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                     <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </span>
+                  
+                  {/* Custom Suggestions Dropdown */}
+                  {showSuggestions && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {filteredOptions.map((option, index) => (
+                        <button
+                          key={`${option.type}-${index}`}
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                          onClick={() => handleSuggestionSelect(option)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{option.displayName}</span>
+                            {option.type === 'recent' && option.lastUsed && (
+                              <span className="text-xs text-gray-400">
+                                {new Date(option.lastUsed).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                      {filteredOptions.length === 0 && (
+                        <div className="px-3 py-2 text-gray-500 italic">No matches found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -406,7 +582,7 @@ const BreadApp: React.FC = () => {
                   className="text-red-500 text-sm mt-1 hover:underline"
                   disabled={isLoadingMakes}
                 >
-                  + Add new make
+                  + Add bread
                 </button>
               </div>
             </div>
@@ -562,7 +738,53 @@ const BreadApp: React.FC = () => {
           ) : (
             // Timing tab content
             activeTab === 'create' ? (
-              <CreateTab
+              <>
+                {/* Recipe Preview Section - Only show when a recipe is selected */}
+                {selectedRecipePreview && (
+                  <div className="mb-6">
+                    <div className="space-y-4 p-4 border rounded-lg bg-green-50">
+                      <button
+                        type="button"
+                        onClick={() => setIsRecipePreviewExpanded(!isRecipePreviewExpanded)}
+                        className="flex items-center justify-between w-full p-3 bg-green-100 hover:bg-green-200 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">📝</span>
+                          <div className="text-left">
+                            <span className="font-medium text-green-800">Recipe Preview: {selectedRecipePreview.name}</span>
+                            {selectedRecipePreview.current_version && (
+                              <p className="text-sm text-green-600">
+                                {selectedRecipePreview.current_version.ingredients?.length || 0} ingredients • {selectedRecipePreview.current_version.instructions?.length || 0} steps
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <svg
+                          className={`h-5 w-5 transform transition-transform text-green-600 ${
+                            isRecipePreviewExpanded ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {isRecipePreviewExpanded && (
+                        <div className="pl-4">
+                          <div className="text-xs text-gray-700 bg-gray-50 p-4 rounded border overflow-auto max-h-96">
+                            <pre className="whitespace-pre-wrap font-mono">
+                              {JSON.stringify(selectedRecipePreview, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <CreateTab
                 formData={formData}
                 teamMakes={teamMakes}
                 isLoadingMakes={isLoadingMakes}
@@ -582,6 +804,7 @@ const BreadApp: React.FC = () => {
                 onSubmit={editingTiming ? () => handleUpdateRecentTiming(editingTiming) : submitForm}
                 isEditing={!!editingTiming}
               />
+              </>
             ) : (
               // Recent Timings Display for Timing Saved tab
               <div className="p-6">
@@ -679,8 +902,16 @@ const BreadApp: React.FC = () => {
                               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 text-sm rounded-md font-medium"
                               onClick={() => {
                                 console.log('Use as template:', timing);
-                                // TODO: Implement template functionality
+                                // Clear editing state to ensure we create a new make, not update existing
+                                setEditingTiming(null);
+                                // Populate form with timing data as template
                                 populateFormWithDough(timing);
+                                // Override the date to today for new make (template behavior)
+                                setFormData(prev => ({
+                                  ...prev,
+                                  date: dayjs() // Set to today's date for new make
+                                }));
+                                // Switch to create tab (will be in create mode, not edit mode)
                                 setActiveTab('create');
                               }}
                             >

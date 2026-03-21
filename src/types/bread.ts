@@ -77,8 +77,16 @@ export interface CreateMakeRequest {
 
 export type TabType = 'create' | 'saved';
 
+export interface DropdownOption {
+  value: string;           // The actual name to use
+  displayName: string;     // What to show in dropdown
+  type: 'make' | 'recipe' | 'recent'; // Source type
+  lastUsed?: Date;         // When last used in timing entry
+}
+
 // Default values
 export const DEFAULT_TEAM_MAKES: TeamMake[] = [
+  { displayName: 'Select a make...', key: '' },
   { displayName: 'Hoagie', key: 'hoagie' },
   { displayName: 'Demi', key: 'demi' },
   { displayName: 'Ube', key: 'ube' }
@@ -86,11 +94,11 @@ export const DEFAULT_TEAM_MAKES: TeamMake[] = [
 
 export const INITIAL_TEMP_SETTINGS: TemperatureSettings = {
   unit: TemperatureUnit.FAHRENHEIT,
-  roomTemp: 65,
-  flourTemp: 65,
-  prefermentTemp: 76,
-  waterTemp: 45,
-  doughTemp: 76,
+  roomTemp: 0,
+  flourTemp: 0,
+  prefermentTemp: 0,
+  waterTemp: 0,
+  doughTemp: 0,
 };
 
 export const INITIAL_STRETCH_FOLDS: StretchFold[] = [

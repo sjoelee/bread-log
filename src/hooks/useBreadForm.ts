@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { 
   BreadFormData, 
@@ -14,17 +14,17 @@ import { convertTemperature } from '../utils/temperature.ts';
 import { doughMakesApi } from '../services/api.ts';
 
 const INITIAL_PROCESSES: DoughProcess[] = [
-  { step: 'Autolyse', time: dayjs() },
-  { step: 'Mix', time: dayjs() },
-  { step: 'Bulk', time: dayjs() },
-  { step: 'Preshape', time: dayjs() },
-  { step: 'Final Shape', time: dayjs() },
-  { step: 'Fridge', time: dayjs() },
+  { step: 'Autolyse', time: null },
+  { step: 'Mix', time: null },
+  { step: 'Bulk', time: null },
+  { step: 'Preshape', time: null },
+  { step: 'Final Shape', time: null },
+  { step: 'Fridge', time: null },
 ];
 
 const INITIAL_FORM_DATA: BreadFormData = {
   date: dayjs(),
-  teamMake: 'hoagie', // Use lowercase to match API keys
+  teamMake: '', // Empty to show selection prompt
   temperatures: INITIAL_TEMP_SETTINGS,
   processes: INITIAL_PROCESSES,
   stretchFolds: INITIAL_STRETCH_FOLDS,
@@ -37,6 +37,7 @@ export const useBreadForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [customSuccessMessage, setCustomSuccessMessage] = useState<string | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -87,12 +88,46 @@ export const useBreadForm = () => {
   };
 
   const handleProcessTimeChange = (step: string, time: Dayjs | null) => {
-    setFormData((prev) => ({
-      ...prev,
-      processes: prev.processes.map((process) =>
+    setFormData((prev) => {
+      const updatedProcesses = prev.processes.map((process) =>
         process.step === step ? { ...process, time } : process
-      ),
-    }));
+      );
+
+      return {
+        ...prev,
+        processes: updatedProcesses,
+      };
+    });
+
+    // Progressive time logic: Use a debounced approach to auto-fill next slot
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Set a new timeout to auto-fill the next process after a brief delay
+    // This ensures the user has finished selecting both hour and minute
+    if (time && time.isValid()) {
+      timeoutRef.current = setTimeout(() => {
+        setFormData((prev) => {
+          const currentIndex = prev.processes.findIndex(p => p.step === step);
+          const nextIndex = currentIndex + 1;
+          
+          // Only auto-fill if next process exists and doesn't have a time set
+          if (nextIndex < prev.processes.length && !prev.processes[nextIndex].time) {
+            const updatedProcesses = [...prev.processes];
+            updatedProcesses[nextIndex] = { ...updatedProcesses[nextIndex], time };
+            
+            return {
+              ...prev,
+              processes: updatedProcesses,
+            };
+          }
+          
+          return prev;
+        });
+      }, 1000); // 1 second delay to ensure complete selection
+    }
   };
 
   const addStretchFold = () => {
@@ -123,19 +158,11 @@ export const useBreadForm = () => {
   };
 
   const resetForm = () => {
-    const currentTime = dayjs();
     setFormData({
       date: dayjs(),
-      teamMake: 'hoagie', // Use lowercase to match API keys
+      teamMake: '', // Empty to show selection prompt
       temperatures: INITIAL_TEMP_SETTINGS,
-      processes: [
-        { step: 'Autolyse', time: currentTime },
-        { step: 'Mix', time: currentTime },
-        { step: 'Bulk', time: currentTime },
-        { step: 'Preshape', time: currentTime },
-        { step: 'Final Shape', time: currentTime },
-        { step: 'Fridge', time: currentTime },
-      ],
+      processes: INITIAL_PROCESSES, // Use null times
       stretchFolds: INITIAL_STRETCH_FOLDS,
       notes: '',
     });
@@ -148,8 +175,8 @@ export const useBreadForm = () => {
     if (!formData.date) {
       return 'Date is required';
     }
-    if (!formData.teamMake) {
-      return 'Team make is required';
+    if (!formData.teamMake || formData.teamMake === '') {
+      return 'Bread is required';
     }
     // Add more validation as needed
     return null;
