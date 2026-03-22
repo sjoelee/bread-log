@@ -313,6 +313,32 @@ def get_recent_makes(limit: int = 10, offset: int = 0):
       detail=f"Unexpected error: {str(e)}"
     )
 
+@app.get("/makes/distinct-names")
+def get_distinct_bread_names():
+  """
+  Get distinct bread names from dough_makes ordered by most recent created_at
+  """
+  logger.info("GET /makes/distinct-names - Getting distinct bread names")
+  try:
+    # Use hardcoded account ID for now (same as in get_current_user mock)
+    mock_account_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+    logger.info(f"GET /makes/distinct-names - Using mock account ID: {mock_account_id}")
+    
+    distinct_names = db_conn.get_distinct_bread_names(mock_account_id)
+    logger.info(f"GET /makes/distinct-names - Successfully retrieved {len(distinct_names)} distinct names")
+    return {"names": distinct_names}
+  except DatabaseError as e:
+    logger.error(f"GET /makes/distinct-names - Database error: {str(e)}")
+    raise HTTPException(
+      status_code=500,
+      detail=f"Database error: {e.message}"
+    )
+  except Exception as e:
+    logger.error(f"GET /makes/distinct-names - Unexpected error: {str(e)}")
+    raise HTTPException(
+      status_code=500,
+      detail=f"Unexpected error: {str(e)}"
+    )
 
 
 @app.get("/makes/{name}")

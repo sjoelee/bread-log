@@ -422,6 +422,38 @@ class DBConnector:
     
     return dough_makes
 
+  def get_distinct_bread_names(self, account_id: UUID) -> List[dict]:
+    """
+    Get distinct bread names from dough_makes ordered by most recent created_at
+    Note: For now we ignore account_id since we're moving away from account_makes table
+    """
+    sql = """
+        SELECT name, MAX(created_at) as latest_created_at
+        FROM dough_makes
+        WHERE name IS NOT NULL AND name != ''
+        GROUP BY name
+        ORDER BY latest_created_at DESC;
+    """
+    
+    try:
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql)
+          res = cur.fetchall()
+    except Exception as e:
+      logger.error(f"Error getting distinct bread names: {str(e)}")
+      raise DatabaseError(f"Database error: {str(e)}")
+    
+    distinct_names = []
+    for row in res:
+      (name, latest_created_at) = row
+      distinct_names.append({
+        "name": name,
+        "latest_created_at": latest_created_at
+      })
+    
+    return distinct_names
+
   def add_account_make(self, account_id: str, account_name: str, display_name: str, key: str):
     # Execute SQL to insert new make
     sql = """

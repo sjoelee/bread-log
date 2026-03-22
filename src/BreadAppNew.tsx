@@ -3,12 +3,10 @@ import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TabType, DoughMake, DropdownOption } from './types/bread.ts';
 import { useBreadForm } from './hooks/useBreadForm.ts';
-import { useTeamMakes } from './hooks/useTeamMakes.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
 import { SavedTab } from './components/SavedTab.tsx';
 import { RecipeTab } from './components/RecipeTab.tsx';
-import { AddMakeModal } from './components/AddMakeModal.tsx';
 
 // Add main tab types
 type MainTabType = 'recipe' | 'timing';
@@ -72,18 +70,6 @@ const BreadApp: React.FC = () => {
     populateFormWithDough,
   } = useBreadForm();
 
-  const {
-    teamMakes,
-    isLoading: isLoadingMakes,
-    isAddMakeModalOpen,
-    newMakeName,
-    setNewMakeName,
-    isAddingMake,
-    addMakeError,
-    openAddMakeModal,
-    closeAddMakeModal,
-    handleAddMake,
-  } = useTeamMakes();
 
   const {
     savedMakes,
@@ -124,6 +110,47 @@ const BreadApp: React.FC = () => {
       setRecipeError(`Error loading recipes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoadingRecipes(false);
+    }
+  };
+
+  // Load ALL distinct dough makes names for dropdown (not paginated)
+  const loadAllDistinctBreadNames = async () => {
+    try {
+      const isDevelopment = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      const apiBaseUrl = isDevelopment
+        ? 'http://localhost:8000'
+        : 'https://your-production-api.com';
+
+      // New API call to get distinct bread names ordered by most recent created_at
+      const response = await fetch(`${apiBaseUrl}/makes/distinct-names`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const distinctBreadNames = result.names || result; // Handle different response formats
+        
+        // Process similar to recent timings but for dropdown purposes
+        const processedNames = distinctBreadNames.map((item: any) => {
+          return {
+            name: item.name,
+            created_at: new Date(item.latest_created_at), // Use latest usage
+            created_at_original: item.latest_created_at,
+          };
+        });
+        
+        // Update recentTimings with ALL distinct names for dropdown
+        setRecentTimings(processedNames);
+      } else {
+        console.error('Failed to load distinct bread names:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading distinct bread names:', error);
     }
   };
 
@@ -194,7 +221,7 @@ const BreadApp: React.FC = () => {
     }
   };
 
-  // Build combined dropdown options from Makes, Recipes, and Recent usage
+  // Build combined dropdown options from distinct dough_makes names and Recipes
   const buildDropdownOptions = () => {
     const options: DropdownOption[] = [];
     const usedNames = new Set<string>();
@@ -202,7 +229,7 @@ const BreadApp: React.FC = () => {
     // Create a set of recipe names for easy lookup
     const recipeNames = new Set(savedRecipes.map(recipe => recipe.name.toLowerCase()));
 
-    // First, add recent timing entries (most important - shows actual usage)
+    // Add distinct names from recent timing entries (actual usage history)
     recentTimings.forEach((timing) => {
       if (timing.name && !usedNames.has(timing.name.toLowerCase())) {
         const isRecipe = recipeNames.has(timing.name.toLowerCase());
@@ -216,7 +243,7 @@ const BreadApp: React.FC = () => {
       }
     });
 
-    // Add recipes that haven't been used recently
+    // Add recipes that haven't been used in recent timing entries
     savedRecipes.forEach((recipe) => {
       if (recipe.name && !usedNames.has(recipe.name.toLowerCase())) {
         options.push({
@@ -229,22 +256,7 @@ const BreadApp: React.FC = () => {
       }
     });
 
-    // Add team makes that haven't been used recently or as recipes
-    teamMakes.forEach((make) => {
-      if (make.displayName && make.key && !usedNames.has(make.displayName.toLowerCase())) {
-        // Skip the "Select a make..." placeholder
-        if (make.key === '') return;
-        
-        options.push({
-          value: make.displayName,
-          displayName: make.displayName,
-          type: 'make'
-        });
-        usedNames.add(make.displayName.toLowerCase());
-      }
-    });
-
-    // Sort by most recently used, then alphabetically
+    // Sort by most recently used (created_at), then alphabetically
     options.sort((a, b) => {
       if (a.lastUsed && b.lastUsed) {
         return b.lastUsed.getTime() - a.lastUsed.getTime();
@@ -257,10 +269,10 @@ const BreadApp: React.FC = () => {
     setDropdownOptions(options);
   };
 
-  // Load recipes and recent timings on component mount for timing dropdown
+  // Load recipes and distinct bread names on component mount for timing dropdown
   React.useEffect(() => {
     loadSavedRecipes();
-    loadRecentTimings(0, true);
+    loadAllDistinctBreadNames(); // Load ALL distinct names for dropdown
   }, []);
 
   // Load recipes when switching to saved tab
@@ -367,7 +379,7 @@ const BreadApp: React.FC = () => {
   // Build dropdown options when data sources change
   useEffect(() => {
     buildDropdownOptions();
-  }, [recentTimings, savedRecipes, teamMakes]);
+  }, [recentTimings, savedRecipes]);
 
   // Clear saved Create data and recipe preview when form is successfully submitted
   useEffect(() => {
@@ -539,9 +551,9 @@ const BreadApp: React.FC = () => {
                     onChange={handleRecipeInputChange}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
-                    placeholder={loadingRecipes || isLoadingMakes ? "Loading..." : "Select Bread"}
+                    placeholder={loadingRecipes ? "Loading..." : "Select Bread"}
                     className="w-full border rounded p-2 pr-8"
-                    disabled={loadingRecipes || isLoadingMakes}
+                    disabled={loadingRecipes}
                     autoComplete="off"
                   />
                   <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
@@ -576,14 +588,6 @@ const BreadApp: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={openAddMakeModal}
-                  className="text-red-500 text-sm mt-1 hover:underline"
-                  disabled={isLoadingMakes}
-                >
-                  + Add bread
-                </button>
               </div>
             </div>
           )}
@@ -786,8 +790,8 @@ const BreadApp: React.FC = () => {
 
                 <CreateTab
                 formData={formData}
-                teamMakes={teamMakes}
-                isLoadingMakes={isLoadingMakes}
+                teamMakes={[]}
+                isLoadingMakes={false}
                 loading={loading}
                 error={error}
                 success={success}
@@ -940,17 +944,6 @@ const BreadApp: React.FC = () => {
           )}
         </div>
       </div>
-      
-      {/* Add Make Modal */}
-      <AddMakeModal
-        isOpen={isAddMakeModalOpen}
-        newMakeName={newMakeName}
-        onNameChange={setNewMakeName}
-        onClose={closeAddMakeModal}
-        onAdd={handleAddMake}
-        isAdding={isAddingMake}
-        error={addMakeError}
-      />
     </div>
   );
 };

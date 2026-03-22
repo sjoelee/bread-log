@@ -9,7 +9,7 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "FastAPI: service.py",
+      "name": "FastAPI (uv run)",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
@@ -21,11 +21,30 @@
         "--port",
         "8000"
       ],
+      "python": "${workspaceFolder}/.venv/bin/python",
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/backend"
       },
       "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "FastAPI (with uv shell)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${env:HOME}/.local/bin/uv",
+      "args": [
+        "run",
+        "uvicorn",
+        "backend.service:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     }
   ]
