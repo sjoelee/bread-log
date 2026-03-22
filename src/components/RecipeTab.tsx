@@ -48,8 +48,7 @@ interface RecipeResponse {
   current_version: {
     id: string;
     recipe_id: string;
-    version_major: number;
-    version_minor: number;
+    version_number: number;
     description?: string;
     ingredients: Ingredient[];
     instructions: RecipeStep[];
@@ -429,7 +428,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
             <div>
               <div className="text-sm text-gray-600">Current Version</div>
               <div className="font-medium">
-                v{recipe.current_version.version_major}.{recipe.current_version.version_minor}
+                v{recipe.current_version.version_number}
               </div>
               {recipe.current_version.description && (
                 <div className="text-sm text-gray-500 mt-1">
@@ -449,7 +448,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       {success && (
         <div className="text-green-500 mb-4">
           {successMessage || 'Recipe saved successfully!'}
-          {recipe && !successMessage && ` New version: v${recipe.current_version.version_major}.${recipe.current_version.version_minor}`}
+          {recipe && !successMessage && ` New version: v${recipe.current_version.version_number}`}
         </div>
       )}
 

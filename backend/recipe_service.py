@@ -190,8 +190,8 @@ class RecipeService:
         step_diff = compare_instructions(instructions_1, instructions_2)
         
         return {
-            "from_version": f"{version_1.version_major}.{version_1.version_minor}",
-            "to_version": f"{version_2.version_major}.{version_2.version_minor}",
+            "from_version": str(version_1.version_number),
+            "to_version": str(version_2.version_number),
             "ingredient_changes": ingredient_diff,
             "step_changes": step_diff,
             "created_at": version_2.created_at
@@ -208,11 +208,8 @@ class RecipeService:
         bp_id = uuid.uuid4()
         
         # Determine next version number
-        next_major, next_minor = determine_next_version(
-            current_version.version_major, 
-            current_version.version_minor,
-            force_major
-        )
+        next_version_number = current_version.version_number + 1
+        
         
         # Calculate baker's percentages
         bakers_percentages = calculate_bakers_percentages(new_ingredients)
@@ -224,9 +221,8 @@ class RecipeService:
         version_data = {
             'id': version_id,
             'recipe_id': recipe_id,
-            'version_major': next_major,
-            'version_minor': next_minor,
-            'description': description or f"Auto-save v{next_major}.{next_minor}",
+            'version_number': next_version_number,
+            'description': description or f"Auto-save v{next_version_number}",
             'ingredients': new_ingredients,
             'instructions': new_instructions,
             'change_summary': change_summary,

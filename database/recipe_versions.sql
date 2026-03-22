@@ -20,8 +20,7 @@ CREATE TABLE recipes (
 CREATE TABLE recipe_versions (
     id UUID PRIMARY KEY,
     recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
-    version_major INT NOT NULL,
-    version_minor INT NOT NULL,
+    version_number INT NOT NULL,
     description TEXT,
     
     -- Unified ingredients storage (all ingredients in one JSONB column)
@@ -35,7 +34,7 @@ CREATE TABLE recipe_versions (
     change_summary JSONB, -- diff metadata for UI display
     
     -- Ensure unique version numbers per recipe
-    UNIQUE(recipe_id, version_major, version_minor)
+    UNIQUE(recipe_id, version_number)
 );
 
 -- Baker's percentages calculation table
@@ -62,7 +61,7 @@ ALTER TABLE recipes ADD CONSTRAINT fk_recipes_current_version
 
 -- Indexes for performance
 CREATE INDEX idx_recipe_versions_recipe_id ON recipe_versions(recipe_id);
-CREATE INDEX idx_recipe_versions_version ON recipe_versions(recipe_id, version_major DESC, version_minor DESC);
+CREATE INDEX idx_recipe_versions_version ON recipe_versions(recipe_id, version_number DESC);
 CREATE INDEX idx_recipe_versions_created ON recipe_versions(created_at DESC);
 CREATE INDEX idx_recipes_category ON recipes(category);
 CREATE INDEX idx_recipes_name ON recipes(name);

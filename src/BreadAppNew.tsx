@@ -631,7 +631,7 @@ const BreadApp: React.FC = () => {
                     if (response.ok) {
                       const result = await response.json();
                       console.log('Recipe created successfully:', result);
-                      console.log('Version:', `${result.recipe.current_version.version_major}.${result.recipe.current_version.version_minor}`);
+                      console.log('Version:', `${result.recipe.current_version.version_number}`);
                       if (result.recipe.bakers_percentages) {
                         console.log('Baker\'s percentages calculated:', result.recipe.bakers_percentages);
                       }

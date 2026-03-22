@@ -623,15 +623,15 @@ class DBConnector:
             datetime.now()
           ])
           
-          # Insert initial version (v1.0)
+          # Insert initial version (v1)
           cur.execute("""
-            INSERT INTO recipe_versions (id, recipe_id, version_major, version_minor, 
+            INSERT INTO recipe_versions (id, recipe_id, version_number, 
                                        description, ingredients, instructions, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
           """, [
             version_id,
             recipe_id,
-            1, 0,
+            1,
             recipe_data.get('version_description', 'Initial version'),
             json.dumps({"ingredients": recipe_data['ingredients']}),
             json.dumps({"instructions": recipe_data['instructions']}),
@@ -675,14 +675,13 @@ class DBConnector:
         with conn.cursor() as cur:
           # Insert new version
           cur.execute("""
-            INSERT INTO recipe_versions (id, recipe_id, version_major, version_minor,
+            INSERT INTO recipe_versions (id, recipe_id, version_number,
                                        description, ingredients, instructions, created_at, change_summary)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
           """, [
             version_data['id'],
             version_data['recipe_id'],
-            version_data['version_major'],
-            version_data['version_minor'],
+            version_data['version_number'],
             version_data.get('description'),
             json.dumps({"ingredients": version_data['ingredients']}),
             json.dumps({"instructions": version_data['instructions']}),
@@ -724,7 +723,7 @@ class DBConnector:
     """
     query = """
       SELECT r.id, r.name, r.description, r.category, r.current_version_id, r.created_at, r.updated_at,
-             rv.id, rv.version_major, rv.version_minor, rv.description, rv.ingredients, rv.instructions, rv.created_at,
+             rv.id, rv.version_number, rv.description, rv.ingredients, rv.instructions, rv.created_at,
              bp.total_flour_weight, bp.flour_ingredients, bp.other_ingredients
       FROM recipes r
       LEFT JOIN recipe_versions rv ON r.current_version_id = rv.id
@@ -745,7 +744,7 @@ class DBConnector:
       return None
     
     (r_id, r_name, r_description, r_category, r_current_version_id, r_created_at, r_updated_at,
-     rv_id, rv_major, rv_minor, rv_description, rv_ingredients, rv_instructions, rv_created_at,
+     rv_id, rv_version_number, rv_description, rv_ingredients, rv_instructions, rv_created_at,
      bp_total_flour, bp_flour_ingredients, bp_other_ingredients) = result
     
     # Parse ingredients and instructions
@@ -759,8 +758,7 @@ class DBConnector:
     current_version = RecipeVersion(
       id=rv_id,
       recipe_id=r_id,
-      version_major=rv_major,
-      version_minor=rv_minor,
+      version_number=rv_version_number,
       description=rv_description,
       ingredients=ingredients,
       instructions=instructions,
@@ -794,7 +792,7 @@ class DBConnector:
     """
     base_query = """
       SELECT r.id, r.name, r.category, r.created_at, r.updated_at,
-             rv.version_major, rv.version_minor,
+             rv.version_number,
              jsonb_array_length(rv.ingredients->'ingredients') as ingredient_count,
              jsonb_array_length(rv.instructions->'instructions') as step_count
       FROM recipes r
@@ -828,9 +826,9 @@ class DBConnector:
     recipes = []
     for result in results:
       (r_id, r_name, r_category, r_created_at, r_updated_at,
-       rv_major, rv_minor, ingredient_count, step_count) = result
+       rv_version_number, ingredient_count, step_count) = result
       
-      version_str = f"{rv_major}.{rv_minor}" if rv_major is not None else "1.0"
+      version_str = str(rv_version_number) if rv_version_number is not None else "1"
       
       recipes.append(RecipeListItem(
         id=r_id,
@@ -850,11 +848,11 @@ class DBConnector:
     Get all versions of a recipe ordered by version number
     """
     query = """
-      SELECT id, recipe_id, version_major, version_minor, description, 
+      SELECT id, recipe_id, version_number, description, 
              ingredients, instructions, created_at, change_summary
       FROM recipe_versions
       WHERE recipe_id = %s
-      ORDER BY version_major DESC, version_minor DESC
+      ORDER BY version_number DESC
     """
     
     try:
@@ -868,7 +866,7 @@ class DBConnector:
     
     versions = []
     for result in results:
-      (rv_id, rv_recipe_id, rv_major, rv_minor, rv_description,
+      (rv_id, rv_recipe_id, rv_version_number, rv_description,
        rv_ingredients, rv_instructions, rv_created_at, rv_change_summary) = result
       
       ingredients_data = rv_ingredients.get('ingredients', []) if rv_ingredients else []
@@ -880,8 +878,7 @@ class DBConnector:
       versions.append(RecipeVersion(
         id=rv_id,
         recipe_id=rv_recipe_id,
-        version_major=rv_major,
-        version_minor=rv_minor,
+        version_number=rv_version_number,
         description=rv_description,
         ingredients=ingredients,
         instructions=instructions,
@@ -896,7 +893,7 @@ class DBConnector:
     Get a specific recipe version by ID
     """
     query = """
-      SELECT id, recipe_id, version_major, version_minor, description,
+      SELECT id, recipe_id, version_number, description,
              ingredients, instructions, created_at, change_summary
       FROM recipe_versions
       WHERE id = %s
@@ -914,7 +911,7 @@ class DBConnector:
     if not result:
       return None
     
-    (rv_id, rv_recipe_id, rv_major, rv_minor, rv_description,
+    (rv_id, rv_recipe_id, rv_version_number, rv_description,
      rv_ingredients, rv_instructions, rv_created_at, rv_change_summary) = result
     
     ingredients_data = rv_ingredients.get('ingredients', []) if rv_ingredients else []
@@ -926,8 +923,7 @@ class DBConnector:
     return RecipeVersion(
       id=rv_id,
       recipe_id=rv_recipe_id,
-      version_major=rv_major,
-      version_minor=rv_minor,
+      version_number=rv_version_number,
       description=rv_description,
       ingredients=ingredients,
       instructions=instructions,

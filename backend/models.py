@@ -135,8 +135,7 @@ class RecipeUpdateRequest(BaseModel):
 class RecipeVersion(BaseModel):
   id: UUID
   recipe_id: UUID
-  version_major: int
-  version_minor: int
+  version_number: int
   description: Optional[str] = None
   ingredients: List[Ingredient]
   instructions: List[RecipeStep]
@@ -163,7 +162,7 @@ class RecipeListItem(BaseModel):
   id: UUID
   name: str
   category: Optional[str] = None
-  version: str  # e.g., "1.2"
+  version: str  # e.g., "2", "3"
   ingredient_count: int
   step_count: int
   created_at: datetime

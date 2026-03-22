@@ -366,7 +366,7 @@ def create_recipe(recipe: RecipeRequest):
     recipe_obj = recipe_service.create_recipe(recipe)
     response = RecipeCreateResponse(
       recipe=recipe_obj,
-      message=f"Recipe '{recipe_obj.name}' created successfully with version {recipe_obj.current_version.version_major}.{recipe_obj.current_version.version_minor}",
+      message=f"Recipe '{recipe_obj.name}' created successfully with version {recipe_obj.current_version.version_number}",
       success=True
     )
     logger.info(f"POST /recipes/ - Successfully created recipe '{recipe_obj.name}' with ID: {recipe_obj.id}")

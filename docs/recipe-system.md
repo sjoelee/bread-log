@@ -19,7 +19,7 @@ This document explains the relationship between recipe-related tables and the re
 - **Key Fields**:
   - `id` (UUID) - Primary key
   - `recipe_id` (UUID) - Foreign key linking back to main recipe
-  - `version_major`, `version_minor` - Version numbers (e.g., 1.2, 2.0)
+  - `version_number` (int) - Simple incremental version number (1, 2, 3, etc.)
   - `ingredients` (JSON) - Array of ingredient objects
   - `instructions` (JSON) - Array of instruction steps
   - `description` - Version-specific description
@@ -57,8 +57,8 @@ graph TD
 
 2. **Create First Version** (`recipe_versions` table):
    ```sql
-   INSERT INTO recipe_versions (recipe_id, version_major, version_minor, ingredients, instructions)
-   VALUES (recipe_id, 1, 0, ingredients_json, instructions_json)
+   INSERT INTO recipe_versions (recipe_id, version_number, ingredients, instructions)
+   VALUES (recipe_id, 1, ingredients_json, instructions_json)
    RETURNING id;
    ```
 
@@ -124,11 +124,12 @@ current_version_id points to → recipe_versions.id
 
 ## Versioning Benefits
 
-- **Version Control**: Track changes to recipes over time (v1.0 → v1.1 → v2.0)
+- **Version Control**: Track changes to recipes over time (v1 → v2 → v3)
 - **Baker's Percentages**: Automatically calculate proper bread ratios
 - **Current Version**: Always know which version is "live"
 - **History**: Keep old versions for comparison/rollback
 - **Change Tracking**: See what changed between versions
+- **Simplified Versioning**: Single number system avoids confusion between major/minor changes
 
 ## Integration with Timing System
 
@@ -155,7 +156,7 @@ The current implementation lacks proper recipe viewing and editing functionality
 
 #### Backend Processing Requirements:
 1. **Version Management**: 
-   - Increment the version **major** number (e.g., 1.0 → 2.0, not 1.1)
+   - Increment the version number by 1 (e.g., 1 → 2 → 3)
    - Create new entry in `recipe_versions` table
 2. **Recipe Table Updates**:
    - Update `current_version_id` to point to the new version
@@ -168,7 +169,7 @@ The current implementation lacks proper recipe viewing and editing functionality
 ```mermaid
 graph TD
     A[PATCH /recipes/{recipe_id}] --> B[Get Current Recipe Data]
-    B --> C[Create New Version Record v2.0]
+    B --> C[Create New Version Record v2, v3, etc.]
     C --> D[Check if Ingredients Changed]
     D --> E[Recalculate Baker's Percentages]
     E --> F[Update current_version_id]
@@ -196,8 +197,8 @@ Response: Complete recipe object with new version information
 #### Database Operations for Recipe Edit:
 1. **Insert New Version**:
    ```sql
-   INSERT INTO recipe_versions (recipe_id, version_major, version_minor, ingredients, instructions, description, created_at)
-   VALUES (recipe_id, current_major + 1, 0, new_ingredients, new_instructions, new_description, NOW())
+   INSERT INTO recipe_versions (recipe_id, version_number, ingredients, instructions, description, created_at)
+   VALUES (recipe_id, current_version + 1, new_ingredients, new_instructions, new_description, NOW())
    RETURNING id;
    ```
 
@@ -218,3 +219,20 @@ Response: Complete recipe object with new version information
    ```
 
 This ensures full version control with automatic percentage recalculation for any recipe modifications.
+
+## Schema Changes (Updated)
+
+### Simplified Versioning System
+- **Removed**: `version_major` and `version_minor` fields
+- **Added**: Single `version_number` field (integer)
+- **Rationale**: Users don't need to distinguish between major/minor changes - any edit creates a new version
+- **Benefits**: 
+  - Simpler UX (no confusion about major vs minor changes)
+  - Cleaner database queries
+  - Easier to understand version history (v1, v2, v3 instead of v1.0, v1.1, v2.0)
+
+### Migration Impact
+All backend code updated to use `version_number` instead of `version_major`/`version_minor` including:
+- Database queries in `db.py`
+- Pydantic models in `models.py`
+- API responses now return simple version numbers
