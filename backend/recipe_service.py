@@ -69,70 +69,6 @@ class RecipeService:
         """
         return self.db.list_recipes(category=category, limit=limit, offset=offset)
     
-    def update_recipe(self, recipe_id: UUID, updates: RecipeUpdateRequest) -> Recipe:
-        """
-        Update recipe - creates new version if ingredients/instructions changed
-        """
-        # Get current recipe
-        current_recipe = self.get_recipe(recipe_id)
-        if not current_recipe:
-            raise ValueError(f"Recipe {recipe_id} not found")
-        
-        # Handle name/description/category updates (no new version needed)
-        basic_updates = {}
-        if updates.name is not None:
-            basic_updates['name'] = updates.name
-        if updates.description is not None:
-            basic_updates['description'] = updates.description
-        if updates.category is not None:
-            basic_updates['category'] = updates.category
-        
-        # Update basic fields if any
-        if basic_updates:
-            self._update_recipe_basic_fields(recipe_id, basic_updates)
-        
-        # Check if ingredients or instructions changed
-        needs_new_version = False
-        ingredient_diff = None
-        step_diff = None
-        
-        if updates.ingredients is not None or updates.instructions is not None:
-            # Prepare new ingredients and instructions
-            new_ingredients = updates.ingredients or current_recipe.current_version.ingredients
-            new_instructions = updates.instructions or current_recipe.current_version.instructions
-            
-            new_ingredients_data = [ing.model_dump() for ing in new_ingredients]
-            new_instructions_data = [step.model_dump() for step in new_instructions]
-            
-            # Generate IDs for new items
-            new_ingredients_data = generate_ingredient_ids(new_ingredients_data)
-            new_instructions_data = generate_step_ids(new_instructions_data)
-            
-            # Compare with current version
-            current_ingredients = [ing.model_dump() for ing in current_recipe.current_version.ingredients]
-            current_instructions = [step.model_dump() for step in current_recipe.current_version.instructions]
-            
-            ingredient_diff = compare_ingredients(current_ingredients, new_ingredients_data)
-            step_diff = compare_instructions(current_instructions, new_instructions_data)
-            
-            needs_new_version = has_meaningful_changes(ingredient_diff, step_diff)
-        
-        # Create new version if needed
-        if needs_new_version:
-            return self._create_recipe_version(
-                recipe_id=recipe_id,
-                current_version=current_recipe.current_version,
-                new_ingredients=new_ingredients_data,
-                new_instructions=new_instructions_data,
-                ingredient_diff=ingredient_diff,
-                step_diff=step_diff,
-                description=updates.description,
-                force_major=updates.force_major or False
-            )
-        
-        # Return updated recipe
-        return self.get_recipe(recipe_id)
-    
     def create_recipe_version(self, recipe_id: UUID, ingredients: List[Ingredient], 
                             instructions: List[RecipeStep], description: Optional[str] = None,
                             force_major: bool = False) -> Recipe:
@@ -236,10 +172,72 @@ class RecipeService:
         # Return updated recipe
         return self.get_recipe(recipe_id)
     
-    def _update_recipe_basic_fields(self, recipe_id: UUID, updates: Dict[str, Any]):
+    def update_recipe_full(self, recipe_id: UUID, recipe_data: RecipeRequest) -> Recipe:
         """
-        Update basic recipe fields (name, description, category) without creating new version
+        Update a recipe with complete new data - creates new version and updates current_version_id
+        This implements the PATCH endpoint specification for full recipe updates.
+        
+        Steps:
+        1. Get current recipe and version
+        2. Create new version with incremented version_number
+        3. Update current_version_id and updated_at in recipes table
+        4. Recalculate baker's percentages if ingredients changed
         """
-        # This would require a new DB method to update just the recipes table
-        # For now, we'll skip this as it's not critical for MVP
-        pass
+        # Get current recipe
+        current_recipe = self.get_recipe(recipe_id)
+        if not current_recipe:
+            raise ValueError(f"Recipe with ID {recipe_id} not found")
+        
+        current_version = current_recipe.current_version
+        
+        # Prepare new ingredients and instructions with IDs
+        new_ingredients = [ingredient.dict() for ingredient in recipe_data.ingredients]
+        new_instructions = [instruction.dict() for instruction in recipe_data.instructions]
+        
+        # Add IDs if not present
+        new_ingredients = generate_ingredient_ids(new_ingredients)
+        new_instructions = generate_step_ids(new_instructions)
+        
+        # Compare with current version to detect changes
+        current_ingredients = [ingredient.dict() for ingredient in current_version.ingredients]
+        current_instructions = [instruction.dict() for instruction in current_version.instructions]
+        
+        ingredient_diff = compare_ingredients(current_ingredients, new_ingredients)
+        step_diff = compare_instructions(current_instructions, new_instructions)
+        
+        # Create new version - this returns the updated recipe with new current_version_id
+        updated_recipe = self._create_recipe_version(
+            recipe_id=recipe_id,
+            current_version=current_version,
+            new_ingredients=new_ingredients,
+            new_instructions=new_instructions,
+            ingredient_diff=ingredient_diff,
+            step_diff=step_diff,
+            description=recipe_data.description
+        )
+        
+        # Update basic recipe fields (name, description, category, updated_at)
+        # Note: current_version_id is already updated by _create_recipe_version
+        self.db.update_recipe_basic_fields(recipe_id, {
+            'name': recipe_data.name,
+            'description': recipe_data.description,
+            'category': recipe_data.category,
+            'updated_at': datetime.now()
+        })
+        
+        # Return the updated recipe
+        return self.get_recipe(recipe_id)
+    
+    def delete_recipe(self, recipe_id: UUID) -> bool:
+        """
+        Delete a recipe and all its associated data (versions, baker's percentages)
+        Returns True if successful, False if recipe not found
+        """
+        # Check if recipe exists first
+        existing_recipe = self.get_recipe(recipe_id)
+        if not existing_recipe:
+            raise ValueError(f"Recipe with ID {recipe_id} not found")
+        
+        # Delete from database - CASCADE should handle versions and baker's percentages
+        success = self.db.delete_recipe(recipe_id)
+        return success

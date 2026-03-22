@@ -554,51 +554,6 @@ class DBConnector:
       updated_at=updated_at
     )
 
-  def update_recipe(self, recipe_id: UUID, updates: dict):
-    """
-    Update a recipe with the provided fields
-    """
-    # Handle JSON conversion for instructions and ingredients
-    if 'instructions' in updates:
-      updates['instructions'] = json.dumps(updates['instructions'])
-    
-    if 'flour_ingredients' in updates:
-      updates['flour_ingredients'] = json.dumps(updates['flour_ingredients'])
-    
-    if 'other_ingredients' in updates:
-      updates['other_ingredients'] = json.dumps(updates['other_ingredients'])
-    
-    # Filter out None values
-    updates = {k: v for k, v in updates.items() if v is not None}
-    
-    if not updates:
-      raise DatabaseError("No valid fields to update")
-    
-    # Construct the SET clause dynamically
-    set_assignments = [sql.SQL("{} = %s").format(sql.Identifier(key)) for key in updates.keys()]
-    set_clause = sql.SQL(", ").join(set_assignments)
-    
-    query = sql.SQL("""
-      UPDATE recipes
-      SET {}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = %s
-    """).format(set_clause)
-    
-    # Create parameter list with update values followed by WHERE clause values
-    params = list(updates.values()) + [recipe_id]
-    
-    logger.debug(f'SQL Command\n {query}')
-    try:
-      with self.db_pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(query, params)
-          if cur.rowcount == 0:
-            raise DatabaseError(f"Recipe with ID {recipe_id} not found")
-          conn.commit()
-    except Exception as e:
-      logger.error(f"Error updating recipe: {str(e)}")
-      raise DatabaseError(f"Error updating recipe: {e}")
-
   # New versioned recipe methods
   def create_versioned_recipe(self, recipe_data: dict) -> dict:
     """
@@ -930,3 +885,60 @@ class DBConnector:
       created_at=rv_created_at,
       change_summary=rv_change_summary
     )
+  
+  def update_recipe_basic_fields(self, recipe_id: UUID, updates: dict):
+    """
+    Update basic recipe fields (name, description, category, current_version_id, updated_at)
+    Used by the PATCH endpoint to update recipe metadata after creating a new version.
+    """
+    try:
+      # Build dynamic update query based on provided fields
+      update_fields = []
+      params = []
+      param_num = 1
+      
+      for field, value in updates.items():
+        if field in ['name', 'description', 'category', 'current_version_id', 'updated_at']:
+          update_fields.append(f"{field} = %s")
+          params.append(value)
+        else:
+          logger.warning(f"Skipping unknown field in update: {field}")
+      
+      if not update_fields:
+        return  # Nothing to update
+      
+      # Add recipe_id parameter for WHERE clause
+      params.append(recipe_id)
+      
+      query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = %s"
+      
+      
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          if cur.rowcount == 0:
+            raise ValueError(f"Recipe with ID {recipe_id} not found")
+      
+    except Exception as e:
+      logger.error(f"Error updating recipe basic fields: {str(e)}")
+      raise DatabaseError(f"Failed to update recipe basic fields: {str(e)}")
+  
+  def delete_recipe(self, recipe_id: UUID) -> bool:
+    """
+    Delete a recipe and all its associated data.
+    The CASCADE constraints will automatically delete recipe_versions and bakers_percentages.
+    """
+    try:
+      query = "DELETE FROM recipes WHERE id = $1"
+      
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [recipe_id])
+          rows_deleted = cur.rowcount
+          
+      # Return True if a row was deleted, False if recipe didn't exist
+      return rows_deleted > 0
+      
+    except Exception as e:
+      logger.error(f"Error deleting recipe: {str(e)}")
+      raise DatabaseError(f"Failed to delete recipe: {str(e)}")

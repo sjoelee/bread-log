@@ -409,21 +409,56 @@ def get_recipe(recipe_id: UUID):
     logger.error(f"Error getting recipe: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/recipes/{recipe_id}", response_model=Recipe)
-def update_recipe(recipe_id: UUID, updates: RecipeUpdateRequest):
+@app.patch("/recipes/{recipe_id}", response_model=RecipeCreateResponse)
+def update_recipe(recipe_id: UUID, recipe_data: RecipeRequest):
   """
-  Update a recipe - creates new version if ingredients/instructions changed
+  Update a recipe - creates new version and updates current_version_id
+  Uses the same complete JSON body structure as POST creation
   """
+  logger.info(f"PATCH /recipes/{recipe_id} - Updating recipe with data: {recipe_data.dict()}")
   try:
-    recipe = recipe_service.update_recipe(recipe_id, updates)
-    return recipe
+    updated_recipe = recipe_service.update_recipe_full(recipe_id, recipe_data)
+    response = RecipeCreateResponse(
+      recipe=updated_recipe,
+      message=f"Recipe '{updated_recipe.name}' updated successfully to version {updated_recipe.current_version.version_number}",
+      success=True
+    )
+    logger.info(f"PATCH /recipes/{recipe_id} - Successfully updated recipe to version {updated_recipe.current_version.version_number}")
+    return response
     
   except ValueError as e:
+    logger.error(f"PATCH /recipes/{recipe_id} - Recipe not found: {str(e)}")
     raise HTTPException(status_code=404, detail=str(e))
   except DatabaseError as e:
+    logger.error(f"PATCH /recipes/{recipe_id} - Database error: {str(e)}")
     raise HTTPException(status_code=400, detail=str(e))
   except Exception as e:
-    logger.error(f"Error updating recipe: {str(e)}")
+    logger.error(f"PATCH /recipes/{recipe_id} - Error updating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/recipes/{recipe_id}")
+def delete_recipe(recipe_id: UUID):
+  """
+  Delete a recipe and all its versions and baker's percentages
+  """
+  logger.info(f"DELETE /recipes/{recipe_id} - Deleting recipe")
+  try:
+    success = recipe_service.delete_recipe(recipe_id)
+    if success:
+      logger.info(f"DELETE /recipes/{recipe_id} - Successfully deleted recipe")
+      return {"message": "Recipe deleted successfully", "success": True}
+    else:
+      logger.error(f"DELETE /recipes/{recipe_id} - Recipe not found")
+      raise HTTPException(status_code=404, detail="Recipe not found")
+    
+  except ValueError as e:
+    logger.error(f"DELETE /recipes/{recipe_id} - Recipe not found: {str(e)}")
+    raise HTTPException(status_code=404, detail=str(e))
+  except DatabaseError as e:
+    logger.error(f"DELETE /recipes/{recipe_id} - Database error: {str(e)}")
+    raise HTTPException(status_code=400, detail=str(e))
+  except Exception as e:
+    logger.error(f"DELETE /recipes/{recipe_id} - Error deleting recipe: {str(e)}")
     raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/recipes/{recipe_id}/versions", response_model=Recipe)

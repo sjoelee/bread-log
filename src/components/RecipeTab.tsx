@@ -453,35 +453,14 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       )}
 
       {/* Submit Buttons */}
-      <div className="flex justify-center gap-4">
+      <div className="flex justify-center">
         <button
           type="submit"
           disabled={loading}
           className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
         >
-          {loading ? 'Saving...' : recipe ? 'Save Changes (Auto Version)' : 'Create Recipe'}
+          {loading ? 'Saving...' : recipe ? 'Save Changes' : 'Create Recipe'}
         </button>
-        
-        {recipe && (
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => {
-              // TODO: Implement major version bump
-              console.log('Major version bump requested');
-              if (onSubmit) {
-                const formDataWithMajorFlag = { 
-                  ...formData, 
-                  forceMajorVersion: true 
-                };
-                onSubmit(formDataWithMajorFlag as any);
-              }
-            }}
-            className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-6 rounded"
-          >
-            Save New Major Version
-          </button>
-        )}
       </div>
     </form>
   );

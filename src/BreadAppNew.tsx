@@ -27,6 +27,10 @@ const BreadApp: React.FC = () => {
   const [savedRecipes, setSavedRecipes] = useState<any[]>([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
   
+  // Recipe editing state
+  const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  
   // Timing-specific state for recent saved timings
   const [recentTimings, setRecentTimings] = useState<any[]>([]);
   const [loadingRecentTimings, setLoadingRecentTimings] = useState(false);
@@ -426,27 +430,57 @@ const BreadApp: React.FC = () => {
 
           {/* Sub Tab Navigation for Recipe tab */}
           {activeMainTab === 'recipe' && (
-            <div className="flex mb-6 border-b">
-              <button
-                onClick={() => setActiveRecipeTab('create')}
-                className={`px-4 py-2 font-medium ${
-                  activeRecipeTab === 'create'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Create
-              </button>
-              <button
-                onClick={() => setActiveRecipeTab('saved')}
-                className={`px-4 py-2 font-medium ${
-                  activeRecipeTab === 'saved'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Saved
-              </button>
+            <div className="flex justify-between items-center mb-6 border-b">
+              <div className="flex">
+                <button
+                  onClick={() => {
+                    setActiveRecipeTab('create');
+                    // Clear editing state when switching tabs
+                    if (activeRecipeTab !== 'create') {
+                      setEditingRecipe(null);
+                      setEditingRecipeId(null);
+                    }
+                  }}
+                  className={`px-4 py-2 font-medium ${
+                    activeRecipeTab === 'create'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {editingRecipe ? 'Edit Recipe' : 'Create'}
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveRecipeTab('saved');
+                    // Clear editing state when switching to saved tab
+                    setEditingRecipe(null);
+                    setEditingRecipeId(null);
+                  }}
+                  className={`px-4 py-2 font-medium ${
+                    activeRecipeTab === 'saved'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Saved
+                </button>
+              </div>
+              
+              {/* Cancel Edit Button - only show when editing */}
+              {editingRecipe && activeRecipeTab === 'create' && (
+                <button
+                  onClick={() => {
+                    setEditingRecipe(null);
+                    setEditingRecipeId(null);
+                    setRecipeSuccess(false);
+                    setRecipeError(null);
+                    setRecipeSuccessMessage(null);
+                  }}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel Edit
+                </button>
+              )}
             </div>
           )}
 
@@ -600,6 +634,7 @@ const BreadApp: React.FC = () => {
                 error={recipeError}
                 success={recipeSuccess}
                 successMessage={recipeSuccessMessage}
+                recipe={editingRecipe}
                 onSubmit={async (recipeData) => {
                   try {
                     setRecipeLoading(true);
@@ -614,8 +649,15 @@ const BreadApp: React.FC = () => {
                       ? 'http://localhost:8000'
                       : 'https://your-production-api.com';
 
-                    const response = await fetch(`${apiBaseUrl}/recipes/`, {
-                      method: 'POST',
+                    // Determine if we're creating or editing
+                    const isEditing = editingRecipeId !== null;
+                    const url = isEditing 
+                      ? `${apiBaseUrl}/recipes/${editingRecipeId}`
+                      : `${apiBaseUrl}/recipes/`;
+                    const method = isEditing ? 'PATCH' : 'POST';
+
+                    const response = await fetch(url, {
+                      method: method,
                       headers: {
                         'Content-Type': 'application/json',
                       },
@@ -630,7 +672,7 @@ const BreadApp: React.FC = () => {
 
                     if (response.ok) {
                       const result = await response.json();
-                      console.log('Recipe created successfully:', result);
+                      console.log(`Recipe ${isEditing ? 'updated' : 'created'} successfully:`, result);
                       console.log('Version:', `${result.recipe.current_version.version_number}`);
                       if (result.recipe.bakers_percentages) {
                         console.log('Baker\'s percentages calculated:', result.recipe.bakers_percentages);
@@ -639,16 +681,22 @@ const BreadApp: React.FC = () => {
                       setRecipeSuccess(true);
                       setRecipeSuccessMessage(result.message);
                       
-                      // Reload recipes list so it appears in Saved tab
+                      // Clear editing state after successful save
+                      if (isEditing) {
+                        setEditingRecipe(null);
+                        setEditingRecipeId(null);
+                      }
+                      
+                      // Reload recipes list so changes appear in Saved tab
                       loadSavedRecipes();
                     } else {
                       const errorText = await response.text();
-                      console.error('Failed to create recipe:', response.statusText, errorText);
-                      setRecipeError(`Failed to create recipe: ${response.statusText}`);
+                      console.error(`Failed to ${isEditing ? 'update' : 'create'} recipe:`, response.statusText, errorText);
+                      setRecipeError(`Failed to ${isEditing ? 'update' : 'create'} recipe: ${response.statusText}`);
                     }
                   } catch (error) {
-                    console.error('Error creating recipe:', error);
-                    setRecipeError(`Error creating recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    console.error(`Error ${isEditing ? 'updating' : 'creating'} recipe:`, error);
+                    setRecipeError(`Error ${isEditing ? 'updating' : 'creating'} recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
                   } finally {
                     setRecipeLoading(false);
                   }
@@ -716,21 +764,102 @@ const BreadApp: React.FC = () => {
                         <div className="mt-4 flex space-x-2">
                           <button 
                             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 text-sm rounded-md font-medium"
-                            onClick={() => {
-                              console.log('View recipe:', recipe);
-                              // TODO: Implement recipe viewing/editing
+                            onClick={async () => {
+                              console.log('View & Edit recipe:', recipe);
+                              
+                              try {
+                                setRecipeLoading(true);
+                                setRecipeError(null);
+                                
+                                const isDevelopment = window.location.hostname === 'localhost' ||
+                                  window.location.hostname === '127.0.0.1';
+
+                                const apiBaseUrl = isDevelopment
+                                  ? 'http://localhost:8000'
+                                  : 'https://your-production-api.com';
+
+                                // Fetch full recipe data including current_version
+                                const response = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
+                                  method: 'GET',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                });
+
+                                if (response.ok) {
+                                  const fullRecipe = await response.json();
+                                  console.log('Loaded full recipe for editing:', fullRecipe);
+                                  
+                                  // Set up editing state with full recipe data
+                                  setEditingRecipe(fullRecipe);
+                                  setEditingRecipeId(fullRecipe.id);
+                                  // Switch to create tab for editing
+                                  setActiveRecipeTab('create');
+                                  // Clear any existing success/error states
+                                  setRecipeSuccess(false);
+                                  setRecipeError(null);
+                                  setRecipeSuccessMessage(null);
+                                } else {
+                                  console.error('Failed to load recipe for editing:', response.statusText);
+                                  setRecipeError(`Failed to load recipe: ${response.statusText}`);
+                                }
+                              } catch (error) {
+                                console.error('Error loading recipe for editing:', error);
+                                setRecipeError(`Error loading recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                              } finally {
+                                setRecipeLoading(false);
+                              }
                             }}
                           >
-                            View
+                            View & Edit
                           </button>
                           <button 
-                            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 text-sm rounded-md font-medium"
-                            onClick={() => {
-                              console.log('Edit recipe:', recipe);
-                              // TODO: Implement recipe editing
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 text-sm rounded-md font-medium"
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to delete "${recipe.name}"? This action cannot be undone.`)) {
+                                console.log('Delete recipe:', recipe);
+                                
+                                try {
+                                  setRecipeLoading(true);
+                                  setRecipeError(null);
+                                  
+                                  const isDevelopment = window.location.hostname === 'localhost' ||
+                                    window.location.hostname === '127.0.0.1';
+
+                                  const apiBaseUrl = isDevelopment
+                                    ? 'http://localhost:8000'
+                                    : 'https://your-production-api.com';
+
+                                  const response = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
+                                    method: 'DELETE',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                  });
+
+                                  if (response.ok) {
+                                    console.log('Recipe deleted successfully');
+                                    // Reload recipes list to remove deleted recipe
+                                    loadSavedRecipes();
+                                    // Clear editing state if this recipe was being edited
+                                    if (editingRecipeId === recipe.id) {
+                                      setEditingRecipe(null);
+                                      setEditingRecipeId(null);
+                                    }
+                                  } else {
+                                    console.error('Failed to delete recipe:', response.statusText);
+                                    setRecipeError(`Failed to delete recipe: ${response.statusText}`);
+                                  }
+                                } catch (error) {
+                                  console.error('Error deleting recipe:', error);
+                                  setRecipeError(`Error deleting recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                } finally {
+                                  setRecipeLoading(false);
+                                }
+                              }
                             }}
                           >
-                            Edit
+                            Delete
                           </button>
                         </div>
                       </div>
