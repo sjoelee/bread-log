@@ -929,7 +929,7 @@ class DBConnector:
     The CASCADE constraints will automatically delete recipe_versions and bakers_percentages.
     """
     try:
-      query = "DELETE FROM recipes WHERE id = $1"
+      query = "DELETE FROM recipes WHERE id = %s"
       
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
