@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from uuid import UUID
 import json
@@ -99,23 +99,44 @@ class CreateMakeRequest(BaseModel):
 # Recipe models - Updated for versioning system
 class Ingredient(BaseModel):
   id: Optional[str] = None
-  name: str
-  amount: float
-  unit: str
-  type: str  # flour, liquid, preferment, other, etc.
+  name: str = Field(..., min_length=1, description="Ingredient name cannot be empty")
+  amount: float = Field(..., gt=0, description="Amount must be greater than 0")
+  unit: str = Field(..., pattern=r'^(grams|kg|ml|cups|tbsp|tsp)$', description="Must be valid unit")
+  type: str = Field(..., pattern=r'^(flour|liquid|preferment|fat|other)$', description="Must be valid ingredient type")
   notes: Optional[str] = None
+
+  @field_validator('name')
+  @classmethod
+  def name_not_empty(cls, v):
+    if not v or not v.strip():
+      raise ValueError('Ingredient name cannot be empty')
+    return v.strip()
 
 class RecipeStep(BaseModel):
   id: Optional[str] = None
-  order: int
-  instruction: str
+  order: int = Field(..., gt=0, description="Order must be greater than 0")
+  instruction: str = Field(..., min_length=1, description="Instruction cannot be empty")
+
+  @field_validator('instruction')
+  @classmethod
+  def instruction_not_empty(cls, v):
+    if not v or not v.strip():
+      raise ValueError('Instruction cannot be empty')
+    return v.strip()
 
 class RecipeRequest(BaseModel):
-  name: str
-  description: Optional[str] = None
-  category: Optional[str] = None
-  ingredients: List[Ingredient]
-  instructions: List[RecipeStep]
+  name: str = Field(..., min_length=1, max_length=255, description="Recipe name is required")
+  description: Optional[str] = Field(None, max_length=1000)
+  category: Optional[str] = Field(None, pattern=r'^(sourdough|enriched|lean|sweet|other)$')
+  ingredients: List[Ingredient] = Field(..., min_length=1, description="At least one ingredient is required")
+  instructions: List[RecipeStep] = Field(..., min_length=1, description="At least one instruction is required")
+
+  @field_validator('name')
+  @classmethod
+  def name_not_empty(cls, v):
+    if not v or not v.strip():
+      raise ValueError('Recipe name cannot be empty')
+    return v.strip()
 
 class RecipeVersionRequest(BaseModel):
   ingredients: List[Ingredient]

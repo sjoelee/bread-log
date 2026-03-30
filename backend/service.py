@@ -2,9 +2,9 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
-from db import DBConnector
-from exceptions import DatabaseError
-from models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersionRequest, RecipeListItem, RecipeVersion, SimpleMake, RecipeCreateResponse
+from .db import DBConnector
+from .exceptions import DatabaseError
+from .models import AccountMake, CreateMakeRequest, DoughMake, DoughMakeRequest, DoughMakeUpdate, MAKE_NAMES, Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersionRequest, RecipeListItem, RecipeVersion, SimpleMake, RecipeCreateResponse
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -13,7 +13,7 @@ import logging
 import re
 
 # Import recipe service
-from recipe_service import RecipeService
+from .recipe_service import RecipeService
 
 app = FastAPI()
 
@@ -356,25 +356,28 @@ def get_makes_for_date(date: str):
   pass
 
 # New versioned recipe endpoints
-@app.post("/recipes/", response_model=RecipeCreateResponse)
+@app.post("/recipes/", response_model=Recipe, status_code=201)
 def create_recipe(recipe: RecipeRequest):
   """
   Create a new versioned recipe with initial version 1.0
   """
-  logger.info(f"POST /recipes/ - Creating recipe: {recipe.dict()}")
+  logger.info(f"POST /recipes/ - Creating recipe: {recipe.model_dump()}")
   try:
     recipe_obj = recipe_service.create_recipe(recipe)
-    response = RecipeCreateResponse(
-      recipe=recipe_obj,
-      message=f"Recipe '{recipe_obj.name}' created successfully with version {recipe_obj.current_version.version_number}",
-      success=True
-    )
     logger.info(f"POST /recipes/ - Successfully created recipe '{recipe_obj.name}' with ID: {recipe_obj.id}")
-    return response
+    return recipe_obj
+    
+  except DatabaseError as e:
+    logger.error(f"POST /recipes/ - Database error creating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail="Failed to create recipe due to database error")
+    
+  except ValueError as e:
+    logger.error(f"POST /recipes/ - Validation error creating recipe: {str(e)}")
+    raise HTTPException(status_code=422, detail=f"Validation error: {str(e)}")
     
   except Exception as e:
-    logger.error(f"POST /recipes/ - Error creating recipe: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+    logger.error(f"POST /recipes/ - Unexpected error creating recipe: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred while creating the recipe")
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
 def list_recipes(category: str = None, limit: int = 50, offset: int = 0):

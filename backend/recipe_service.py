@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
-from db import DBConnector
-from models import (
+from .db import DBConnector
+from .models import (
     Recipe, RecipeRequest, RecipeUpdateRequest, RecipeVersion, RecipeListItem,
     Ingredient, RecipeStep, BakersPercentages
 )
-from recipe_versioning import (
+from .recipe_versioning import (
     compare_ingredients, compare_instructions, determine_next_version,
     create_version_summary, calculate_bakers_percentages, has_meaningful_changes,
     generate_step_ids, generate_ingredient_ids

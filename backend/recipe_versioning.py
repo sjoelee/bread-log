@@ -5,7 +5,7 @@ import re
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
-from models import Ingredient, RecipeStep, IngredientDiff, StepDiff, RecipeVersionDiff
+from .models import Ingredient, RecipeStep, IngredientDiff, StepDiff, RecipeVersionDiff
 
 
 def normalize_ingredient_name(name: str) -> str:

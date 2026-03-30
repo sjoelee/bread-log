@@ -101,8 +101,7 @@ def recipe_version_v1(base_recipe):
     return {
         "id": str(uuid4()),
         "recipe_id": base_recipe["id"],
-        "version_major": 1,
-        "version_minor": 0,
+        "version_number": 1,
         "description": "Initial version",
         "ingredients": base_recipe["ingredients"],
         "instructions": base_recipe["instructions"],
