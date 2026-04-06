@@ -514,46 +514,6 @@ class DBConnector:
       logger.error(f"Error creating recipe: {str(e)}")
       raise DatabaseError(f"Error creating recipe: {e}")
 
-  def get_recipe(self, recipe_id: UUID) -> Optional[Recipe]:
-    """
-    Get a recipe by ID
-    """
-    query = """
-      SELECT id, name, description, instructions, flour_ingredients, other_ingredients, created_at, updated_at
-      FROM recipes
-      WHERE id = %s
-    """
-    
-    try:
-      with self.db_pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(query, [recipe_id])
-          result = cur.fetchone()
-    except Exception as e:
-      logger.error(f"Error getting recipe: {str(e)}")
-      raise DatabaseError(f"Error getting recipe: {e}")
-    
-    if not result:
-      return None
-    
-    (id, name, description, instructions_json, flour_ingredients_json, other_ingredients_json, created_at, updated_at) = result
-    
-    # Parse JSON data
-    instructions = [RecipeStep(**step) for step in instructions_json]
-    flour_ingredients = [Ingredient(**ingredient) for ingredient in flour_ingredients_json]
-    other_ingredients = [Ingredient(**ingredient) for ingredient in other_ingredients_json]
-    
-    return Recipe(
-      id=id,
-      name=name,
-      description=description,
-      instructions=instructions,
-      flour_ingredients=flour_ingredients,
-      other_ingredients=other_ingredients,
-      created_at=created_at,
-      updated_at=updated_at
-    )
-
   # New versioned recipe methods
   def create_versioned_recipe(self, recipe_data: dict) -> dict:
     """
