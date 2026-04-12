@@ -11,6 +11,11 @@ from .models import (
   RecipeVersion,
   RecipeListItem,
   BakersPercentages,
+  BreadTiming,
+  BreadTimingCreate,
+  BreadTimingUpdate,
+  BreadTimingListResponse,
+  StretchFold,
 )
 from psycopg_pool import ConnectionPool
 from psycopg import sql
@@ -1055,3 +1060,348 @@ class DBConnector:
     except Exception as e:
       logger.error(f"Error deleting recipe: {str(e)}")
       raise DatabaseError(f"Failed to delete recipe: {str(e)}")
+
+  # New Bread Timing Methods for REST API
+
+  def create_bread_timing(self, timing_data: BreadTimingCreate) -> BreadTiming:
+    """Create a new bread timing record"""
+    try:
+      # Convert stretch_folds to JSON
+      stretch_folds_json = (
+        json.dumps(
+          [
+            {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
+            for sf in timing_data.stretch_folds
+          ]
+        )
+        if timing_data.stretch_folds
+        else "[]"
+      )
+
+      query = """
+        INSERT INTO bread_timings (
+          recipe_name, date, autolyse_ts, mix_ts, bulk_ts, preshape_ts, 
+          final_shape_ts, fridge_ts, room_temp, water_temp, flour_temp, 
+          preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+        ) VALUES (
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        ) RETURNING id, created_at, updated_at
+      """
+
+      params = [
+        timing_data.recipe_name,
+        timing_data.date,
+        timing_data.autolyse_ts,
+        timing_data.mix_ts,
+        timing_data.bulk_ts,
+        timing_data.preshape_ts,
+        timing_data.final_shape_ts,
+        timing_data.fridge_ts,
+        timing_data.room_temp,
+        timing_data.water_temp,
+        timing_data.flour_temp,
+        timing_data.preferment_temp,
+        timing_data.dough_temp,
+        timing_data.temperature_unit,
+        stretch_folds_json,
+        timing_data.notes,
+      ]
+
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          result = cur.fetchone()
+          timing_id, created_at, updated_at = result
+
+          # Return the created timing
+          return BreadTiming(
+            id=timing_id,
+            recipe_name=timing_data.recipe_name,
+            date=timing_data.date,
+            created_at=created_at,
+            updated_at=updated_at,
+            autolyse_ts=timing_data.autolyse_ts,
+            mix_ts=timing_data.mix_ts,
+            bulk_ts=timing_data.bulk_ts,
+            preshape_ts=timing_data.preshape_ts,
+            final_shape_ts=timing_data.final_shape_ts,
+            fridge_ts=timing_data.fridge_ts,
+            room_temp=timing_data.room_temp,
+            water_temp=timing_data.water_temp,
+            flour_temp=timing_data.flour_temp,
+            preferment_temp=timing_data.preferment_temp,
+            dough_temp=timing_data.dough_temp,
+            temperature_unit=timing_data.temperature_unit,
+            stretch_folds=timing_data.stretch_folds,
+            notes=timing_data.notes,
+          )
+
+    except Exception as e:
+      logger.error(f"Error creating bread timing: {str(e)}")
+      raise DatabaseError(f"Failed to create bread timing: {str(e)}")
+
+  def get_bread_timing(self, timing_id: UUID) -> Optional[BreadTiming]:
+    """Get a specific bread timing by ID"""
+    try:
+      query = """
+        SELECT id, recipe_name, date, created_at, updated_at, autolyse_ts, mix_ts, 
+               bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
+               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+        FROM bread_timings 
+        WHERE id = %s
+      """
+
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [timing_id])
+          result = cur.fetchone()
+
+          if not result:
+            return None
+
+          # Parse the row data
+          return self._parse_timing_row(result)
+
+    except Exception as e:
+      logger.error(f"Error getting bread timing {timing_id}: {str(e)}")
+      raise DatabaseError(f"Failed to get bread timing: {str(e)}")
+
+  def list_bread_timings(
+    self,
+    limit: int = 20,
+    offset: int = 0,
+    recipe_name: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    search: Optional[str] = None,
+    order_by: str = "created_at",
+    order_direction: str = "desc",
+  ) -> BreadTimingListResponse:
+    """List bread timings with pagination and filtering"""
+    try:
+      # Build WHERE clause
+      where_conditions = []
+      params = []
+
+      if recipe_name:
+        where_conditions.append("recipe_name = %s")
+        params.append(recipe_name)
+
+      if date_from:
+        where_conditions.append("date >= %s")
+        params.append(date_from)
+
+      if date_to:
+        where_conditions.append("date <= %s")
+        params.append(date_to)
+
+      if search:
+        where_conditions.append("notes ILIKE %s")
+        params.append(f"%{search}%")
+
+      where_clause = (
+        "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+      )
+
+      # Validate order_by field
+      valid_order_fields = ["created_at", "updated_at", "date", "recipe_name"]
+      if order_by not in valid_order_fields:
+        raise ValueError(
+          f"Invalid order_by field. Must be one of: {valid_order_fields}"
+        )
+
+      # Validate order_direction
+      if order_direction.lower() not in ["asc", "desc"]:
+        raise ValueError("order_direction must be 'asc' or 'desc'")
+
+      # Count total records
+      count_query = f"SELECT COUNT(*) FROM bread_timings {where_clause}"
+
+      # Main query
+      main_query = f"""
+        SELECT id, recipe_name, date, created_at, updated_at, autolyse_ts, mix_ts, 
+               bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
+               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+        FROM bread_timings 
+        {where_clause}
+        ORDER BY {order_by} {order_direction.upper()}
+        LIMIT %s OFFSET %s
+      """
+
+      # Add limit and offset to params
+      main_params = params + [limit, offset]
+
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          # Get total count
+          cur.execute(count_query, params)
+          total_count = cur.fetchone()[0]
+
+          # Get paginated results
+          cur.execute(main_query, main_params)
+          results = cur.fetchall()
+
+          # Parse timing records
+          timings = [self._parse_timing_row(row) for row in results]
+
+          # Calculate pagination metadata
+          page = (offset // limit) + 1
+          total_pages = (total_count + limit - 1) // limit
+          has_next = offset + limit < total_count
+          has_previous = offset > 0
+
+          return BreadTimingListResponse(
+            timings=timings,
+            total_count=total_count,
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_previous=has_previous,
+          )
+
+    except Exception as e:
+      logger.error(f"Error listing bread timings: {str(e)}")
+      raise DatabaseError(f"Failed to list bread timings: {str(e)}")
+
+  def update_bread_timing(
+    self, timing_id: UUID, updates: BreadTimingUpdate
+  ) -> BreadTiming:
+    """Update a bread timing record"""
+    try:
+      # Build UPDATE clause dynamically
+      update_fields = []
+      params = []
+
+      # Get update data, excluding None values
+      update_data = updates.model_dump(exclude_none=True)
+
+      if not update_data:
+        raise ValueError("No valid fields to update")
+
+      for field, value in update_data.items():
+        if field == "stretch_folds":
+          # Convert stretch folds to JSON
+          stretch_folds_json = (
+            json.dumps(
+              [
+                {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
+                for sf in value
+              ]
+            )
+            if value
+            else "[]"
+          )
+          update_fields.append("stretch_folds = %s")
+          params.append(stretch_folds_json)
+        else:
+          update_fields.append(f"{field} = %s")
+          params.append(value)
+
+      # Add timing_id for WHERE clause
+      params.append(timing_id)
+
+      query = f"""
+        UPDATE bread_timings 
+        SET {", ".join(update_fields)}
+        WHERE id = %s
+      """
+
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, params)
+          if cur.rowcount == 0:
+            raise ValueError(f"Bread timing with ID {timing_id} not found")
+
+      # Return the updated timing
+      updated_timing = self.get_bread_timing(timing_id)
+      if not updated_timing:
+        raise DatabaseError("Failed to retrieve updated timing")
+
+      return updated_timing
+
+    except Exception as e:
+      logger.error(f"Error updating bread timing {timing_id}: {str(e)}")
+      raise DatabaseError(f"Failed to update bread timing: {str(e)}")
+
+  def delete_bread_timing(self, timing_id: UUID) -> bool:
+    """Delete a bread timing record"""
+    try:
+      query = "DELETE FROM bread_timings WHERE id = %s"
+
+      with self.db_pool.get_connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(query, [timing_id])
+          rows_deleted = cur.rowcount
+
+      return rows_deleted > 0
+
+    except Exception as e:
+      logger.error(f"Error deleting bread timing {timing_id}: {str(e)}")
+      raise DatabaseError(f"Failed to delete bread timing: {str(e)}")
+
+  def _parse_timing_row(self, row) -> BreadTiming:
+    """Helper method to parse a database row into a BreadTiming object"""
+    (
+      timing_id,
+      recipe_name,
+      date,
+      created_at,
+      updated_at,
+      autolyse_ts,
+      mix_ts,
+      bulk_ts,
+      preshape_ts,
+      final_shape_ts,
+      fridge_ts,
+      room_temp,
+      water_temp,
+      flour_temp,
+      preferment_temp,
+      dough_temp,
+      temperature_unit,
+      stretch_folds_json,
+      notes,
+    ) = row
+
+    # Parse stretch_folds JSON
+    stretch_folds = []
+    if stretch_folds_json:
+      try:
+        if isinstance(stretch_folds_json, list):
+          stretch_folds_data = stretch_folds_json
+        else:
+          stretch_folds_data = json.loads(stretch_folds_json)
+
+        for fold in stretch_folds_data:
+          if isinstance(fold, dict) and "fold_number" in fold and "timestamp" in fold:
+            stretch_folds.append(
+              StretchFold(
+                fold_number=fold["fold_number"],
+                timestamp=datetime.fromisoformat(fold["timestamp"]),
+              )
+            )
+      except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"Invalid stretch_folds JSON for timing {timing_id}: {e}")
+
+    return BreadTiming(
+      id=timing_id,
+      recipe_name=recipe_name,
+      date=date,
+      created_at=created_at,
+      updated_at=updated_at,
+      autolyse_ts=autolyse_ts,
+      mix_ts=mix_ts,
+      bulk_ts=bulk_ts,
+      preshape_ts=preshape_ts,
+      final_shape_ts=final_shape_ts,
+      fridge_ts=fridge_ts,
+      room_temp=float(room_temp) if room_temp is not None else None,
+      water_temp=float(water_temp) if water_temp is not None else None,
+      flour_temp=float(flour_temp) if flour_temp is not None else None,
+      preferment_temp=float(preferment_temp) if preferment_temp is not None else None,
+      dough_temp=float(dough_temp) if dough_temp is not None else None,
+      temperature_unit=temperature_unit or "Fahrenheit",
+      stretch_folds=stretch_folds,
+      notes=notes,
+    )

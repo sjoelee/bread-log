@@ -16,6 +16,10 @@ from .models import (
   RecipeVersion,
   SimpleMake,
   RecipeCreateResponse,
+  BreadTiming,
+  BreadTimingCreate,
+  BreadTimingUpdate,
+  BreadTimingListResponse,
 )
 from typing import List, Optional
 from uuid import UUID
@@ -680,3 +684,305 @@ def validate_dough_make(make: DoughMake) -> bool:
     )
     else False
   )
+
+
+# New Bread Timing REST API Endpoints
+
+
+@app.post("/timings", response_model=BreadTiming, status_code=201)
+def create_timing(timing: BreadTimingCreate):
+  """Create a new bread timing record"""
+  logger.info(f"POST /timings - Creating timing: {timing.model_dump()}")
+  try:
+    # Validate timing data
+    validate_timing_data(timing)
+
+    created_timing = db_conn.create_bread_timing(timing)
+    logger.info(
+      f"POST /timings - Successfully created timing with ID: {created_timing.id}"
+    )
+    return created_timing
+
+  except ValueError as e:
+    logger.error(f"POST /timings - Validation error: {str(e)}")
+    raise HTTPException(status_code=422, detail=str(e))
+  except DatabaseError as e:
+    logger.error(f"POST /timings - Database error: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+  except Exception as e:
+    logger.error(f"POST /timings - Unexpected error: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@app.get("/timings", response_model=BreadTimingListResponse)
+def list_timings(
+  page: int = 1,
+  limit: int = 20,
+  recipe_name: Optional[str] = None,
+  date: Optional[str] = None,
+  date_from: Optional[str] = None,
+  date_to: Optional[str] = None,
+  search: Optional[str] = None,
+  order_by: str = "created_at",
+  order_direction: str = "desc",
+):
+  """List bread timings with pagination and filtering"""
+  logger.info(
+    f"GET /timings - Listing timings with filters: page={page}, limit={limit}, recipe_name={recipe_name}"
+  )
+
+  try:
+    # Validate pagination parameters
+    if page < 1:
+      raise HTTPException(status_code=400, detail="Page must be greater than 0")
+    if limit < 1 or limit > 100:
+      raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+
+    # Calculate offset
+    offset = (page - 1) * limit
+
+    # Parse date filters
+    date_from_obj = None
+    date_to_obj = None
+
+    if date:
+      # Single date filter
+      try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+        date_from_obj = date_to_obj = date_obj
+      except ValueError:
+        raise HTTPException(status_code=400, detail="Date must be in YYYY-MM-DD format")
+
+    if date_from:
+      try:
+        date_from_obj = datetime.strptime(date_from, "%Y-%m-%d").date()
+      except ValueError:
+        raise HTTPException(
+          status_code=400, detail="date_from must be in YYYY-MM-DD format"
+        )
+
+    if date_to:
+      try:
+        date_to_obj = datetime.strptime(date_to, "%Y-%m-%d").date()
+      except ValueError:
+        raise HTTPException(
+          status_code=400, detail="date_to must be in YYYY-MM-DD format"
+        )
+
+    response = db_conn.list_bread_timings(
+      limit=limit,
+      offset=offset,
+      recipe_name=recipe_name,
+      date_from=date_from_obj,
+      date_to=date_to_obj,
+      search=search,
+      order_by=order_by,
+      order_direction=order_direction,
+    )
+
+    logger.info(
+      f"GET /timings - Successfully retrieved {len(response.timings)} timings"
+    )
+    return response
+
+  except HTTPException:
+    raise
+  except ValueError as e:
+    logger.error(f"GET /timings - Validation error: {str(e)}")
+    raise HTTPException(status_code=400, detail=str(e))
+  except DatabaseError as e:
+    logger.error(f"GET /timings - Database error: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+  except Exception as e:
+    logger.error(f"GET /timings - Unexpected error: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@app.get("/timings/{timing_id}", response_model=BreadTiming)
+def get_timing(timing_id: UUID):
+  """Get a specific bread timing by ID"""
+  logger.info(f"GET /timings/{timing_id} - Getting timing")
+
+  try:
+    timing = db_conn.get_bread_timing(timing_id)
+    if not timing:
+      logger.info(f"GET /timings/{timing_id} - Timing not found")
+      raise HTTPException(
+        status_code=404,
+        detail="Bread timing not found",
+        headers={"timing_id": str(timing_id)},
+      )
+
+    logger.info(f"GET /timings/{timing_id} - Successfully retrieved timing")
+    return timing
+
+  except HTTPException:
+    raise
+  except DatabaseError as e:
+    logger.error(f"GET /timings/{timing_id} - Database error: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+  except Exception as e:
+    logger.error(f"GET /timings/{timing_id} - Unexpected error: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@app.patch("/timings/{timing_id}", response_model=BreadTiming)
+def update_timing(timing_id: UUID, updates: BreadTimingUpdate):
+  """Update a bread timing record"""
+  logger.info(
+    f"PATCH /timings/{timing_id} - Updating timing with data: {updates.model_dump(exclude_none=True)}"
+  )
+
+  try:
+    # Check if timing exists first
+    existing_timing = db_conn.get_bread_timing(timing_id)
+    if not existing_timing:
+      logger.info(f"PATCH /timings/{timing_id} - Timing not found")
+      raise HTTPException(
+        status_code=404,
+        detail="Bread timing not found",
+        headers={"timing_id": str(timing_id)},
+      )
+
+    # Validate update data
+    validate_timing_updates(updates, existing_timing)
+
+    updated_timing = db_conn.update_bread_timing(timing_id, updates)
+    logger.info(f"PATCH /timings/{timing_id} - Successfully updated timing")
+    return updated_timing
+
+  except HTTPException:
+    raise
+  except ValueError as e:
+    logger.error(f"PATCH /timings/{timing_id} - Validation error: {str(e)}")
+    raise HTTPException(status_code=422, detail=str(e))
+  except DatabaseError as e:
+    logger.error(f"PATCH /timings/{timing_id} - Database error: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+  except Exception as e:
+    logger.error(f"PATCH /timings/{timing_id} - Unexpected error: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@app.delete("/timings/{timing_id}")
+def delete_timing(timing_id: UUID):
+  """Delete a bread timing record"""
+  logger.info(f"DELETE /timings/{timing_id} - Deleting timing")
+
+  try:
+    deleted = db_conn.delete_bread_timing(timing_id)
+    if not deleted:
+      logger.info(f"DELETE /timings/{timing_id} - Timing not found")
+      raise HTTPException(
+        status_code=404,
+        detail="Bread timing not found",
+        headers={"timing_id": str(timing_id)},
+      )
+
+    logger.info(f"DELETE /timings/{timing_id} - Successfully deleted timing")
+    return {"message": "Timing deleted successfully", "success": True}
+
+  except HTTPException:
+    raise
+  except DatabaseError as e:
+    logger.error(f"DELETE /timings/{timing_id} - Database error: {str(e)}")
+    raise HTTPException(status_code=500, detail=str(e))
+  except Exception as e:
+    logger.error(f"DELETE /timings/{timing_id} - Unexpected error: {str(e)}")
+    raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+# Validation functions for timing data
+
+
+def validate_timing_data(timing: BreadTimingCreate) -> None:
+  """Validate timing data for creation"""
+
+  # Validate timestamp ordering
+  timestamps = [
+    ("autolyse_ts", timing.autolyse_ts),
+    ("mix_ts", timing.mix_ts),
+    ("bulk_ts", timing.bulk_ts),
+    ("preshape_ts", timing.preshape_ts),
+    ("final_shape_ts", timing.final_shape_ts),
+    ("fridge_ts", timing.fridge_ts),
+  ]
+
+  # Filter out None timestamps and validate order
+  valid_timestamps = [(name, ts) for name, ts in timestamps if ts is not None]
+
+  for i in range(len(valid_timestamps) - 1):
+    current_name, current_ts = valid_timestamps[i]
+    next_name, next_ts = valid_timestamps[i + 1]
+
+    if current_ts >= next_ts:
+      raise ValueError(f"{next_name} must be after {current_name}")
+
+  # Validate stretch folds
+  if timing.stretch_folds:
+    if len(timing.stretch_folds) > 8:
+      raise ValueError("Maximum 8 stretch folds allowed")
+
+    # Check for duplicate fold numbers
+    fold_numbers = [sf.fold_number for sf in timing.stretch_folds]
+    if len(fold_numbers) != len(set(fold_numbers)):
+      raise ValueError("Stretch fold numbers must be unique")
+
+    # Validate fold timestamps are within process time range
+    earliest_process_ts = next((ts for _, ts in valid_timestamps if ts), None)
+    if earliest_process_ts:
+      for fold in timing.stretch_folds:
+        if fold.timestamp < earliest_process_ts:
+          raise ValueError("Stretch fold timestamp cannot be before process start")
+
+  # Validate process duration (max 48 hours)
+  if valid_timestamps and len(valid_timestamps) >= 2:
+    start_ts = valid_timestamps[0][1]
+    end_ts = valid_timestamps[-1][1]
+    duration_hours = (end_ts - start_ts).total_seconds() / 3600
+
+    if duration_hours > 48:
+      raise ValueError("Process duration cannot exceed 48 hours")
+
+
+def validate_timing_updates(updates: BreadTimingUpdate, existing: BreadTiming) -> None:
+  """Validate timing update data"""
+
+  # Prevent updating certain fields
+  update_data = updates.model_dump(exclude_none=True)
+
+  forbidden_fields = ["date", "created_at", "id"]
+  for field in forbidden_fields:
+    if field in update_data:
+      raise ValueError(f"{field} cannot be modified")
+
+  # If updating timestamps, validate ordering with existing data
+  if any(field.endswith("_ts") for field in update_data):
+    # Create merged timestamp data for validation
+    merged_data = {
+      "autolyse_ts": updates.autolyse_ts
+      if updates.autolyse_ts is not None
+      else existing.autolyse_ts,
+      "mix_ts": updates.mix_ts if updates.mix_ts is not None else existing.mix_ts,
+      "bulk_ts": updates.bulk_ts if updates.bulk_ts is not None else existing.bulk_ts,
+      "preshape_ts": updates.preshape_ts
+      if updates.preshape_ts is not None
+      else existing.preshape_ts,
+      "final_shape_ts": updates.final_shape_ts
+      if updates.final_shape_ts is not None
+      else existing.final_shape_ts,
+      "fridge_ts": updates.fridge_ts
+      if updates.fridge_ts is not None
+      else existing.fridge_ts,
+    }
+
+    # Validate merged timestamps
+    timestamps = [(name, ts) for name, ts in merged_data.items() if ts is not None]
+    timestamps.sort(key=lambda x: x[1])  # Sort by timestamp
+
+    for i in range(len(timestamps) - 1):
+      current_name, current_ts = timestamps[i]
+      next_name, next_ts = timestamps[i + 1]
+
+      if current_ts >= next_ts:
+        raise ValueError(f"{next_name} must be after {current_name}")

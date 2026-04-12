@@ -250,3 +250,149 @@ class RecipeCreateResponse(BaseModel):
   recipe: Recipe
   message: str
   success: bool = True
+
+
+# New Bread Timing Models for REST API
+class StretchFold(BaseModel):
+  fold_number: int = Field(..., gt=0, description="Fold number must be greater than 0")
+  timestamp: datetime
+
+
+class BreadTimingCreate(BaseModel):
+  """Request model for creating a new bread timing"""
+
+  recipe_name: str = Field(
+    ..., min_length=1, max_length=255, description="Recipe name is required"
+  )
+  date: date = Field(..., description="Date when bread was made")
+
+  # Process timestamps (all optional)
+  autolyse_ts: Optional[datetime] = None
+  mix_ts: Optional[datetime] = None
+  bulk_ts: Optional[datetime] = None
+  preshape_ts: Optional[datetime] = None
+  final_shape_ts: Optional[datetime] = None
+  fridge_ts: Optional[datetime] = None
+
+  # Temperature data
+  room_temp: Optional[float] = Field(
+    None, ge=-20, le=120, description="Room temperature must be between -20 and 120"
+  )
+  water_temp: Optional[float] = Field(
+    None, ge=32, le=212, description="Water temperature must be between 32 and 212"
+  )
+  flour_temp: Optional[float] = Field(
+    None, ge=32, le=120, description="Flour temperature must be between 32 and 120"
+  )
+  preferment_temp: Optional[float] = Field(
+    None, ge=32, le=120, description="Preferment temperature must be between 32 and 120"
+  )
+  dough_temp: Optional[float] = Field(
+    None, ge=32, le=120, description="Dough temperature must be between 32 and 120"
+  )
+  temperature_unit: str = Field(default="Fahrenheit", pattern="^(Fahrenheit|Celsius)$")
+
+  # Stretch & folds
+  stretch_folds: List[StretchFold] = Field(
+    default_factory=list, max_length=8, description="Maximum 8 stretch folds allowed"
+  )
+
+  # Notes
+  notes: Optional[str] = Field(
+    None, max_length=2000, description="Notes cannot exceed 2000 characters"
+  )
+
+  @field_validator("recipe_name")
+  @classmethod
+  def recipe_name_not_empty(cls, v):
+    if not v or not v.strip():
+      raise ValueError("Recipe name cannot be empty")
+    return v.strip()
+
+  @field_validator("date")
+  @classmethod
+  def date_not_future(cls, v):
+    from datetime import date as date_type
+
+    if v > date_type.today():
+      raise ValueError("Cannot create timing for future dates")
+    return v
+
+
+class BreadTimingUpdate(BaseModel):
+  """Request model for updating a bread timing"""
+
+  recipe_name: Optional[str] = Field(None, min_length=1, max_length=255)
+
+  # Process timestamps (all optional)
+  autolyse_ts: Optional[datetime] = None
+  mix_ts: Optional[datetime] = None
+  bulk_ts: Optional[datetime] = None
+  preshape_ts: Optional[datetime] = None
+  final_shape_ts: Optional[datetime] = None
+  fridge_ts: Optional[datetime] = None
+
+  # Temperature data
+  room_temp: Optional[float] = Field(None, ge=-20, le=120)
+  water_temp: Optional[float] = Field(None, ge=32, le=212)
+  flour_temp: Optional[float] = Field(None, ge=32, le=120)
+  preferment_temp: Optional[float] = Field(None, ge=32, le=120)
+  dough_temp: Optional[float] = Field(None, ge=32, le=120)
+  temperature_unit: Optional[str] = Field(None, pattern="^(Fahrenheit|Celsius)$")
+
+  # Stretch & folds
+  stretch_folds: Optional[List[StretchFold]] = Field(None, max_length=8)
+
+  # Notes
+  notes: Optional[str] = Field(None, max_length=2000)
+
+  @field_validator("recipe_name")
+  @classmethod
+  def recipe_name_not_empty(cls, v):
+    if v is not None and (not v or not v.strip()):
+      raise ValueError("Recipe name cannot be empty")
+    return v.strip() if v else v
+
+
+class BreadTiming(BaseModel):
+  """Response model for bread timing"""
+
+  id: UUID = Field(..., description="Unique timing identifier")
+  recipe_name: str
+  date: date
+  created_at: datetime
+  updated_at: datetime
+
+  # Process timestamps (all optional)
+  autolyse_ts: Optional[datetime] = None
+  mix_ts: Optional[datetime] = None
+  bulk_ts: Optional[datetime] = None
+  preshape_ts: Optional[datetime] = None
+  final_shape_ts: Optional[datetime] = None
+  fridge_ts: Optional[datetime] = None
+
+  # Temperature data
+  room_temp: Optional[float] = None
+  water_temp: Optional[float] = None
+  flour_temp: Optional[float] = None
+  preferment_temp: Optional[float] = None
+  dough_temp: Optional[float] = None
+  temperature_unit: str = "Fahrenheit"
+
+  # Stretch & folds
+  stretch_folds: List[StretchFold] = Field(default_factory=list)
+
+  # Notes
+  notes: Optional[str] = None
+
+
+class BreadTimingListResponse(BaseModel):
+  """Paginated response for timing list"""
+
+  timings: List[BreadTiming]
+  total_count: int
+  page: int
+  limit: int
+  total_pages: int
+  has_next: bool
+  has_previous: bool
