@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
@@ -880,7 +880,7 @@ def delete_timing(timing_id: UUID):
       )
 
     logger.info(f"DELETE /timings/{timing_id} - Successfully deleted timing")
-    return {"message": "Timing deleted successfully", "success": True}
+    return Response(status_code=204)
 
   except HTTPException:
     raise

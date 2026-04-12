@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TabType, DoughMake, DropdownOption } from './types/bread.ts';
+import { TabType, DoughMake, BreadTiming, DropdownOption } from './types/bread.ts';
 import { useBreadForm } from './hooks/useBreadForm.ts';
+import { breadTimingApi } from './services/api.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
 import { SavedTab } from './components/SavedTab.tsx';
@@ -32,14 +33,14 @@ const BreadApp: React.FC = () => {
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   
   // Timing-specific state for recent saved timings
-  const [recentTimings, setRecentTimings] = useState<any[]>([]);
+  const [recentTimings, setRecentTimings] = useState<BreadTiming[]>([]);
   const [loadingRecentTimings, setLoadingRecentTimings] = useState(false);
   const [timingsError, setTimingsError] = useState<string | null>(null);
   const [timingsPage, setTimingsPage] = useState(0);
   const [hasMoreTimings, setHasMoreTimings] = useState(true);
   
   // State for viewing/editing a specific timing
-  const [editingTiming, setEditingTiming] = useState<any | null>(null);
+  const [editingTiming, setEditingTiming] = useState<BreadTiming | null>(null);
   
   // Combined dropdown options (Makes + Recipes + Recent usage)
   const [dropdownOptions, setDropdownOptions] = useState<DropdownOption[]>([]);
@@ -72,6 +73,8 @@ const BreadApp: React.FC = () => {
     submitForm,
     updateForm,
     populateFormWithDough,
+    updateBreadTiming,
+    populateFormWithBreadTiming,
   } = useBreadForm();
 
 
@@ -158,65 +161,29 @@ const BreadApp: React.FC = () => {
     }
   };
 
-  // Recent timings loading function
+  // Recent timings loading function using new breadTimingApi
   const loadRecentTimings = async (page = 0, reset = false) => {
     try {
       setLoadingRecentTimings(true);
       setTimingsError(null);
       
-      const isDevelopment = window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
-
-      const apiBaseUrl = isDevelopment
-        ? 'http://localhost:8000'
-        : 'https://your-production-api.com';
-
-      // API call to get recent dough makes (paginated)
-      const response = await fetch(`${apiBaseUrl}/makes/recent?limit=10&offset=${page * 10}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add authorization header when implementing auth
-          // 'Authorization': `Bearer ${token}`,
-        },
+      // Use the new breadTimingApi with pagination
+      const response = await breadTimingApi.list({
+        page: page + 1, // API expects 1-based pages
+        limit: 10,
+        order_by: 'created_at',
+        order_direction: 'desc'
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        const rawTimings = result.makes || result; // Handle different response formats
-        
-        // Process timings the same way as saved makes - preserve original created_at string
-        const processedTimings = rawTimings.map((timing: any) => {
-          if (!timing.created_at) {
-            console.error('Backend did not return created_at timestamp for timing:', timing);
-            return timing;
-          }
-          return {
-            ...timing,
-            created_at: new Date(timing.created_at),
-            created_at_original: timing.created_at, // Preserve original string for API calls
-            autolyse_ts: timing.autolyse_ts ? new Date(timing.autolyse_ts) : undefined,
-            mix_ts: timing.mix_ts ? new Date(timing.mix_ts) : undefined,
-            bulk_ts: timing.bulk_ts ? new Date(timing.bulk_ts) : undefined,
-            preshape_ts: timing.preshape_ts ? new Date(timing.preshape_ts) : undefined,
-            final_shape_ts: timing.final_shape_ts ? new Date(timing.final_shape_ts) : undefined,
-            fridge_ts: timing.fridge_ts ? new Date(timing.fridge_ts) : undefined,
-          };
-        });
-        
-        if (reset || page === 0) {
-          setRecentTimings(processedTimings);
-        } else {
-          setRecentTimings(prev => [...prev, ...processedTimings]);
-        }
-        
-        // Check if there are more results
-        setHasMoreTimings(processedTimings.length === 10);
-        setTimingsPage(page);
+      
+      if (reset || page === 0) {
+        setRecentTimings(response.timings);
       } else {
-        console.error('Failed to load recent timings:', response.statusText);
-        setTimingsError(`Failed to load recent timings: ${response.statusText}`);
+        setRecentTimings(prev => [...prev, ...response.timings]);
       }
+      
+      // Check if there are more results
+      setHasMoreTimings(response.has_next);
+      setTimingsPage(page);
     } catch (error) {
       console.error('Error loading recent timings:', error);
       setTimingsError(`Error loading recent timings: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -235,15 +202,15 @@ const BreadApp: React.FC = () => {
 
     // Add distinct names from recent timing entries (actual usage history)
     recentTimings.forEach((timing) => {
-      if (timing.name && !usedNames.has(timing.name.toLowerCase())) {
-        const isRecipe = recipeNames.has(timing.name.toLowerCase());
+      if (timing.recipe_name && !usedNames.has(timing.recipe_name.toLowerCase())) {
+        const isRecipe = recipeNames.has(timing.recipe_name.toLowerCase());
         options.push({
-          value: timing.name,
-          displayName: isRecipe ? `${timing.name} (Recipe)` : timing.name,
+          value: timing.recipe_name,
+          displayName: isRecipe ? `${timing.recipe_name} (Recipe)` : timing.recipe_name,
           type: isRecipe ? 'recipe' : 'recent',
           lastUsed: new Date(timing.created_at)
         });
-        usedNames.add(timing.name.toLowerCase());
+        usedNames.add(timing.recipe_name.toLowerCase());
       }
     });
 
@@ -310,8 +277,8 @@ const BreadApp: React.FC = () => {
     handleViewMake(make);
   };
 
-  const handleUpdateRecentTiming = (selectedDough: DoughMake) => {
-    updateForm(selectedDough, () => {
+  const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
+    updateBreadTiming(selectedTiming.id, () => {
       setEditingTiming(null); // Clear editing state
       loadRecentTimings(0, true); // Refresh recent timings list
     });
@@ -542,7 +509,7 @@ const BreadApp: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                   <div>
-                    <p className="text-blue-800 font-medium">Editing: {editingTiming.name}</p>
+                    <p className="text-blue-800 font-medium">Editing: {editingTiming.recipe_name}</p>
                     <p className="text-blue-600 text-sm">Made on {new Date(editingTiming.date).toLocaleDateString()}</p>
                   </div>
                 </div>
@@ -978,10 +945,10 @@ const BreadApp: React.FC = () => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {recentTimings.map((timing) => (
-                        <div key={`${timing.name}-${timing.date}-${timing.created_at}`} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+                        <div key={timing.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{timing.name}</h3>
+                              <h3 className="text-lg font-semibold text-gray-900">{timing.recipe_name}</h3>
                               <p className="text-gray-600 text-sm">
                                 {new Date(timing.date).toLocaleDateString()}
                               </p>
@@ -1011,7 +978,7 @@ const BreadApp: React.FC = () => {
                             {timing.dough_temp && (
                               <div className="flex justify-between">
                                 <span>Dough Temp:</span>
-                                <span>{timing.dough_temp}°F</span>
+                                <span>{timing.dough_temp}°{timing.temperature_unit}</span>
                               </div>
                             )}
                           </div>
@@ -1022,7 +989,7 @@ const BreadApp: React.FC = () => {
                               onClick={() => {
                                 console.log('View/Edit timing details:', timing);
                                 // Populate the form with timing data for editing
-                                populateFormWithDough(timing);
+                                populateFormWithBreadTiming(timing);
                                 // Set this timing as the one being edited
                                 setEditingTiming(timing);
                                 // Switch to Create tab (which will now be in edit mode)
@@ -1038,7 +1005,7 @@ const BreadApp: React.FC = () => {
                                 // Clear editing state to ensure we create a new make, not update existing
                                 setEditingTiming(null);
                                 // Populate form with timing data as template
-                                populateFormWithDough(timing);
+                                populateFormWithBreadTiming(timing);
                                 // Override the date to today for new make (template behavior)
                                 setFormData(prev => ({
                                   ...prev,

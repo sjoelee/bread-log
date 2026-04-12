@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as python_date, datetime
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
@@ -77,7 +77,7 @@ class DoughMakeRequest(BaseModel):
 
 class DoughMake(DoughMakeRequest):
   name: str
-  date: date
+  date: python_date
 
 
 # Request model for creating a new account make
@@ -264,7 +264,7 @@ class BreadTimingCreate(BaseModel):
   recipe_name: str = Field(
     ..., min_length=1, max_length=255, description="Recipe name is required"
   )
-  date: date = Field(..., description="Date when bread was made")
+  date: python_date = Field(..., description="Date when bread was made")
 
   # Process timestamps (all optional)
   autolyse_ts: Optional[datetime] = None
@@ -274,21 +274,21 @@ class BreadTimingCreate(BaseModel):
   final_shape_ts: Optional[datetime] = None
   fridge_ts: Optional[datetime] = None
 
-  # Temperature data
+  # Temperature data (ranges accommodate both Celsius and Fahrenheit)
   room_temp: Optional[float] = Field(
-    None, ge=-20, le=120, description="Room temperature must be between -20 and 120"
+    None, ge=-20, le=120, description="Room temperature (supports both C and F)"
   )
   water_temp: Optional[float] = Field(
-    None, ge=32, le=212, description="Water temperature must be between 32 and 212"
+    None, ge=0, le=212, description="Water temperature (supports both C and F)"
   )
   flour_temp: Optional[float] = Field(
-    None, ge=32, le=120, description="Flour temperature must be between 32 and 120"
+    None, ge=0, le=120, description="Flour temperature (supports both C and F)"
   )
   preferment_temp: Optional[float] = Field(
-    None, ge=32, le=120, description="Preferment temperature must be between 32 and 120"
+    None, ge=0, le=120, description="Preferment temperature (supports both C and F)"
   )
   dough_temp: Optional[float] = Field(
-    None, ge=32, le=120, description="Dough temperature must be between 32 and 120"
+    None, ge=0, le=120, description="Dough temperature (supports both C and F)"
   )
   temperature_unit: str = Field(default="Fahrenheit", pattern="^(Fahrenheit|Celsius)$")
 
@@ -359,7 +359,7 @@ class BreadTiming(BaseModel):
 
   id: UUID = Field(..., description="Unique timing identifier")
   recipe_name: str
-  date: date
+  date: python_date
   created_at: datetime
   updated_at: datetime
 

@@ -11,7 +11,8 @@ import {
   INITIAL_STRETCH_FOLDS
 } from '../types/bread.ts';
 import { convertTemperature } from '../utils/temperature.ts';
-import { doughMakesApi } from '../services/api.ts';
+import { breadTimingApi, doughMakesApi } from '../services/api.ts';
+import { BreadTiming, BreadTimingCreate } from '../types/bread.ts';
 
 const INITIAL_PROCESSES: DoughProcess[] = [
   { step: 'Autolyse', time: null },
@@ -182,6 +183,53 @@ export const useBreadForm = () => {
     return null;
   };
 
+  const populateFormWithBreadTiming = (timing: BreadTiming) => {
+    // Convert timestamp strings to dayjs objects
+    const convertToDayjs = (timestamp: string | undefined) => 
+      timestamp ? dayjs(timestamp) : null;
+
+    // Convert temperature unit string to enum
+    const tempUnit = timing.temperature_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
+
+    // Create updated processes array with times from timing
+    const updatedProcesses = [
+      { step: 'Autolyse', time: convertToDayjs(timing.autolyse_ts) },
+      { step: 'Mix', time: convertToDayjs(timing.mix_ts) },
+      { step: 'Bulk', time: convertToDayjs(timing.bulk_ts) },
+      { step: 'Preshape', time: convertToDayjs(timing.preshape_ts) },
+      { step: 'Final Shape', time: convertToDayjs(timing.final_shape_ts) },
+      { step: 'Fridge', time: convertToDayjs(timing.fridge_ts) },
+    ];
+
+    // Convert stretch folds data
+    let stretchFolds = INITIAL_STRETCH_FOLDS;
+    if (timing.stretch_folds && timing.stretch_folds.length > 0) {
+      stretchFolds = timing.stretch_folds.map((fold, index) => ({
+        id: fold.fold_number,
+        performed: true,
+        time: dayjs(fold.timestamp)
+      }));
+    }
+
+    // Update form data with timing data
+    setFormData({
+      date: dayjs(timing.date),
+      teamMake: timing.recipe_name,
+      temperatures: {
+        unit: tempUnit,
+        roomTemp: timing.room_temp ?? 0,
+        flourTemp: timing.flour_temp ?? 0,
+        prefermentTemp: timing.preferment_temp ?? 0,
+        waterTemp: timing.water_temp ?? 0,
+        doughTemp: timing.dough_temp ?? 0,
+      },
+      processes: updatedProcesses,
+      stretchFolds: stretchFolds,
+      notes: timing.notes || '',
+    });
+  };
+
+  // Backward compatibility function for old DoughMake structure
   const populateFormWithDough = (dough: DoughMake) => {
     // Convert timestamps to dayjs objects
     const convertToDayjs = (timestamp: Date | undefined) => 
@@ -228,9 +276,10 @@ export const useBreadForm = () => {
     });
   };
 
-  const prepareSubmissionData = () => {
+  const prepareSubmissionData = (): BreadTimingCreate => {
     const date = formData.date!;
     return {
+      recipe_name: formData.teamMake,
       date: date.format('YYYY-MM-DD'),
       autolyse_ts: formData.processes.find(p => p.step === 'Autolyse')?.time?.toISOString(),
       mix_ts: formData.processes.find(p => p.step === 'Mix')?.time?.toISOString(),
@@ -238,17 +287,17 @@ export const useBreadForm = () => {
       preshape_ts: formData.processes.find(p => p.step === 'Preshape')?.time?.toISOString(),
       final_shape_ts: formData.processes.find(p => p.step === 'Final Shape')?.time?.toISOString(),
       fridge_ts: formData.processes.find(p => p.step === 'Fridge')?.time?.toISOString(),
-      room_temp: formData.temperatures.roomTemp,
-      water_temp: formData.temperatures.waterTemp,
-      flour_temp: formData.temperatures.flourTemp,
-      preferment_temp: formData.temperatures.prefermentTemp,
-      dough_temp: formData.temperatures.doughTemp,
+      room_temp: formData.temperatures.roomTemp || undefined,
+      water_temp: formData.temperatures.waterTemp || undefined,
+      flour_temp: formData.temperatures.flourTemp || undefined,
+      preferment_temp: formData.temperatures.prefermentTemp || undefined,
+      dough_temp: formData.temperatures.doughTemp || undefined,
       temperature_unit: formData.temperatures.unit,
       stretch_folds: formData.stretchFolds.filter(sf => sf.performed).map(sf => ({
         fold_number: sf.id,
-        timestamp: sf.time?.toISOString()
+        timestamp: sf.time!.toISOString() // Non-null assertion since we filter by performed
       })),
-      notes: formData.notes || null,
+      notes: formData.notes || undefined,
     };
   };
 
@@ -264,13 +313,8 @@ export const useBreadForm = () => {
     setSuccess(false);
 
     try {
-      const date = formData.date!;
-      const year = date.year();
-      const month = date.month() + 1; // dayjs months are 0-indexed
-      const day = date.date();
-
       const submissionData = prepareSubmissionData();
-      await doughMakesApi.create(year, month, day, formData.teamMake, submissionData);
+      await breadTimingApi.create(submissionData);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -279,6 +323,60 @@ export const useBreadForm = () => {
     }
   };
 
+  // New function for updating bread timings with UUID
+  const updateBreadTiming = async (timingId: string, onUpdateSuccess?: () => void) => {
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+    setCustomSuccessMessage(null);
+
+    try {
+      const submissionData = prepareSubmissionData();
+      
+      // Convert to update format (include only changed fields)
+      const updates = {
+        recipe_name: submissionData.recipe_name,
+        autolyse_ts: submissionData.autolyse_ts || null,
+        mix_ts: submissionData.mix_ts || null,
+        bulk_ts: submissionData.bulk_ts || null,
+        preshape_ts: submissionData.preshape_ts || null,
+        final_shape_ts: submissionData.final_shape_ts || null,
+        fridge_ts: submissionData.fridge_ts || null,
+        room_temp: submissionData.room_temp || null,
+        water_temp: submissionData.water_temp || null,
+        flour_temp: submissionData.flour_temp || null,
+        preferment_temp: submissionData.preferment_temp || null,
+        dough_temp: submissionData.dough_temp || null,
+        temperature_unit: submissionData.temperature_unit,
+        stretch_folds: submissionData.stretch_folds || null,
+        notes: submissionData.notes || null,
+      };
+
+      const updatedTiming = await breadTimingApi.update(timingId, updates);
+      
+      // Show success message
+      const createdAtFormatted = new Date(updatedTiming.created_at).toLocaleString();
+      setCustomSuccessMessage(`Updated ${updatedTiming.recipe_name} created at ${createdAtFormatted} successfully`);
+      setSuccess(true);
+      
+      // Call the callback to clear selected timing and show the list again
+      if (onUpdateSuccess) {
+        onUpdateSuccess();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Backward compatibility function for old DoughMake structure
   const updateForm = async (selectedDough: DoughMake, onUpdateSuccess?: () => void) => {
     const validationError = validateForm();
     if (validationError) {
@@ -340,5 +438,8 @@ export const useBreadForm = () => {
     submitForm,
     updateForm,
     populateFormWithDough,
+    // New functions for bread timing API
+    updateBreadTiming,
+    populateFormWithBreadTiming,
   };
 };

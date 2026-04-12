@@ -1112,6 +1112,7 @@ class DBConnector:
           cur.execute(query, params)
           result = cur.fetchone()
           timing_id, created_at, updated_at = result
+          conn.commit()  # Explicitly commit the transaction
 
           # Return the created timing
           return BreadTiming(
@@ -1282,16 +1283,25 @@ class DBConnector:
       for field, value in update_data.items():
         if field == "stretch_folds":
           # Convert stretch folds to JSON
-          stretch_folds_json = (
-            json.dumps(
-              [
-                {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
-                for sf in value
-              ]
-            )
-            if value
-            else "[]"
-          )
+          if value:
+            stretch_folds_list = []
+            for sf in value:
+              if hasattr(sf, "fold_number"):  # StretchFold object
+                stretch_folds_list.append(
+                  {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
+                )
+              else:  # dict object
+                stretch_folds_list.append(
+                  {
+                    "fold_number": sf["fold_number"],
+                    "timestamp": sf["timestamp"].isoformat()
+                    if hasattr(sf["timestamp"], "isoformat")
+                    else sf["timestamp"],
+                  }
+                )
+            stretch_folds_json = json.dumps(stretch_folds_list)
+          else:
+            stretch_folds_json = "[]"
           update_fields.append("stretch_folds = %s")
           params.append(stretch_folds_json)
         else:
@@ -1312,6 +1322,7 @@ class DBConnector:
           cur.execute(query, params)
           if cur.rowcount == 0:
             raise ValueError(f"Bread timing with ID {timing_id} not found")
+          conn.commit()  # Explicitly commit the transaction
 
       # Return the updated timing
       updated_timing = self.get_bread_timing(timing_id)
@@ -1333,6 +1344,7 @@ class DBConnector:
         with conn.cursor() as cur:
           cur.execute(query, [timing_id])
           rows_deleted = cur.rowcount
+          conn.commit()  # Explicitly commit the transaction
 
       return rows_deleted > 0
 
