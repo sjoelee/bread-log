@@ -49,8 +49,30 @@ export const CreateTab: React.FC<CreateTabProps> = ({
     onSubmit();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle Cmd+Enter (Mac) or Ctrl+Enter (PC) to submit form
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      onSubmit();
+    }
+    // Prevent plain Enter from submitting when inside TimePicker inputs
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Move focus to next focusable element
+      const form = e.currentTarget as HTMLElement;
+      const focusableElements = form.querySelectorAll(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const currentIndex = Array.from(focusableElements).indexOf(e.target as Element);
+      const nextElement = focusableElements[currentIndex + 1] as HTMLElement;
+      if (nextElement) {
+        nextElement.focus();
+      }
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
 
       {/* Temperature Section */}
       <TemperatureSection
@@ -206,7 +228,7 @@ export const CreateTab: React.FC<CreateTabProps> = ({
       {success && <div className="text-green-500 mb-4">Form submitted successfully!</div>}
 
       {/* Submit Button */}
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center space-y-2">
         <button
           type="submit"
           disabled={loading}
@@ -214,6 +236,9 @@ export const CreateTab: React.FC<CreateTabProps> = ({
         >
           {loading ? 'Submitting...' : 'SUBMIT'}
         </button>
+        <div className="text-xs text-gray-500">
+          Press <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">⌘+Enter</kbd> or <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Ctrl+Enter</kbd> to submit
+        </div>
       </div>
 
     </form>

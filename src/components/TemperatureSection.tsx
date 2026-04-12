@@ -20,6 +20,27 @@ export const TemperatureSection: React.FC<TemperatureSectionProps> = ({
     { key: 'doughTemp' as const, label: 'Dough' },
   ];
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Move focus to next input field
+      const form = e.currentTarget.form;
+      if (form) {
+        const inputs = Array.from(form.querySelectorAll('input[type="number"], input[type="text"], textarea'));
+        const currentIndex = inputs.indexOf(e.currentTarget);
+        const nextInput = inputs[currentIndex + 1] as HTMLElement;
+        if (nextInput) {
+          nextInput.focus();
+        }
+      }
+    }
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Select all text when focusing, so typing replaces the value
+    e.target.select();
+  };
+
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
       <div className="flex items-center justify-between">
@@ -58,6 +79,8 @@ export const TemperatureSection: React.FC<TemperatureSectionProps> = ({
               type="number"
               value={temperatures[key]}
               onChange={(e) => onTemperatureChange(key, e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={handleFocus}
               className="w-full border rounded p-2 text-center"
               placeholder="0"
             />

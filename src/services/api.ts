@@ -1,4 +1,5 @@
 import { TeamMake, DoughMake, CreateMakeRequest } from '../types/bread';
+import { parseValidationErrors } from '../utils/errorParser.ts';
 
 const getApiBaseUrl = (): string => {
   const isDevelopment = window.location.hostname === 'localhost' ||
@@ -41,6 +42,10 @@ export const teamMakesApi = {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      if (response.status === 422 && errorData.detail) {
+        const validationErrors = parseValidationErrors(errorData);
+        throw new Error(validationErrors.join(', '));
+      }
       throw new Error(errorData.detail || 'Failed to create make');
     }
 
@@ -96,6 +101,10 @@ export const doughMakesApi = {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      if (response.status === 422 && errorData.detail) {
+        const validationErrors = parseValidationErrors(errorData);
+        throw new Error(validationErrors.join(', '));
+      }
       throw new Error(errorData.detail || 'Failed to create dough make');
     }
   },
@@ -109,6 +118,10 @@ export const doughMakesApi = {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      if (response.status === 422 && errorData.detail) {
+        const validationErrors = parseValidationErrors(errorData);
+        throw new Error(validationErrors.join(', '));
+      }
       throw new Error(errorData.detail || 'Failed to update dough make');
     }
   },
@@ -121,6 +134,10 @@ export const doughMakesApi = {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      if (response.status === 422 && errorData.detail) {
+        const validationErrors = parseValidationErrors(errorData);
+        throw new Error(validationErrors.join(', '));
+      }
       throw new Error(errorData.detail || 'Failed to delete dough make');
     }
   }
