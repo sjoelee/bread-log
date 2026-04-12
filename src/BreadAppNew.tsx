@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TabType, DoughMake, BreadTiming, DropdownOption } from './types/bread.ts';
+import { TabType, BreadTiming, DropdownOption } from './types/bread.ts';
 import { useBreadForm } from './hooks/useBreadForm.ts';
 import { breadTimingApi } from './services/api.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
-import { SavedTab } from './components/SavedTab.tsx';
 import { RecipeTab } from './components/RecipeTab.tsx';
 
 // Add main tab types
@@ -17,7 +16,7 @@ const BreadApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('create');
   const [activeRecipeTab, setActiveRecipeTab] = useState<TabType>('create');
   const [isStretchFoldsExpanded, setIsStretchFoldsExpanded] = useState(false);
-  const [selectedDough, setSelectedDough] = useState<DoughMake | null>(null);
+  const [selectedDough, setSelectedDough] = useState<BreadTiming | null>(null);
   const [savedCreateFormData, setSavedCreateFormData] = useState<any>(null);
   
   // Recipe-specific state
@@ -60,7 +59,6 @@ const BreadApp: React.FC = () => {
     loading,
     error,
     success,
-    customSuccessMessage,
     handleInputChange,
     handleDateChange,
     handleTemperatureChange,
@@ -71,19 +69,15 @@ const BreadApp: React.FC = () => {
     updateStretchFold,
     resetForm,
     submitForm,
-    updateForm,
-    populateFormWithDough,
     updateBreadTiming,
     populateFormWithBreadTiming,
   } = useBreadForm();
 
 
   const {
-    savedMakes,
-    isLoading: isLoadingSavedMakes,
     handleViewMake,
     refreshSavedMakes,
-  } = useSavedMakes(activeTab, formData.date, selectedDough, setSelectedDough, populateFormWithDough);
+  } = useSavedMakes(activeTab, formData.date, selectedDough, setSelectedDough, populateFormWithBreadTiming);
 
   // Recipe loading function
   const loadSavedRecipes = async () => {
@@ -120,42 +114,33 @@ const BreadApp: React.FC = () => {
     }
   };
 
-  // Load ALL distinct dough makes names for dropdown (not paginated)
+  // Load ALL distinct bread timing recipe names for dropdown (not paginated)
   const loadAllDistinctBreadNames = async () => {
     try {
-      const isDevelopment = window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
-
-      const apiBaseUrl = isDevelopment
-        ? 'http://localhost:8000'
-        : 'https://your-production-api.com';
-
-      // New API call to get distinct bread names ordered by most recent created_at
-      const response = await fetch(`${apiBaseUrl}/makes/distinct-names`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const distinctBreadNames = result.names || result; // Handle different response formats
-        
-        // Process similar to recent timings but for dropdown purposes
-        const processedNames = distinctBreadNames.map((item: any) => {
-          return {
-            name: item.name,
-            created_at: new Date(item.latest_created_at), // Use latest usage
-            created_at_original: item.latest_created_at,
-          };
-        });
-        
-        // Update recentTimings with ALL distinct names for dropdown
-        setRecentTimings(processedNames);
-      } else {
-        console.error('Failed to load distinct bread names:', response.statusText);
+      // Get all recent timings to extract distinct recipe names
+      const response = await breadTimingApi.list(1, 100); // Get up to 100 recent timings
+      const timings = response.timings;
+      
+      // Extract distinct recipe names with their most recent usage
+      const recipeNameMap = new Map<string, BreadTiming>();
+      
+      for (const timing of timings) {
+        const currentTiming = recipeNameMap.get(timing.recipe_name);
+        if (!currentTiming || new Date(timing.created_at) > new Date(currentTiming.created_at)) {
+          recipeNameMap.set(timing.recipe_name, timing);
+        }
       }
+      
+      // Convert to array and sort by most recent usage
+      const distinctNames = Array.from(recipeNameMap.values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .map(timing => ({
+          name: timing.recipe_name,
+          created_at: new Date(timing.created_at),
+          created_at_original: timing.created_at,
+        }));
+        
+      setRecentTimings(distinctNames);
     } catch (error) {
       console.error('Error loading distinct bread names:', error);
     }
@@ -265,17 +250,6 @@ const BreadApp: React.FC = () => {
     setIsStretchFoldsExpanded(!isStretchFoldsExpanded);
   };
 
-  const handleUpdateWithCallback = (selectedDough: DoughMake) => {
-    updateForm(selectedDough, () => {
-      setSelectedDough(null); // Clear selected dough to show the list again
-      refreshSavedMakes(); // Refresh the list to get updated data
-    });
-  };
-
-  const handleViewMakeWithClearSave = (make: DoughMake) => {
-    setSavedCreateFormData(null); // Clear saved Create data when viewing a saved make
-    handleViewMake(make);
-  };
 
   const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
     updateBreadTiming(selectedTiming.id, () => {

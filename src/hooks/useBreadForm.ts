@@ -6,12 +6,11 @@ import {
   TemperatureSettings,
   DoughProcess,
   StretchFold,
-  DoughMake,
   INITIAL_TEMP_SETTINGS,
   INITIAL_STRETCH_FOLDS
 } from '../types/bread.ts';
 import { convertTemperature } from '../utils/temperature.ts';
-import { breadTimingApi, doughMakesApi } from '../services/api.ts';
+import { breadTimingApi } from '../services/api.ts';
 import { BreadTiming, BreadTimingCreate } from '../types/bread.ts';
 
 const INITIAL_PROCESSES: DoughProcess[] = [
@@ -376,48 +375,6 @@ export const useBreadForm = () => {
     }
   };
 
-  // Backward compatibility function for old DoughMake structure
-  const updateForm = async (selectedDough: DoughMake, onUpdateSuccess?: () => void) => {
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
-    setCustomSuccessMessage(null);
-
-    try {
-      const date = formData.date!;
-      const year = date.year();
-      const month = date.month() + 1; // dayjs months are 0-indexed
-      const day = date.date();
-
-      const submissionData = prepareSubmissionData();
-      // Lowercase the make name for PATCH requests
-      const lowerCaseMakeName = formData.teamMake.toLowerCase();
-      // Use original timestamp string for the API to avoid timezone conversion
-      const createdAtString = selectedDough.created_at_original;
-      await doughMakesApi.update(year, month, day, lowerCaseMakeName, createdAtString, submissionData);
-      
-      // Find the display name for the success message
-      const displayName = selectedDough.name;
-      const createdAtFormatted = selectedDough.created_at.toLocaleString();
-      setCustomSuccessMessage(`Updated ${displayName} created at ${createdAtFormatted} successfully`);
-      setSuccess(true);
-      
-      // Call the callback to clear selected dough and show the list again
-      if (onUpdateSuccess) {
-        onUpdateSuccess();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return {
     formData,
@@ -436,7 +393,6 @@ export const useBreadForm = () => {
     updateStretchFold,
     resetForm,
     submitForm,
-    updateForm,
     populateFormWithDough,
     // New functions for bread timing API
     updateBreadTiming,
