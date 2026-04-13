@@ -283,12 +283,19 @@ def create_timing(timing: BreadTimingCreate):
   """Create a new bread timing record"""
   logger.info(f"POST /timings - Creating timing: {timing.model_dump()}")
   try:
-    # Validate timing data
+    # Validate timing data (relaxed validation for partial data)
     validate_timing_data(timing)
 
-    created_timing = db_conn.create_bread_timing(timing)
+    # Calculate status based on data completeness
+    timing_dict = timing.model_dump(exclude_none=True)
+    status = calculate_timing_status(timing_dict)
+
+    # Create a new timing object with the calculated status
+    timing_with_status = BreadTimingCreate(**timing_dict, status=status)
+
+    created_timing = db_conn.create_bread_timing(timing_with_status)
     logger.info(
-      f"POST /timings - Successfully created timing with ID: {created_timing.id}"
+      f"POST /timings - Successfully created timing with ID: {created_timing.id}, status: {status}"
     )
     return created_timing
 
@@ -308,16 +315,17 @@ def list_timings(
   page: int = 1,
   limit: int = 20,
   recipe_name: Optional[str] = None,
+  status: Optional[str] = None,
   date: Optional[str] = None,
   date_from: Optional[str] = None,
   date_to: Optional[str] = None,
   search: Optional[str] = None,
-  order_by: str = "created_at",
+  sort_by: str = "updated_at",
   order_direction: str = "desc",
 ):
   """List bread timings with pagination and filtering"""
   logger.info(
-    f"GET /timings - Listing timings with filters: page={page}, limit={limit}, recipe_name={recipe_name}"
+    f"GET /timings - Listing timings with filters: page={page}, limit={limit}, recipe_name={recipe_name}, status={status}, sort_by={sort_by}"
   )
 
   try:
@@ -326,6 +334,19 @@ def list_timings(
       raise HTTPException(status_code=400, detail="Page must be greater than 0")
     if limit < 1 or limit > 100:
       raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+
+    # Validate status filter
+    if status and status not in ["in_progress", "completed"]:
+      raise HTTPException(
+        status_code=400, detail="Status must be 'in_progress' or 'completed'"
+      )
+
+    # Validate sort_by parameter
+    valid_sort_fields = ["created_at", "updated_at", "date", "recipe_name"]
+    if sort_by not in valid_sort_fields:
+      raise HTTPException(
+        status_code=400, detail=f"sort_by must be one of {valid_sort_fields}"
+      )
 
     # Calculate offset
     offset = (page - 1) * limit
@@ -362,10 +383,11 @@ def list_timings(
       limit=limit,
       offset=offset,
       recipe_name=recipe_name,
+      status=status,
       date_from=date_from_obj,
       date_to=date_to_obj,
       search=search,
-      order_by=order_by,
+      order_by=sort_by,
       order_direction=order_direction,
     )
 
@@ -436,8 +458,22 @@ def update_timing(timing_id: UUID, updates: BreadTimingUpdate):
     # Validate update data
     validate_timing_updates(updates, existing_timing)
 
+    # Calculate new status if not explicitly set
+    update_data = updates.model_dump(exclude_none=True)
+    if "status" not in update_data:
+      # Merge existing data with updates to calculate new status
+      merged_data = existing_timing.model_dump()
+      merged_data.update(update_data)
+      new_status = calculate_timing_status(merged_data)
+      update_data["status"] = new_status
+
+      # Create a new BreadTimingUpdate object with the calculated status
+      updates = BreadTimingUpdate(**update_data)
+
     updated_timing = db_conn.update_bread_timing(timing_id, updates)
-    logger.info(f"PATCH /timings/{timing_id} - Successfully updated timing")
+    logger.info(
+      f"PATCH /timings/{timing_id} - Successfully updated timing, new status: {updated_timing.status}"
+    )
     return updated_timing
 
   except HTTPException:
@@ -481,7 +517,37 @@ def delete_timing(timing_id: UUID):
     raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
-# Validation functions for timing data
+# Status calculation and validation functions for timing data
+
+
+def calculate_timing_status(timing_data: dict) -> str:
+  """
+  Calculate the completion status of a timing based on required fields.
+  Returns 'completed' if all required fields are populated, 'in_progress' otherwise.
+  """
+  required_fields = [
+    "recipe_name",
+    "date",
+    "autolyse_ts",
+    "mix_ts",
+    "bulk_ts",
+    "preshape_ts",
+    "final_shape_ts",
+    "fridge_ts",
+    "room_temp",
+    "water_temp",
+    "flour_temp",
+    "preferment_temp",
+    "dough_temp",
+    "temperature_unit",
+  ]
+
+  # Check if all required fields have non-None values
+  for field in required_fields:
+    if timing_data.get(field) is None:
+      return "in_progress"
+
+  return "completed"
 
 
 def validate_timing_data(timing: BreadTimingCreate) -> None:

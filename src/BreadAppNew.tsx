@@ -7,6 +7,7 @@ import { breadTimingApi } from './services/api.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
 import { RecipeTab } from './components/RecipeTab.tsx';
+import { StatusBadge } from './components/StatusBadge.tsx';
 
 // Add main tab types
 type MainTabType = 'recipe' | 'timing';
@@ -40,6 +41,12 @@ const BreadApp: React.FC = () => {
   
   // State for viewing/editing a specific timing
   const [editingTiming, setEditingTiming] = useState<BreadTiming | null>(null);
+  
+  // Filters and sorting for timings
+  const [statusFilter, setStatusFilter] = useState<string>('all'); // 'all' | 'in_progress' | 'completed'
+  const [sortBy, setSortBy] = useState<string>('updated_at'); // 'updated_at' | 'created_at' | 'recipe_name' | 'date'
+  const [sortDirection, setSortDirection] = useState<string>('desc'); // 'desc' | 'asc'
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Combined dropdown options (Makes + Recipes + Recent usage)
   const [dropdownOptions, setDropdownOptions] = useState<DropdownOption[]>([]);
@@ -152,13 +159,26 @@ const BreadApp: React.FC = () => {
       setLoadingRecentTimings(true);
       setTimingsError(null);
       
-      // Use the new breadTimingApi with pagination
-      const response = await breadTimingApi.list({
+      // Prepare filter parameters
+      const params: any = {
         page: page + 1, // API expects 1-based pages
         limit: 10,
-        order_by: 'created_at',
-        order_direction: 'desc'
-      });
+        order_by: sortBy,
+        order_direction: sortDirection
+      };
+      
+      // Add status filter if not 'all'
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+      
+      // Add search query if provided
+      if (searchQuery.trim()) {
+        params.recipe_name = searchQuery.trim();
+      }
+      
+      // Use the new breadTimingApi with pagination and filters
+      const response = await breadTimingApi.list(params);
       
       if (reset || page === 0) {
         setRecentTimings(response.timings);
@@ -244,6 +264,17 @@ const BreadApp: React.FC = () => {
       loadRecentTimings(0, true);
     }
   }, [activeMainTab, activeTab]);
+
+  // Reload timings when filter parameters change
+  React.useEffect(() => {
+    if (activeMainTab === 'timing' && activeTab === 'saved') {
+      const timeoutId = setTimeout(() => {
+        loadRecentTimings(0, true);
+      }, searchQuery ? 500 : 0); // Debounce search, but instant for other filters
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [statusFilter, sortBy, sortDirection, searchQuery, activeMainTab, activeTab]);
 
   // Local handlers
   const handleStretchFoldsToggle = () => {
@@ -893,6 +924,65 @@ const BreadApp: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Filtering and Sorting Controls */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Status Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+
+                    {/* Sort By */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="updated_at">Last Updated</option>
+                        <option value="created_at">Date Created</option>
+                        <option value="date">Bread Date</option>
+                        <option value="recipe_name">Recipe Name</option>
+                      </select>
+                    </div>
+
+                    {/* Sort Direction */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
+                      <select
+                        value={sortDirection}
+                        onChange={(e) => setSortDirection(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                      </select>
+                    </div>
+
+                    {/* Search */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search Recipe</label>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by recipe name..."
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {timingsError && (
                   <div className="text-red-500 mb-4 p-4 bg-red-50 rounded-md">
                     {timingsError}
@@ -922,14 +1012,12 @@ const BreadApp: React.FC = () => {
                         <div key={timing.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{timing.recipe_name}</h3>
+                              <h3 className="text-lg font-semibold text-gray-900">{timing.recipe_name || 'Untitled'}</h3>
                               <p className="text-gray-600 text-sm">
-                                {new Date(timing.date).toLocaleDateString()}
+                                {timing.date ? new Date(timing.date).toLocaleDateString() : 'No date'}
                               </p>
                             </div>
-                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                              Completed
-                            </span>
+                            <StatusBadge status={timing.status} />
                           </div>
                           
                           <div className="space-y-2 text-sm text-gray-600 mb-4">

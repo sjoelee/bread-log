@@ -105,6 +105,7 @@ export const breadTimingApi = {
     page?: number;
     limit?: number;
     recipe_name?: string;
+    status?: string;
     date?: string;
     date_from?: string;
     date_to?: string;
@@ -118,6 +119,7 @@ export const breadTimingApi = {
     if (params.page) queryParams.set('page', params.page.toString());
     if (params.limit) queryParams.set('limit', params.limit.toString());
     if (params.recipe_name) queryParams.set('recipe_name', params.recipe_name);
+    if (params.status) queryParams.set('status', params.status);
     if (params.date) queryParams.set('date', params.date);
     if (params.date_from) queryParams.set('date_from', params.date_from);
     if (params.date_to) queryParams.set('date_to', params.date_to);

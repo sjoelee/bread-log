@@ -172,14 +172,13 @@ export const useBreadForm = () => {
   };
 
   const validateForm = (): string | null => {
-    if (!formData.date) {
-      return 'Date is required';
-    }
-    if (!formData.teamMake || formData.teamMake === '') {
-      return 'Bread is required';
-    }
-    // Add more validation as needed
-    return null;
+    // Minimal validation - only validate format/type of provided data
+    // Allow partial submissions for "in_progress" status
+    
+    // No required fields - users can save partial data
+    // Only validate data format if provided
+    
+    return null; // Allow all partial data
   };
 
   const populateFormWithBreadTiming = (timing: BreadTiming) => {
@@ -276,28 +275,66 @@ export const useBreadForm = () => {
   };
 
   const prepareSubmissionData = (): BreadTimingCreate => {
-    const date = formData.date!;
-    return {
-      recipe_name: formData.teamMake,
-      date: date.format('YYYY-MM-DD'),
-      autolyse_ts: formData.processes.find(p => p.step === 'Autolyse')?.time?.toISOString(),
-      mix_ts: formData.processes.find(p => p.step === 'Mix')?.time?.toISOString(),
-      bulk_ts: formData.processes.find(p => p.step === 'Bulk')?.time?.toISOString(),
-      preshape_ts: formData.processes.find(p => p.step === 'Preshape')?.time?.toISOString(),
-      final_shape_ts: formData.processes.find(p => p.step === 'Final Shape')?.time?.toISOString(),
-      fridge_ts: formData.processes.find(p => p.step === 'Fridge')?.time?.toISOString(),
-      room_temp: formData.temperatures.roomTemp || undefined,
-      water_temp: formData.temperatures.waterTemp || undefined,
-      flour_temp: formData.temperatures.flourTemp || undefined,
-      preferment_temp: formData.temperatures.prefermentTemp || undefined,
-      dough_temp: formData.temperatures.doughTemp || undefined,
-      temperature_unit: formData.temperatures.unit,
-      stretch_folds: formData.stretchFolds.filter(sf => sf.performed).map(sf => ({
+    // Prepare data, allowing all fields to be optional
+    const data: BreadTimingCreate = {};
+    
+    // Only include fields that have values
+    if (formData.teamMake && formData.teamMake.trim()) {
+      data.recipe_name = formData.teamMake;
+    }
+    
+    if (formData.date) {
+      data.date = formData.date.format('YYYY-MM-DD');
+    }
+    
+    // Process timestamps - only include if time is set
+    const autolyse = formData.processes.find(p => p.step === 'Autolyse')?.time;
+    if (autolyse) data.autolyse_ts = autolyse.toISOString();
+    
+    const mix = formData.processes.find(p => p.step === 'Mix')?.time;
+    if (mix) data.mix_ts = mix.toISOString();
+    
+    const bulk = formData.processes.find(p => p.step === 'Bulk')?.time;
+    if (bulk) data.bulk_ts = bulk.toISOString();
+    
+    const preshape = formData.processes.find(p => p.step === 'Preshape')?.time;
+    if (preshape) data.preshape_ts = preshape.toISOString();
+    
+    const finalShape = formData.processes.find(p => p.step === 'Final Shape')?.time;
+    if (finalShape) data.final_shape_ts = finalShape.toISOString();
+    
+    const fridge = formData.processes.find(p => p.step === 'Fridge')?.time;
+    if (fridge) data.fridge_ts = fridge.toISOString();
+    
+    // Temperature data - only include if set
+    if (formData.temperatures.roomTemp !== null) data.room_temp = formData.temperatures.roomTemp;
+    if (formData.temperatures.waterTemp !== null) data.water_temp = formData.temperatures.waterTemp;
+    if (formData.temperatures.flourTemp !== null) data.flour_temp = formData.temperatures.flourTemp;
+    if (formData.temperatures.prefermentTemp !== null) data.preferment_temp = formData.temperatures.prefermentTemp;
+    if (formData.temperatures.doughTemp !== null) data.dough_temp = formData.temperatures.doughTemp;
+    
+    // Always include temperature unit if we have any temperatures
+    if (formData.temperatures.roomTemp !== null || formData.temperatures.waterTemp !== null ||
+        formData.temperatures.flourTemp !== null || formData.temperatures.prefermentTemp !== null ||
+        formData.temperatures.doughTemp !== null) {
+      data.temperature_unit = formData.temperatures.unit;
+    }
+    
+    // Stretch folds
+    const performedFolds = formData.stretchFolds.filter(sf => sf.performed && sf.time);
+    if (performedFolds.length > 0) {
+      data.stretch_folds = performedFolds.map(sf => ({
         fold_number: sf.id,
-        timestamp: sf.time!.toISOString() // Non-null assertion since we filter by performed
-      })),
-      notes: formData.notes || undefined,
-    };
+        timestamp: sf.time!.toISOString()
+      }));
+    }
+    
+    // Notes
+    if (formData.notes && formData.notes.trim()) {
+      data.notes = formData.notes;
+    }
+    
+    return data;
   };
 
   const submitForm = async () => {
@@ -313,7 +350,14 @@ export const useBreadForm = () => {
 
     try {
       const submissionData = prepareSubmissionData();
-      await breadTimingApi.create(submissionData);
+      const createdTiming = await breadTimingApi.create(submissionData);
+      
+      // Show different message based on completeness
+      const statusMessage = createdTiming.status === 'completed' 
+        ? 'Timing saved successfully!' 
+        : 'Draft saved! You can continue editing later.';
+      
+      setCustomSuccessMessage(statusMessage);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -359,9 +403,12 @@ export const useBreadForm = () => {
 
       const updatedTiming = await breadTimingApi.update(timingId, updates);
       
-      // Show success message
-      const createdAtFormatted = new Date(updatedTiming.created_at).toLocaleString();
-      setCustomSuccessMessage(`Updated ${updatedTiming.recipe_name} created at ${createdAtFormatted} successfully`);
+      // Show different message based on completeness
+      const statusMessage = updatedTiming.status === 'completed' 
+        ? `Timing updated successfully!`
+        : `Draft updated! ${updatedTiming.status === 'in_progress' ? 'Continue editing to complete.' : ''}`;
+      
+      setCustomSuccessMessage(statusMessage);
       setSuccess(true);
       
       // Call the callback to clear selected timing and show the list again

@@ -67,8 +67,9 @@ export interface BreadTimingStretchFold {
 }
 
 export interface BreadTimingCreate {
-  recipe_name: string;
-  date: string; // YYYY-MM-DD format
+  recipe_name?: string;
+  date?: string; // YYYY-MM-DD format
+  status?: string; // 'in_progress' | 'completed'
   autolyse_ts?: string; // ISO datetime strings
   mix_ts?: string;
   bulk_ts?: string;
@@ -87,6 +88,7 @@ export interface BreadTimingCreate {
 
 export interface BreadTimingUpdate {
   recipe_name?: string;
+  status?: string; // 'in_progress' | 'completed'
   autolyse_ts?: string | null;
   mix_ts?: string | null;
   bulk_ts?: string | null;
@@ -105,8 +107,9 @@ export interface BreadTimingUpdate {
 
 export interface BreadTiming {
   id: string; // UUID
-  recipe_name: string;
-  date: string; // YYYY-MM-DD format
+  recipe_name?: string;
+  date?: string; // YYYY-MM-DD format
+  status: string; // 'in_progress' | 'completed'
   created_at: string; // ISO datetime string
   updated_at: string; // ISO datetime string
   autolyse_ts?: string;

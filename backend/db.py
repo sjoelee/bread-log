@@ -587,17 +587,21 @@ class DBConnector:
 
       query = """
         INSERT INTO bread_timings (
-          recipe_name, date, autolyse_ts, mix_ts, bulk_ts, preshape_ts, 
+          recipe_name, date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts, 
           final_shape_ts, fridge_ts, room_temp, water_temp, flour_temp, 
           preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
         ) VALUES (
-          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
+
+      # Get status from timing_data or default to 'in_progress'
+      status = getattr(timing_data, "status", "in_progress")
 
       params = [
         timing_data.recipe_name,
         timing_data.date,
+        status,
         timing_data.autolyse_ts,
         timing_data.mix_ts,
         timing_data.bulk_ts,
@@ -626,6 +630,7 @@ class DBConnector:
             id=timing_id,
             recipe_name=timing_data.recipe_name,
             date=timing_data.date,
+            status=status,
             created_at=created_at,
             updated_at=updated_at,
             autolyse_ts=timing_data.autolyse_ts,
@@ -652,7 +657,7 @@ class DBConnector:
     """Get a specific bread timing by ID"""
     try:
       query = """
-        SELECT id, recipe_name, date, created_at, updated_at, autolyse_ts, mix_ts, 
+        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
                bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
                flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
         FROM bread_timings 
@@ -679,6 +684,7 @@ class DBConnector:
     limit: int = 20,
     offset: int = 0,
     recipe_name: Optional[str] = None,
+    status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     search: Optional[str] = None,
@@ -694,6 +700,10 @@ class DBConnector:
       if recipe_name:
         where_conditions.append("recipe_name = %s")
         params.append(recipe_name)
+
+      if status:
+        where_conditions.append("status = %s")
+        params.append(status)
 
       if date_from:
         where_conditions.append("date >= %s")
@@ -727,7 +737,7 @@ class DBConnector:
 
       # Main query
       main_query = f"""
-        SELECT id, recipe_name, date, created_at, updated_at, autolyse_ts, mix_ts, 
+        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
                bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
                flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
         FROM bread_timings 
@@ -865,6 +875,7 @@ class DBConnector:
       timing_id,
       recipe_name,
       date,
+      status,
       created_at,
       updated_at,
       autolyse_ts,
@@ -907,6 +918,7 @@ class DBConnector:
       id=timing_id,
       recipe_name=recipe_name,
       date=date,
+      status=status or "in_progress",
       created_at=created_at,
       updated_at=updated_at,
       autolyse_ts=autolyse_ts,

@@ -261,10 +261,11 @@ class StretchFold(BaseModel):
 class BreadTimingCreate(BaseModel):
   """Request model for creating a new bread timing"""
 
-  recipe_name: str = Field(
-    ..., min_length=1, max_length=255, description="Recipe name is required"
+  recipe_name: Optional[str] = Field(
+    None, min_length=1, max_length=255, description="Recipe name"
   )
-  date: python_date = Field(..., description="Date when bread was made")
+  date: Optional[python_date] = Field(None, description="Date when bread was made")
+  status: Optional[str] = Field(None, pattern="^(in_progress|completed)$")
 
   # Process timestamps (all optional)
   autolyse_ts: Optional[datetime] = None
@@ -305,17 +306,18 @@ class BreadTimingCreate(BaseModel):
   @field_validator("recipe_name")
   @classmethod
   def recipe_name_not_empty(cls, v):
-    if not v or not v.strip():
+    if v is not None and (not v or not v.strip()):
       raise ValueError("Recipe name cannot be empty")
-    return v.strip()
+    return v.strip() if v else v
 
   @field_validator("date")
   @classmethod
   def date_not_future(cls, v):
-    from datetime import date as date_type
+    if v is not None:
+      from datetime import date as date_type
 
-    if v > date_type.today():
-      raise ValueError("Cannot create timing for future dates")
+      if v > date_type.today():
+        raise ValueError("Cannot create timing for future dates")
     return v
 
 
@@ -323,6 +325,9 @@ class BreadTimingUpdate(BaseModel):
   """Request model for updating a bread timing"""
 
   recipe_name: Optional[str] = Field(None, min_length=1, max_length=255)
+
+  # Status can be manually updated
+  status: Optional[str] = Field(None, pattern="^(in_progress|completed)$")
 
   # Process timestamps (all optional)
   autolyse_ts: Optional[datetime] = None
@@ -358,8 +363,9 @@ class BreadTiming(BaseModel):
   """Response model for bread timing"""
 
   id: UUID = Field(..., description="Unique timing identifier")
-  recipe_name: str
-  date: python_date
+  recipe_name: Optional[str] = None
+  date: Optional[python_date] = None
+  status: str = Field(default="in_progress", pattern="^(in_progress|completed)$")
   created_at: datetime
   updated_at: datetime
 
