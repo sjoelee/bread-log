@@ -65,6 +65,7 @@ interface RecipeTabProps {
   success?: boolean;
   successMessage?: string | null;
   recipe?: RecipeResponse | null; // For editing existing recipes
+  isTemplate?: boolean; // Pre-filled from template but saving as new
   onSubmit?: (data: RecipeFormData) => void;
 }
 
@@ -74,6 +75,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   success = false,
   successMessage = null,
   recipe = null,
+  isTemplate = false,
   onSubmit
 }) => {
   const [formData, setFormData] = useState<RecipeFormData>(() => {
@@ -459,7 +461,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
           disabled={loading}
           className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
         >
-          {loading ? 'Saving...' : recipe ? 'Save Changes' : 'Create Recipe'}
+          {loading ? 'Saving...' : (recipe && !isTemplate) ? 'Save Changes' : 'Create Recipe'}
         </button>
       </div>
     </form>

@@ -108,7 +108,20 @@ const BreadApp: React.FC = () => {
 
       if (response.ok) {
         const recipes = await response.json();
-        setSavedRecipes(recipes);
+        const apiBaseUrl2 = isDevelopment ? 'http://localhost:8000' : 'https://your-production-api.com';
+        const fullRecipes = await Promise.all(
+          recipes.map(async (recipe: any) => {
+            try {
+              const res = await fetch(`${apiBaseUrl2}/recipes/${recipe.id}`, {
+                headers: { 'Content-Type': 'application/json' },
+              });
+              return res.ok ? await res.json() : recipe;
+            } catch {
+              return recipe;
+            }
+          })
+        );
+        setSavedRecipes(fullRecipes);
       } else {
         console.error('Failed to load recipes:', response.statusText);
         setRecipeError(`Failed to load recipes: ${response.statusText}`);
@@ -422,7 +435,7 @@ const BreadApp: React.FC = () => {
                       : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  {editingRecipe ? 'Edit Recipe' : 'Create'}
+                  {editingRecipe && editingRecipeId ? 'Edit Recipe' : 'Create'}
                 </button>
                 <button
                   onClick={() => {
@@ -610,6 +623,7 @@ const BreadApp: React.FC = () => {
                 success={recipeSuccess}
                 successMessage={recipeSuccessMessage}
                 recipe={editingRecipe}
+                isTemplate={!!editingRecipe && !editingRecipeId}
                 onSubmit={async (recipeData) => {
                   try {
                     setRecipeLoading(true);
@@ -714,131 +728,116 @@ const BreadApp: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {savedRecipes.map((recipe) => (
-                      <div key={recipe.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="mb-4">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{recipe.name}</h3>
-                          {recipe.description && (
-                            <p className="text-gray-600 text-sm mb-2">{recipe.description}</p>
-                          )}
-                          {recipe.category && (
-                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                              {recipe.category}
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="text-sm text-gray-500 space-y-1">
-                          <p>Created: {new Date(recipe.created_at).toLocaleDateString()}</p>
-                          {recipe.updated_at !== recipe.created_at && (
-                            <p>Updated: {new Date(recipe.updated_at).toLocaleDateString()}</p>
-                          )}
-                        </div>
-                        
-                        <div className="mt-4 flex space-x-2">
-                          <button 
-                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 text-sm rounded-md font-medium"
-                            onClick={async () => {
-                              console.log('View & Edit recipe:', recipe);
-                              
-                              try {
-                                setRecipeLoading(true);
-                                setRecipeError(null);
-                                
-                                const isDevelopment = window.location.hostname === 'localhost' ||
-                                  window.location.hostname === '127.0.0.1';
-
-                                const apiBaseUrl = isDevelopment
-                                  ? 'http://localhost:8000'
-                                  : 'https://your-production-api.com';
-
-                                // Fetch full recipe data including current_version
-                                const response = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
-                                  method: 'GET',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                });
-
-                                if (response.ok) {
-                                  const fullRecipe = await response.json();
-                                  console.log('Loaded full recipe for editing:', fullRecipe);
-                                  
-                                  // Set up editing state with full recipe data
-                                  setEditingRecipe(fullRecipe);
-                                  setEditingRecipeId(fullRecipe.id);
-                                  // Switch to create tab for editing
-                                  setActiveRecipeTab('create');
-                                  // Clear any existing success/error states
-                                  setRecipeSuccess(false);
-                                  setRecipeError(null);
-                                  setRecipeSuccessMessage(null);
-                                } else {
-                                  console.error('Failed to load recipe for editing:', response.statusText);
-                                  setRecipeError(`Failed to load recipe: ${response.statusText}`);
-                                }
-                              } catch (error) {
-                                console.error('Error loading recipe for editing:', error);
-                                setRecipeError(`Error loading recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                              } finally {
-                                setRecipeLoading(false);
-                              }
-                            }}
-                          >
-                            View & Edit
-                          </button>
-                          <button 
-                            className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 text-sm rounded-md font-medium"
-                            onClick={async () => {
-                              if (window.confirm(`Are you sure you want to delete "${recipe.name}"? This action cannot be undone.`)) {
-                                console.log('Delete recipe:', recipe);
-                                
-                                try {
-                                  setRecipeLoading(true);
-                                  setRecipeError(null);
-                                  
-                                  const isDevelopment = window.location.hostname === 'localhost' ||
-                                    window.location.hostname === '127.0.0.1';
-
-                                  const apiBaseUrl = isDevelopment
-                                    ? 'http://localhost:8000'
-                                    : 'https://your-production-api.com';
-
-                                  const response = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
-                                    method: 'DELETE',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                    },
-                                  });
-
-                                  if (response.ok) {
-                                    console.log('Recipe deleted successfully');
-                                    // Reload recipes list to remove deleted recipe
-                                    loadSavedRecipes();
-                                    // Clear editing state if this recipe was being edited
-                                    if (editingRecipeId === recipe.id) {
-                                      setEditingRecipe(null);
-                                      setEditingRecipeId(null);
-                                    }
-                                  } else {
-                                    console.error('Failed to delete recipe:', response.statusText);
-                                    setRecipeError(`Failed to delete recipe: ${response.statusText}`);
-                                  }
-                                } catch (error) {
-                                  console.error('Error deleting recipe:', error);
-                                  setRecipeError(`Error deleting recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                } finally {
-                                  setRecipeLoading(false);
-                                }
-                              }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Recipe</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Category</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Ver.</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Flour Ingredients</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Updated</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {savedRecipes.map((recipe) => {
+                          const flourIngredients = recipe.current_version?.ingredients
+                            ?.filter((i: any) => i.type === 'flour')
+                            .map((i: any) => i.name)
+                            .filter(Boolean)
+                            .join(', ');
+                          return (
+                            <tr key={recipe.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <div className="font-medium text-gray-900">{recipe.name}</div>
+                                <div className="flex gap-1.5 mt-1">
+                                  <button
+                                    className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 text-xs rounded font-medium"
+                                    onClick={async () => {
+                                      try {
+                                        setRecipeLoading(true);
+                                        setRecipeError(null);
+                                        const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                                          ? 'http://localhost:8000' : 'https://your-production-api.com';
+                                        const res = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
+                                          headers: { 'Content-Type': 'application/json' },
+                                        });
+                                        if (res.ok) {
+                                          const fullRecipe = await res.json();
+                                          setEditingRecipe(fullRecipe);
+                                          setEditingRecipeId(fullRecipe.id);
+                                          setActiveRecipeTab('create');
+                                          setRecipeSuccess(false);
+                                          setRecipeError(null);
+                                          setRecipeSuccessMessage(null);
+                                        } else {
+                                          setRecipeError(`Failed to load recipe: ${res.statusText}`);
+                                        }
+                                      } catch (err) {
+                                        setRecipeError(`Error loading recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                                      } finally {
+                                        setRecipeLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    View & Edit
+                                  </button>
+                                  <button
+                                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-0.5 text-xs rounded font-medium"
+                                    onClick={async () => {
+                                      try {
+                                        setRecipeLoading(true);
+                                        setRecipeError(null);
+                                        const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                                          ? 'http://localhost:8000' : 'https://your-production-api.com';
+                                        const res = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
+                                          headers: { 'Content-Type': 'application/json' },
+                                        });
+                                        if (res.ok) {
+                                          const fullRecipe = await res.json();
+                                          setEditingRecipe(fullRecipe);
+                                          setEditingRecipeId(null);
+                                          setActiveRecipeTab('create');
+                                          setRecipeSuccess(false);
+                                          setRecipeError(null);
+                                          setRecipeSuccessMessage(null);
+                                        } else {
+                                          setRecipeError(`Failed to load recipe: ${res.statusText}`);
+                                        }
+                                      } catch (err) {
+                                        setRecipeError(`Error loading recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                                      } finally {
+                                        setRecipeLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    Use Template
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {recipe.category || '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {recipe.current_version?.version_number != null ? `v${recipe.current_version.version_number}` : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600">
+                                {flourIngredients || '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {new Date(recipe.updated_at).toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'})}
+                              </td>
+                              <td className="px-3 py-2 text-gray-500 max-w-xs">
+                                <span title={recipe.description}>
+                                  {recipe.description ? recipe.description.substring(0, 80) + (recipe.description.length > 80 ? '…' : '') : '—'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
