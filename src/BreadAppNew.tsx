@@ -180,10 +180,14 @@ const BreadApp: React.FC = () => {
       // Use the new breadTimingApi with pagination and filters
       const response = await breadTimingApi.list(params);
       
+      const dedup = (items: BreadTiming[]) => {
+        const seen = new Set<string>();
+        return items.filter(t => t.id && !seen.has(t.id) && seen.add(t.id));
+      };
       if (reset || page === 0) {
-        setRecentTimings(response.timings);
+        setRecentTimings(dedup(response.timings));
       } else {
-        setRecentTimings(prev => [...prev, ...response.timings]);
+        setRecentTimings(prev => dedup([...prev, ...response.timings]));
       }
       
       // Check if there are more results
@@ -265,16 +269,15 @@ const BreadApp: React.FC = () => {
     }
   }, [activeMainTab, activeTab]);
 
-  // Reload timings when filter parameters change
+  // Reload timings when filter parameters change (tab-switch loading is handled separately above)
   React.useEffect(() => {
-    if (activeMainTab === 'timing' && activeTab === 'saved') {
-      const timeoutId = setTimeout(() => {
-        loadRecentTimings(0, true);
-      }, searchQuery ? 500 : 0); // Debounce search, but instant for other filters
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [statusFilter, sortBy, sortDirection, searchQuery, activeMainTab, activeTab]);
+    if (activeMainTab !== 'timing' || activeTab !== 'saved') return;
+    const timeoutId = setTimeout(() => {
+      loadRecentTimings(0, true);
+    }, searchQuery ? 500 : 0);
+    return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, sortBy, sortDirection, searchQuery]);
 
   // Local handlers
   const handleStretchFoldsToggle = () => {
@@ -367,7 +370,7 @@ const BreadApp: React.FC = () => {
   }, [success, activeTab]);
 
   return (
-    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow p-6">
+    <div className="min-w-[720px] bg-white shadow-sm p-6">
       <div className="flex gap-6">
         {/* Left Sidebar - Tab Navigation */}
         <div className="w-16 flex-shrink-0">
@@ -1007,83 +1010,76 @@ const BreadApp: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {recentTimings.map((timing) => (
-                        <div key={timing.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{timing.recipe_name || 'Untitled'}</h3>
-                              <p className="text-gray-600 text-sm">
-                                {timing.date ? new Date(timing.date).toLocaleDateString() : 'No date'}
-                              </p>
-                            </div>
-                            <StatusBadge status={timing.status} />
-                          </div>
-                          
-                          <div className="space-y-2 text-sm text-gray-600 mb-4">
-                            <div className="flex justify-between">
-                              <span>Autolyse:</span>
-                              <span>{timing.autolyse_ts ? new Date(timing.autolyse_ts).toLocaleTimeString() : 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Mix:</span>
-                              <span>{timing.mix_ts ? new Date(timing.mix_ts).toLocaleTimeString() : 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Bulk Ferment:</span>
-                              <span>{timing.bulk_ts ? new Date(timing.bulk_ts).toLocaleTimeString() : 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Final Shape:</span>
-                              <span>{timing.final_shape_ts ? new Date(timing.final_shape_ts).toLocaleTimeString() : 'N/A'}</span>
-                            </div>
-                            {timing.dough_temp && (
-                              <div className="flex justify-between">
-                                <span>Dough Temp:</span>
-                                <span>{timing.dough_temp}°{timing.temperature_unit}</span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex space-x-2">
-                            <button 
-                              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 text-sm rounded-md font-medium"
-                              onClick={() => {
-                                console.log('View/Edit timing details:', timing);
-                                // Populate the form with timing data for editing
-                                populateFormWithBreadTiming(timing);
-                                // Set this timing as the one being edited
-                                setEditingTiming(timing);
-                                // Switch to Create tab (which will now be in edit mode)
-                                setActiveTab('create');
-                              }}
-                            >
-                              View & Edit
-                            </button>
-                            <button 
-                              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 text-sm rounded-md font-medium"
-                              onClick={() => {
-                                console.log('Use as template:', timing);
-                                // Clear editing state to ensure we create a new make, not update existing
-                                setEditingTiming(null);
-                                // Populate form with timing data as template
-                                populateFormWithBreadTiming(timing);
-                                // Override the date to today for new make (template behavior)
-                                setFormData(prev => ({
-                                  ...prev,
-                                  date: dayjs() // Set to today's date for new make
-                                }));
-                                // Switch to create tab (will be in create mode, not edit mode)
-                                setActiveTab('create');
-                              }}
-                            >
-                              Use Template
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Recipe</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Date</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Autolyse</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Mix</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Bulk</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Final Shape</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Dough Temp</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {recentTimings.map((timing) => (
+                            <tr key={timing.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <div className="font-medium text-gray-900">{timing.recipe_name || 'Untitled'}</div>
+                                <div className="flex gap-1.5 mt-1">
+                                  <button
+                                    className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 text-xs rounded font-medium"
+                                    onClick={() => {
+                                      populateFormWithBreadTiming(timing);
+                                      setEditingTiming(timing);
+                                      setActiveTab('create');
+                                    }}
+                                  >
+                                    View & Edit
+                                  </button>
+                                  <button
+                                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-0.5 text-xs rounded font-medium"
+                                    onClick={() => {
+                                      setEditingTiming(null);
+                                      populateFormWithBreadTiming(timing);
+                                      setFormData(prev => ({ ...prev, date: dayjs() }));
+                                      setActiveTab('create');
+                                    }}
+                                  >
+                                    Use Template
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <StatusBadge status={timing.status} />
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.date ? new Date(timing.date + 'T12:00:00').toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.autolyse_ts ? new Date(timing.autolyse_ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.mix_ts ? new Date(timing.mix_ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.bulk_ts ? new Date(timing.bulk_ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.final_shape_ts ? new Date(timing.final_shape_ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.dough_temp ? `${timing.dough_temp}°${timing.temperature_unit?.charAt(0) || 'F'}` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    
+
                     {hasMoreTimings && (
                       <div className="text-center pt-6">
                         <button
