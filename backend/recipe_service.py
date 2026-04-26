@@ -79,12 +79,24 @@ class RecipeService:
     return self.db.get_versioned_recipe(recipe_id)
 
   def list_recipes(
-    self, category: Optional[str] = None, limit: int = 50, offset: int = 0
+    self,
+    category: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_direction: str = "desc",
+    ingredient: Optional[str] = None,
   ) -> List[RecipeListItem]:
-    """
-    List recipes with pagination and optional category filter
-    """
-    return self.db.list_recipes(category=category, limit=limit, offset=offset)
+    return self.db.list_recipes(
+      category=category,
+      limit=limit,
+      offset=offset,
+      search=search,
+      sort_by=sort_by,
+      sort_direction=sort_direction,
+      ingredient=ingredient,
+    )
 
   def create_recipe_version(
     self,

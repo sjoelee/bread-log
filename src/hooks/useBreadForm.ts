@@ -172,13 +172,10 @@ export const useBreadForm = () => {
   };
 
   const validateForm = (): string | null => {
-    // Minimal validation - only validate format/type of provided data
-    // Allow partial submissions for "in_progress" status
-    
-    // No required fields - users can save partial data
-    // Only validate data format if provided
-    
-    return null; // Allow all partial data
+    if (!formData.teamMake.trim()) {
+      return 'Bread name is required. Type any name — it doesn\'t have to be a saved recipe.';
+    }
+    return null;
   };
 
   const populateFormWithBreadTiming = (timing: BreadTiming) => {

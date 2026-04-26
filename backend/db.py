@@ -26,6 +26,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("psycopg")
 logger.setLevel(logging.DEBUG)
 
+db_logger = logging.getLogger("db")
+
 
 class DatabasePool:
   _instance: Optional["DatabasePool"] = None
@@ -294,7 +296,11 @@ class DBConnector:
     )
 
     ingredients = [Ingredient(**ing) for ing in ingredients_data]
-    instructions = [RecipeStep(**step) for step in instructions_data]
+    instructions = [
+      RecipeStep(**step)
+      for step in instructions_data
+      if step.get("instruction", "").strip()
+    ]
 
     # Create current version
     current_version = RecipeVersion(
@@ -329,16 +335,26 @@ class DBConnector:
     )
 
   def list_recipes(
-    self, category: Optional[str] = None, limit: int = 50, offset: int = 0
+    self,
+    category: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_direction: str = "desc",
+    ingredient: Optional[str] = None,
   ) -> List[RecipeListItem]:
     """
     List recipes with basic info and current version
     """
     base_query = """
-      SELECT r.id, r.name, r.category, r.created_at, r.updated_at,
+      SELECT r.id, r.name, r.description, r.category, r.created_at, r.updated_at,
              rv.version_number,
              jsonb_array_length(rv.ingredients->'ingredients') as ingredient_count,
-             jsonb_array_length(rv.instructions->'instructions') as step_count
+             jsonb_array_length(rv.instructions->'instructions') as step_count,
+             (SELECT string_agg(ing->>'name', ', ')
+              FROM jsonb_array_elements(rv.ingredients->'ingredients') AS ing
+              WHERE ing->>'type' = 'flour') as flour_ingredient_names
       FROM recipes r
       LEFT JOIN recipe_versions rv ON r.current_version_id = rv.id
     """
@@ -350,12 +366,25 @@ class DBConnector:
       conditions.append("r.category = %s")
       params.append(category)
 
-    if conditions:
-      query = base_query + " WHERE " + " AND ".join(conditions)
-    else:
-      query = base_query
+    if search:
+      conditions.append("r.name ILIKE %s")
+      params.append(f"%{search}%")
 
-    query += " ORDER BY r.updated_at DESC LIMIT %s OFFSET %s"
+    if ingredient:
+      conditions.append("""
+        EXISTS (
+          SELECT 1 FROM jsonb_array_elements(rv.ingredients->'ingredients') AS ing
+          WHERE ing->>'name' ILIKE %s
+        )
+      """)
+      params.append(f"%{ingredient}%")
+
+    query = base_query + (" WHERE " + " AND ".join(conditions) if conditions else "")
+
+    allowed_sort_fields = {"created_at": "r.created_at", "name": "r.name"}
+    sort_col = allowed_sort_fields.get(sort_by, "r.created_at")
+    sort_dir = "ASC" if sort_direction.lower() == "asc" else "DESC"
+    query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     try:
@@ -372,12 +401,14 @@ class DBConnector:
       (
         r_id,
         r_name,
+        r_description,
         r_category,
         r_created_at,
         r_updated_at,
         rv_version_number,
         ingredient_count,
         step_count,
+        flour_ingredient_names,
       ) = result
 
       version_str = str(rv_version_number) if rv_version_number is not None else "1"
@@ -386,10 +417,12 @@ class DBConnector:
         RecipeListItem(
           id=r_id,
           name=r_name,
+          description=r_description,
           category=r_category,
           version=version_str,
           ingredient_count=ingredient_count or 0,
           step_count=step_count or 0,
+          flour_ingredient_names=flour_ingredient_names,
           created_at=r_created_at,
           updated_at=r_updated_at,
         )
@@ -437,7 +470,11 @@ class DBConnector:
       )
 
       ingredients = [Ingredient(**ing) for ing in ingredients_data]
-      instructions = [RecipeStep(**step) for step in instructions_data]
+      instructions = [
+        RecipeStep(**step)
+        for step in instructions_data
+        if step.get("instruction", "").strip()
+      ]
 
       versions.append(
         RecipeVersion(
@@ -494,7 +531,11 @@ class DBConnector:
     )
 
     ingredients = [Ingredient(**ing) for ing in ingredients_data]
-    instructions = [RecipeStep(**step) for step in instructions_data]
+    instructions = [
+      RecipeStep(**step)
+      for step in instructions_data
+      if step.get("instruction", "").strip()
+    ]
 
     return RecipeVersion(
       id=rv_id,
@@ -554,18 +595,39 @@ class DBConnector:
     The CASCADE constraints will automatically delete recipe_versions and bakers_percentages.
     """
     try:
-      query = "DELETE FROM recipes WHERE id = %s"
+      # Count rows that will be cascade-deleted for logging
+      count_query = """
+        SELECT
+          (SELECT COUNT(*) FROM recipe_versions WHERE recipe_id = %s) AS version_count,
+          (SELECT COUNT(*) FROM bakers_percentages WHERE recipe_id = %s) AS bp_count
+      """
+      delete_query = "DELETE FROM recipes WHERE id = %s"
 
       with self.db_pool.get_connection() as conn:
         with conn.cursor() as cur:
-          cur.execute(query, [recipe_id])
-          rows_deleted = cur.rowcount
+          db_logger.info(
+            f"[delete_recipe] SQL: {count_query.strip()} | params: [{recipe_id}, {recipe_id}]"
+          )
+          cur.execute(count_query, [recipe_id, recipe_id])
+          counts = cur.fetchone()
+          version_count = counts[0] if counts else 0
+          bp_count = counts[1] if counts else 0
+          db_logger.info(
+            f"[delete_recipe] recipe_id={recipe_id} — will cascade delete {version_count} recipe_version(s) and {bp_count} bakers_percentage(s)"
+          )
 
-      # Return True if a row was deleted, False if recipe didn't exist
+          db_logger.info(f"[delete_recipe] SQL: {delete_query} | params: [{recipe_id}]")
+          cur.execute(delete_query, [recipe_id])
+          rows_deleted = cur.rowcount
+          conn.commit()
+          db_logger.info(
+            f"[delete_recipe] recipe_id={recipe_id} — deleted {rows_deleted} recipe row(s); cascade removed {version_count} version(s) and {bp_count} bakers_percentage row(s)"
+          )
+
       return rows_deleted > 0
 
     except Exception as e:
-      logger.error(f"Error deleting recipe: {str(e)}")
+      db_logger.error(f"[delete_recipe] Error deleting recipe {recipe_id}: {str(e)}")
       raise DatabaseError(f"Failed to delete recipe: {str(e)}")
 
   # New Bread Timing Methods for REST API

@@ -215,10 +215,12 @@ class Recipe(BaseModel):
 class RecipeListItem(BaseModel):
   id: UUID
   name: str
+  description: Optional[str] = None
   category: Optional[str] = None
   version: str  # e.g., "2", "3"
   ingredient_count: int
   step_count: int
+  flour_ingredient_names: Optional[str] = None
   created_at: datetime
   updated_at: datetime
 

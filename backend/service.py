@@ -119,15 +119,31 @@ def create_recipe(recipe: RecipeRequest):
 
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
-def list_recipes(category: str = None, limit: int = 50, offset: int = 0):
+def list_recipes(
+  category: str = None,
+  limit: int = 50,
+  offset: int = 0,
+  search: str = None,
+  sort_by: str = "created_at",
+  sort_direction: str = "desc",
+  ingredient: str = None,
+):
   """
-  List recipes with pagination and optional category filter
+  List recipes with pagination, optional category filter, search, ingredient filter, and sorting
   """
   logger.info(
-    f"GET /recipes/ - Listing recipes with category={category}, limit={limit}, offset={offset}"
+    f"GET /recipes/ - Listing recipes with category={category}, search={search}, ingredient={ingredient}, sort_by={sort_by}, sort_direction={sort_direction}"
   )
   try:
-    recipes = recipe_service.list_recipes(category=category, limit=limit, offset=offset)
+    recipes = recipe_service.list_recipes(
+      category=category,
+      limit=limit,
+      offset=offset,
+      search=search,
+      sort_by=sort_by,
+      sort_direction=sort_direction,
+      ingredient=ingredient,
+    )
     logger.info(f"GET /recipes/ - Successfully retrieved {len(recipes)} recipes")
     return recipes
 

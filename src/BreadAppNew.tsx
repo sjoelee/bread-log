@@ -31,6 +31,13 @@ const BreadApp: React.FC = () => {
   // Recipe editing state
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+
+  // Recipe list filters
+  const [recipeSortBy, setRecipeSortBy] = useState<string>('created_at');
+  const [recipeSortDirection, setRecipeSortDirection] = useState<string>('desc');
+  const [recipeSearch, setRecipeSearch] = useState<string>('');
+  const [recipeIngredientFilter, setRecipeIngredientFilter] = useState<string>('');
+  const [knownIngredients, setKnownIngredients] = useState<string[]>([]);
   
   // Timing-specific state for recent saved timings
   const [recentTimings, setRecentTimings] = useState<BreadTiming[]>([]);
@@ -44,10 +51,13 @@ const BreadApp: React.FC = () => {
   
   // Filters and sorting for timings
   const [statusFilter, setStatusFilter] = useState<string>('all'); // 'all' | 'in_progress' | 'completed'
-  const [sortBy, setSortBy] = useState<string>('updated_at'); // 'updated_at' | 'created_at' | 'recipe_name' | 'date'
+  const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<string>('desc'); // 'desc' | 'asc'
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Distinct timing names for the bread name dropdown (separate from paginated saved list)
+  const [timingDropdownNames, setTimingDropdownNames] = useState<{ name: string; created_at: Date }[]>([]);
+
   // Combined dropdown options (Makes + Recipes + Recent usage)
   const [dropdownOptions, setDropdownOptions] = useState<DropdownOption[]>([]);
   
@@ -87,80 +97,61 @@ const BreadApp: React.FC = () => {
   } = useSavedMakes(activeTab, formData.date, selectedDough, setSelectedDough, populateFormWithBreadTiming);
 
   // Recipe loading function
-  const loadSavedRecipes = async () => {
+  const loadSavedRecipes = async (
+    search = recipeSearch,
+    sortBy = recipeSortBy,
+    sortDir = recipeSortDirection,
+    ingredient = recipeIngredientFilter,
+  ) => {
     try {
       setLoadingRecipes(true);
       setRecipeError(null);
-      
-      const isDevelopment = window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
 
-      const apiBaseUrl = isDevelopment
-        ? 'http://localhost:8000'
-        : 'https://your-production-api.com';
+      const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8000' : 'https://your-production-api.com';
 
-      const response = await fetch(`${apiBaseUrl}/recipes/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const params = new URLSearchParams({ sort_by: sortBy, sort_direction: sortDir });
+      if (search.trim()) params.set('search', search.trim());
+      if (ingredient) params.set('ingredient', ingredient);
+
+      const response = await fetch(`${apiBaseUrl}/recipes/?${params}`, {
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (response.ok) {
         const recipes = await response.json();
-        const apiBaseUrl2 = isDevelopment ? 'http://localhost:8000' : 'https://your-production-api.com';
-        const fullRecipes = await Promise.all(
-          recipes.map(async (recipe: any) => {
-            try {
-              const res = await fetch(`${apiBaseUrl2}/recipes/${recipe.id}`, {
-                headers: { 'Content-Type': 'application/json' },
-              });
-              return res.ok ? await res.json() : recipe;
-            } catch {
-              return recipe;
-            }
-          })
-        );
-        setSavedRecipes(fullRecipes);
+        setSavedRecipes(recipes);
+        // Accumulate distinct ingredient names across all loads for the dropdown
+        if (!ingredient) {
+          const names = new Set<string>();
+          recipes.forEach((r: any) => {
+            r.flour_ingredient_names?.split(', ').forEach((n: string) => n.trim() && names.add(n.trim()));
+          });
+          setKnownIngredients(prev => Array.from(new Set([...prev, ...names])).sort());
+        }
       } else {
-        console.error('Failed to load recipes:', response.statusText);
         setRecipeError(`Failed to load recipes: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Error loading recipes:', error);
       setRecipeError(`Error loading recipes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoadingRecipes(false);
     }
   };
 
-  // Load ALL distinct bread timing recipe names for dropdown (not paginated)
+  // Load distinct bread names from timings for the dropdown
   const loadAllDistinctBreadNames = async () => {
     try {
-      // Get all recent timings to extract distinct recipe names
-      const response = await breadTimingApi.list(1, 100); // Get up to 100 recent timings
-      const timings = response.timings;
-      
-      // Extract distinct recipe names with their most recent usage
-      const recipeNameMap = new Map<string, BreadTiming>();
-      
-      for (const timing of timings) {
-        const currentTiming = recipeNameMap.get(timing.recipe_name);
-        if (!currentTiming || new Date(timing.created_at) > new Date(currentTiming.created_at)) {
-          recipeNameMap.set(timing.recipe_name, timing);
+      const response = await breadTimingApi.list({ page: 1, limit: 100, order_by: 'created_at', order_direction: 'desc' });
+      const seen = new Set<string>();
+      const distinctNames: { name: string; created_at: Date }[] = [];
+      for (const timing of response.timings) {
+        if (timing.recipe_name && !seen.has(timing.recipe_name.toLowerCase())) {
+          seen.add(timing.recipe_name.toLowerCase());
+          distinctNames.push({ name: timing.recipe_name, created_at: new Date(timing.created_at) });
         }
       }
-      
-      // Convert to array and sort by most recent usage
-      const distinctNames = Array.from(recipeNameMap.values())
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .map(timing => ({
-          name: timing.recipe_name,
-          created_at: new Date(timing.created_at),
-          created_at_original: timing.created_at,
-        }));
-        
-      setRecentTimings(distinctNames);
+      setTimingDropdownNames(distinctNames);
     } catch (error) {
       console.error('Error loading distinct bread names:', error);
     }
@@ -214,48 +205,41 @@ const BreadApp: React.FC = () => {
     }
   };
 
-  // Build combined dropdown options from distinct dough_makes names and Recipes
+  // Build combined dropdown options from distinct timing names and saved recipes
   const buildDropdownOptions = () => {
     const options: DropdownOption[] = [];
     const usedNames = new Set<string>();
-    
-    // Create a set of recipe names for easy lookup
-    const recipeNames = new Set(savedRecipes.map(recipe => recipe.name.toLowerCase()));
+    const recipeNames = new Set(savedRecipes.map(r => r.name.toLowerCase()));
 
-    // Add distinct names from recent timing entries (actual usage history)
-    recentTimings.forEach((timing) => {
-      if (timing.recipe_name && !usedNames.has(timing.recipe_name.toLowerCase())) {
-        const isRecipe = recipeNames.has(timing.recipe_name.toLowerCase());
+    timingDropdownNames.forEach(({ name, created_at }) => {
+      if (!usedNames.has(name.toLowerCase())) {
+        const isRecipe = recipeNames.has(name.toLowerCase());
         options.push({
-          value: timing.recipe_name,
-          displayName: isRecipe ? `${timing.recipe_name} (Recipe)` : timing.recipe_name,
+          value: name,
+          displayName: isRecipe ? `${name} (Recipe)` : name,
           type: isRecipe ? 'recipe' : 'recent',
-          lastUsed: new Date(timing.created_at)
+          lastUsed: created_at,
         });
-        usedNames.add(timing.recipe_name.toLowerCase());
+        usedNames.add(name.toLowerCase());
       }
     });
 
-    // Add recipes that haven't been used in recent timing entries
     savedRecipes.forEach((recipe) => {
       if (recipe.name && !usedNames.has(recipe.name.toLowerCase())) {
         options.push({
           value: recipe.name,
           displayName: `${recipe.name} (Recipe)`,
           type: 'recipe',
-          lastUsed: new Date(recipe.updated_at || recipe.created_at)
+          lastUsed: new Date(recipe.created_at),
         });
         usedNames.add(recipe.name.toLowerCase());
       }
     });
 
-    // Sort by most recently used (created_at), then alphabetically
     options.sort((a, b) => {
-      if (a.lastUsed && b.lastUsed) {
-        return b.lastUsed.getTime() - a.lastUsed.getTime();
-      }
-      if (a.lastUsed && !b.lastUsed) return -1;
-      if (!a.lastUsed && b.lastUsed) return 1;
+      if (a.lastUsed && b.lastUsed) return b.lastUsed.getTime() - a.lastUsed.getTime();
+      if (a.lastUsed) return -1;
+      if (b.lastUsed) return 1;
       return a.displayName.localeCompare(b.displayName);
     });
 
@@ -274,6 +258,17 @@ const BreadApp: React.FC = () => {
       loadSavedRecipes();
     }
   }, [activeMainTab, activeRecipeTab]);
+
+  // Reload recipes when filters change
+  React.useEffect(() => {
+    if (activeMainTab !== 'recipe' || activeRecipeTab !== 'saved') return;
+    const id = setTimeout(
+      () => loadSavedRecipes(recipeSearch, recipeSortBy, recipeSortDirection, recipeIngredientFilter),
+      recipeSearch ? 400 : 0,
+    );
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeSearch, recipeSortBy, recipeSortDirection, recipeIngredientFilter]);
 
   // Load recent timings when switching to timing saved tab
   React.useEffect(() => {
@@ -300,9 +295,35 @@ const BreadApp: React.FC = () => {
 
   const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
     updateBreadTiming(selectedTiming.id, () => {
-      setEditingTiming(null); // Clear editing state
-      loadRecentTimings(0, true); // Refresh recent timings list
+      setEditingTiming(null);
+      loadRecentTimings(0, true);
     });
+  };
+
+  const handleDeleteTiming = async (timingId: string, recipeName: string) => {
+    if (!window.confirm(`Delete "${recipeName}"? This cannot be undone.`)) return;
+    try {
+      await breadTimingApi.delete(timingId);
+      await loadRecentTimings(0, true);
+    } catch (err) {
+      setTimingsError(`Failed to delete timing: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleDeleteRecipe = async (recipeId: string, recipeName: string) => {
+    if (!window.confirm(`Delete recipe "${recipeName}"? This cannot be undone.`)) return;
+    try {
+      const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8000' : 'https://your-production-api.com';
+      const res = await fetch(`${apiBaseUrl}/recipes/${recipeId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || res.statusText);
+      }
+      await loadSavedRecipes();
+    } catch (err) {
+      setRecipeError(`Failed to delete recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   // Handle recipe selection for preview and suggestions
@@ -371,7 +392,7 @@ const BreadApp: React.FC = () => {
   // Build dropdown options when data sources change
   useEffect(() => {
     buildDropdownOptions();
-  }, [recentTimings, savedRecipes]);
+  }, [timingDropdownNames, savedRecipes]);
 
   // Clear saved Create data and recipe preview when form is successfully submitted
   useEffect(() => {
@@ -564,7 +585,7 @@ const BreadApp: React.FC = () => {
                 />
               </div>
               <div className="w-1/2">
-                <label className="block text-sm font-medium mb-1">Bread</label>
+                <label className="block text-sm font-medium mb-1">Bread Name</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -573,7 +594,7 @@ const BreadApp: React.FC = () => {
                     onChange={handleRecipeInputChange}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
-                    placeholder={loadingRecipes ? "Loading..." : "Select Bread"}
+                    placeholder={loadingRecipes ? "Loading..." : "Type a name or select a saved recipe"}
                     className="w-full border rounded p-2 pr-8"
                     disabled={loadingRecipes}
                     autoComplete="off"
@@ -625,6 +646,7 @@ const BreadApp: React.FC = () => {
                 recipe={editingRecipe}
                 isTemplate={!!editingRecipe && !editingRecipeId}
                 onSubmit={async (recipeData) => {
+                  const isEditing = editingRecipeId !== null;
                   try {
                     setRecipeLoading(true);
                     setRecipeError(null);
@@ -637,9 +659,6 @@ const BreadApp: React.FC = () => {
                     const apiBaseUrl = isDevelopment
                       ? 'http://localhost:8000'
                       : 'https://your-production-api.com';
-
-                    // Determine if we're creating or editing
-                    const isEditing = editingRecipeId !== null;
                     const url = isEditing 
                       ? `${apiBaseUrl}/recipes/${editingRecipeId}`
                       : `${apiBaseUrl}/recipes/`;
@@ -705,6 +724,51 @@ const BreadApp: React.FC = () => {
                   </button>
                 </div>
 
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                      <select
+                        value={`${recipeSortBy}:${recipeSortDirection}`}
+                        onChange={(e) => {
+                          const [field, dir] = e.target.value.split(':');
+                          setRecipeSortBy(field);
+                          setRecipeSortDirection(dir);
+                        }}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="created_at:desc">Date Created (Newest First)</option>
+                        <option value="created_at:asc">Date Created (Oldest First)</option>
+                        <option value="name:asc">Recipe Name (A → Z)</option>
+                        <option value="name:desc">Recipe Name (Z → A)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ingredient</label>
+                      <select
+                        value={recipeIngredientFilter}
+                        onChange={(e) => setRecipeIngredientFilter(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">All Ingredients</option>
+                        {knownIngredients.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                      <input
+                        type="text"
+                        value={recipeSearch}
+                        onChange={(e) => setRecipeSearch(e.target.value)}
+                        placeholder="Search by recipe name..."
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {recipeError && (
                   <div className="text-red-500 mb-4 p-4 bg-red-50 rounded-md">
                     {recipeError}
@@ -738,16 +802,11 @@ const BreadApp: React.FC = () => {
                           <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Flour Ingredients</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Updated</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-700">Description</th>
+                          <th className="px-3 py-2"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {savedRecipes.map((recipe) => {
-                          const flourIngredients = recipe.current_version?.ingredients
-                            ?.filter((i: any) => i.type === 'flour')
-                            .map((i: any) => i.name)
-                            .filter(Boolean)
-                            .join(', ');
-                          return (
+                        {savedRecipes.map((recipe) => (
                             <tr key={recipe.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-3 py-2 whitespace-nowrap">
                                 <div className="font-medium text-gray-900">{recipe.name}</div>
@@ -820,10 +879,10 @@ const BreadApp: React.FC = () => {
                                 {recipe.category || '—'}
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
-                                {recipe.current_version?.version_number != null ? `v${recipe.current_version.version_number}` : '—'}
+                                {recipe.version != null ? `v${recipe.version}` : '—'}
                               </td>
                               <td className="px-3 py-2 text-gray-600">
-                                {flourIngredients || '—'}
+                                {recipe.flour_ingredient_names || '—'}
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                                 {new Date(recipe.updated_at).toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'})}
@@ -833,9 +892,19 @@ const BreadApp: React.FC = () => {
                                   {recipe.description ? recipe.description.substring(0, 80) + (recipe.description.length > 80 ? '…' : '') : '—'}
                                 </span>
                               </td>
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <button
+                                  title="Delete recipe"
+                                  onClick={() => handleDeleteRecipe(recipe.id, recipe.name)}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </td>
                             </tr>
-                          );
-                        })}
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -928,7 +997,7 @@ const BreadApp: React.FC = () => {
 
                 {/* Filtering and Sorting Controls */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Status Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
@@ -947,27 +1016,18 @@ const BreadApp: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
                       <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
+                        value={`${sortBy}:${sortDirection}`}
+                        onChange={(e) => {
+                          const [field, dir] = e.target.value.split(':');
+                          setSortBy(field);
+                          setSortDirection(dir);
+                        }}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
-                        <option value="updated_at">Last Updated</option>
-                        <option value="created_at">Date Created</option>
-                        <option value="date">Bread Date</option>
-                        <option value="recipe_name">Recipe Name</option>
-                      </select>
-                    </div>
-
-                    {/* Sort Direction */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
-                      <select
-                        value={sortDirection}
-                        onChange={(e) => setSortDirection(e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="desc">Newest First</option>
-                        <option value="asc">Oldest First</option>
+                        <option value="created_at:desc">Date Created (Newest First)</option>
+                        <option value="created_at:asc">Date Created (Oldest First)</option>
+                        <option value="recipe_name:asc">Recipe Name (A → Z)</option>
+                        <option value="recipe_name:desc">Recipe Name (Z → A)</option>
                       </select>
                     </div>
 
@@ -1021,6 +1081,7 @@ const BreadApp: React.FC = () => {
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Bulk</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Final Shape</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Dough Temp</th>
+                            <th className="px-3 py-2"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -1072,6 +1133,17 @@ const BreadApp: React.FC = () => {
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                                 {timing.dough_temp ? `${timing.dough_temp}°${timing.temperature_unit?.charAt(0) || 'F'}` : '—'}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                <button
+                                  title="Delete timing"
+                                  onClick={() => handleDeleteTiming(timing.id, timing.recipe_name || 'Untitled')}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
                               </td>
                             </tr>
                           ))}
