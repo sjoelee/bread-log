@@ -5,22 +5,9 @@ from typing import List, Optional
 from uuid import UUID
 
 
-class MakeNames(Enum):
-  # Sticks
-  DEMI_BAGUETTE = "demi-baguette"
-  HOAGIE = "hoagie"
-
-  # Sourdough
-  UBE = "ube"
-  TEAM = "team"
-
-
 class TempUnit(Enum):
   FAHRENHEIT = "Fahrenheit"
   CELSIUS = "Celsius"
-
-
-MAKE_NAMES = set(e.value for e in MakeNames.__members__.values())
 
 
 class StretchFoldCreate(BaseModel):
@@ -255,9 +242,6 @@ class RecipeCreateResponse(BaseModel):
 
 
 # New Bread Timing Models for REST API
-class StretchFold(BaseModel):
-  fold_number: int = Field(..., gt=0, description="Fold number must be greater than 0")
-  timestamp: datetime
 
 
 class BreadTimingCreate(BaseModel):
@@ -295,10 +279,8 @@ class BreadTimingCreate(BaseModel):
   )
   temperature_unit: str = Field(default="Fahrenheit", pattern="^(Fahrenheit|Celsius)$")
 
-  # Stretch & folds
-  stretch_folds: List[StretchFold] = Field(
-    default_factory=list, max_length=8, description="Maximum 8 stretch folds allowed"
-  )
+  # Stretch & fold count
+  stretch_fold_count: int = Field(default=0, ge=0, le=50)
 
   # Notes
   notes: Optional[str] = Field(
@@ -347,8 +329,8 @@ class BreadTimingUpdate(BaseModel):
   dough_temp: Optional[float] = Field(None, ge=32, le=120)
   temperature_unit: Optional[str] = Field(None, pattern="^(Fahrenheit|Celsius)$")
 
-  # Stretch & folds
-  stretch_folds: Optional[List[StretchFold]] = Field(None, max_length=8)
+  # Stretch & fold count
+  stretch_fold_count: Optional[int] = Field(None, ge=0, le=50)
 
   # Notes
   notes: Optional[str] = Field(None, max_length=2000)
@@ -387,8 +369,8 @@ class BreadTiming(BaseModel):
   dough_temp: Optional[float] = None
   temperature_unit: str = "Fahrenheit"
 
-  # Stretch & folds
-  stretch_folds: List[StretchFold] = Field(default_factory=list)
+  # Stretch & fold count
+  stretch_fold_count: int = 0
 
   # Notes
   notes: Optional[str] = None

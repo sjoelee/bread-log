@@ -12,7 +12,6 @@ from .models import (
   BreadTimingCreate,
   BreadTimingUpdate,
   BreadTimingListResponse,
-  StretchFold,
 )
 from psycopg_pool import ConnectionPool
 from psycopg import sql
@@ -632,33 +631,56 @@ class DBConnector:
 
   # New Bread Timing Methods for REST API
 
+  @staticmethod
+  def _compute_timing_status(
+    autolyse_ts,
+    mix_ts,
+    bulk_ts,
+    preshape_ts,
+    final_shape_ts,
+    fridge_ts,
+    room_temp,
+    dough_temp,
+  ) -> str:
+    """A timing is complete when all process timestamps and key temperatures are present."""
+    complete = all(
+      [
+        autolyse_ts,
+        mix_ts,
+        bulk_ts,
+        preshape_ts,
+        final_shape_ts,
+        fridge_ts,
+        room_temp is not None,
+        dough_temp is not None,
+      ]
+    )
+    return "completed" if complete else "in_progress"
+
   def create_bread_timing(self, timing_data: BreadTimingCreate) -> BreadTiming:
     """Create a new bread timing record"""
     try:
       # Convert stretch_folds to JSON
-      stretch_folds_json = (
-        json.dumps(
-          [
-            {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
-            for sf in timing_data.stretch_folds
-          ]
-        )
-        if timing_data.stretch_folds
-        else "[]"
+      status = self._compute_timing_status(
+        timing_data.autolyse_ts,
+        timing_data.mix_ts,
+        timing_data.bulk_ts,
+        timing_data.preshape_ts,
+        timing_data.final_shape_ts,
+        timing_data.fridge_ts,
+        timing_data.room_temp,
+        timing_data.dough_temp,
       )
 
       query = """
         INSERT INTO bread_timings (
-          recipe_name, date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts, 
-          final_shape_ts, fridge_ts, room_temp, water_temp, flour_temp, 
-          preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+          recipe_name, date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
+          final_shape_ts, fridge_ts, room_temp, water_temp, flour_temp,
+          preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         ) VALUES (
           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
-
-      # Get status from timing_data or default to 'in_progress'
-      status = getattr(timing_data, "status", "in_progress")
 
       params = [
         timing_data.recipe_name,
@@ -676,7 +698,7 @@ class DBConnector:
         timing_data.preferment_temp,
         timing_data.dough_temp,
         timing_data.temperature_unit,
-        stretch_folds_json,
+        timing_data.stretch_fold_count,
         timing_data.notes,
       ]
 
@@ -685,9 +707,8 @@ class DBConnector:
           cur.execute(query, params)
           result = cur.fetchone()
           timing_id, created_at, updated_at = result
-          conn.commit()  # Explicitly commit the transaction
+          conn.commit()
 
-          # Return the created timing
           return BreadTiming(
             id=timing_id,
             recipe_name=timing_data.recipe_name,
@@ -707,7 +728,7 @@ class DBConnector:
             preferment_temp=timing_data.preferment_temp,
             dough_temp=timing_data.dough_temp,
             temperature_unit=timing_data.temperature_unit,
-            stretch_folds=timing_data.stretch_folds,
+            stretch_fold_count=timing_data.stretch_fold_count,
             notes=timing_data.notes,
           )
 
@@ -721,7 +742,7 @@ class DBConnector:
       query = """
         SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
                bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
-               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         FROM bread_timings 
         WHERE id = %s
       """
@@ -801,7 +822,7 @@ class DBConnector:
       main_query = f"""
         SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
                bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
-               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_folds, notes
+               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         FROM bread_timings 
         {where_clause}
         ORDER BY {order_by} {order_direction.upper()}
@@ -860,32 +881,8 @@ class DBConnector:
         raise ValueError("No valid fields to update")
 
       for field, value in update_data.items():
-        if field == "stretch_folds":
-          # Convert stretch folds to JSON
-          if value:
-            stretch_folds_list = []
-            for sf in value:
-              if hasattr(sf, "fold_number"):  # StretchFold object
-                stretch_folds_list.append(
-                  {"fold_number": sf.fold_number, "timestamp": sf.timestamp.isoformat()}
-                )
-              else:  # dict object
-                stretch_folds_list.append(
-                  {
-                    "fold_number": sf["fold_number"],
-                    "timestamp": sf["timestamp"].isoformat()
-                    if hasattr(sf["timestamp"], "isoformat")
-                    else sf["timestamp"],
-                  }
-                )
-            stretch_folds_json = json.dumps(stretch_folds_list)
-          else:
-            stretch_folds_json = "[]"
-          update_fields.append("stretch_folds = %s")
-          params.append(stretch_folds_json)
-        else:
-          update_fields.append(f"{field} = %s")
-          params.append(value)
+        update_fields.append(f"{field} = %s")
+        params.append(value)
 
       # Add timing_id for WHERE clause
       params.append(timing_id)
@@ -901,12 +898,32 @@ class DBConnector:
           cur.execute(query, params)
           if cur.rowcount == 0:
             raise ValueError(f"Bread timing with ID {timing_id} not found")
-          conn.commit()  # Explicitly commit the transaction
+          conn.commit()
 
-      # Return the updated timing
+      # Re-fetch to get full current state, then recompute status
       updated_timing = self.get_bread_timing(timing_id)
       if not updated_timing:
         raise DatabaseError("Failed to retrieve updated timing")
+
+      new_status = self._compute_timing_status(
+        updated_timing.autolyse_ts,
+        updated_timing.mix_ts,
+        updated_timing.bulk_ts,
+        updated_timing.preshape_ts,
+        updated_timing.final_shape_ts,
+        updated_timing.fridge_ts,
+        updated_timing.room_temp,
+        updated_timing.dough_temp,
+      )
+      if new_status != updated_timing.status:
+        with self.db_pool.get_connection() as conn:
+          with conn.cursor() as cur:
+            cur.execute(
+              "UPDATE bread_timings SET status = %s WHERE id = %s",
+              [new_status, timing_id],
+            )
+            conn.commit()
+        updated_timing = self.get_bread_timing(timing_id)
 
       return updated_timing
 
@@ -952,29 +969,9 @@ class DBConnector:
       preferment_temp,
       dough_temp,
       temperature_unit,
-      stretch_folds_json,
+      stretch_fold_count,
       notes,
     ) = row
-
-    # Parse stretch_folds JSON
-    stretch_folds = []
-    if stretch_folds_json:
-      try:
-        if isinstance(stretch_folds_json, list):
-          stretch_folds_data = stretch_folds_json
-        else:
-          stretch_folds_data = json.loads(stretch_folds_json)
-
-        for fold in stretch_folds_data:
-          if isinstance(fold, dict) and "fold_number" in fold and "timestamp" in fold:
-            stretch_folds.append(
-              StretchFold(
-                fold_number=fold["fold_number"],
-                timestamp=datetime.fromisoformat(fold["timestamp"]),
-              )
-            )
-      except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"Invalid stretch_folds JSON for timing {timing_id}: {e}")
 
     return BreadTiming(
       id=timing_id,
@@ -995,6 +992,6 @@ class DBConnector:
       preferment_temp=float(preferment_temp) if preferment_temp is not None else None,
       dough_temp=float(dough_temp) if dough_temp is not None else None,
       temperature_unit=temperature_unit or "Fahrenheit",
-      stretch_folds=stretch_folds,
+      stretch_fold_count=stretch_fold_count or 0,
       notes=notes,
     )

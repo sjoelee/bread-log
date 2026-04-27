@@ -110,11 +110,11 @@ export const breadTimingApi = {
     date_from?: string;
     date_to?: string;
     search?: string;
-    order_by?: string;
+    sort_by?: string;
     order_direction?: string;
   } = {}): Promise<BreadTimingListResponse> {
     const queryParams = new URLSearchParams();
-    
+
     // Add parameters if they exist
     if (params.page) queryParams.set('page', params.page.toString());
     if (params.limit) queryParams.set('limit', params.limit.toString());
@@ -124,7 +124,7 @@ export const breadTimingApi = {
     if (params.date_from) queryParams.set('date_from', params.date_from);
     if (params.date_to) queryParams.set('date_to', params.date_to);
     if (params.search) queryParams.set('search', params.search);
-    if (params.order_by) queryParams.set('order_by', params.order_by);
+    if (params.sort_by) queryParams.set('sort_by', params.sort_by);
     if (params.order_direction) queryParams.set('order_direction', params.order_direction);
 
     const url = `${getApiBaseUrl()}/timings${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
@@ -181,9 +181,9 @@ export const breadTimingApi = {
   // Convenience method to get timings by date (uses the list API with date filter)
   async getByDate(date: string): Promise<BreadTiming[]> {
     const response = await this.list({ 
-      date, 
-      limit: 100, // Get all timings for the date
-      order_by: 'created_at',
+      date,
+      limit: 100,
+      sort_by: 'created_at',
       order_direction: 'desc'
     });
     return response.timings;

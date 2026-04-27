@@ -1,13 +1,11 @@
 import { useState, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
-import { 
-  BreadFormData, 
-  TemperatureUnit, 
+import {
+  BreadFormData,
+  TemperatureUnit,
   TemperatureSettings,
   DoughProcess,
-  StretchFold,
   INITIAL_TEMP_SETTINGS,
-  INITIAL_STRETCH_FOLDS
 } from '../types/bread.ts';
 import { convertTemperature } from '../utils/temperature.ts';
 import { breadTimingApi } from '../services/api.ts';
@@ -24,10 +22,10 @@ const INITIAL_PROCESSES: DoughProcess[] = [
 
 const INITIAL_FORM_DATA: BreadFormData = {
   date: dayjs(),
-  teamMake: '', // Empty to show selection prompt
+  teamMake: '',
   temperatures: INITIAL_TEMP_SETTINGS,
   processes: INITIAL_PROCESSES,
-  stretchFolds: INITIAL_STRETCH_FOLDS,
+  stretchFoldCount: 0,
   notes: '',
 };
 
@@ -130,40 +128,13 @@ export const useBreadForm = () => {
     }
   };
 
-  const addStretchFold = () => {
-    const newId = Math.max(...formData.stretchFolds.map(sf => sf.id), 0) + 1;
-    setFormData((prev) => ({
-      ...prev,
-      stretchFolds: [
-        ...prev.stretchFolds,
-        { id: newId, performed: false, time: null }
-      ],
-    }));
-  };
-
-  const removeStretchFold = (id: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      stretchFolds: prev.stretchFolds.filter(sf => sf.id !== id),
-    }));
-  };
-
-  const updateStretchFold = (id: number, updates: Partial<StretchFold>) => {
-    setFormData((prev) => ({
-      ...prev,
-      stretchFolds: prev.stretchFolds.map(sf =>
-        sf.id === id ? { ...sf, ...updates } : sf
-      ),
-    }));
-  };
-
   const resetForm = () => {
     setFormData({
       date: dayjs(),
-      teamMake: '', // Empty to show selection prompt
+      teamMake: '',
       temperatures: INITIAL_TEMP_SETTINGS,
-      processes: INITIAL_PROCESSES, // Use null times
-      stretchFolds: INITIAL_STRETCH_FOLDS,
+      processes: INITIAL_PROCESSES,
+      stretchFoldCount: 0,
       notes: '',
     });
     setError(null);
@@ -196,20 +167,9 @@ export const useBreadForm = () => {
       { step: 'Fridge', time: convertToDayjs(timing.fridge_ts) },
     ];
 
-    // Convert stretch folds data
-    let stretchFolds = INITIAL_STRETCH_FOLDS;
-    if (timing.stretch_folds && timing.stretch_folds.length > 0) {
-      stretchFolds = timing.stretch_folds.map((fold, index) => ({
-        id: fold.fold_number,
-        performed: true,
-        time: dayjs(fold.timestamp)
-      }));
-    }
-
-    // Update form data with timing data
     setFormData({
-      date: dayjs(timing.date),
-      teamMake: timing.recipe_name,
+      date: timing.date ? dayjs(timing.date) : dayjs(),
+      teamMake: timing.recipe_name || '',
       temperatures: {
         unit: tempUnit,
         roomTemp: timing.room_temp ?? 0,
@@ -219,7 +179,7 @@ export const useBreadForm = () => {
         doughTemp: timing.dough_temp ?? 0,
       },
       processes: updatedProcesses,
-      stretchFolds: stretchFolds,
+      stretchFoldCount: timing.stretch_fold_count ?? 0,
       notes: timing.notes || '',
     });
   };
@@ -243,20 +203,9 @@ export const useBreadForm = () => {
       { step: 'Fridge', time: convertToDayjs(dough.fridge_ts) },
     ];
 
-    // Convert stretch folds data
-    let stretchFolds = INITIAL_STRETCH_FOLDS;
-    if (dough.stretch_folds && Array.isArray(dough.stretch_folds) && dough.stretch_folds.length > 0) {
-      stretchFolds = dough.stretch_folds.map((fold: any, index: number) => ({
-        id: index + 1,
-        performed: true,
-        time: fold.timestamp ? dayjs(fold.timestamp) : null
-      }));
-    }
-
-    // Update form data with dough data
     setFormData({
       date: dayjs(dough.date),
-      teamMake: dough.name,
+      teamMake: dough.recipe_name || '',
       temperatures: {
         unit: tempUnit,
         roomTemp: dough.room_temp ?? 0,
@@ -266,7 +215,7 @@ export const useBreadForm = () => {
         doughTemp: dough.dough_temp ?? 0,
       },
       processes: updatedProcesses,
-      stretchFolds: stretchFolds,
+      stretchFoldCount: 0,
       notes: dough.notes || '',
     });
   };
@@ -317,15 +266,9 @@ export const useBreadForm = () => {
       data.temperature_unit = formData.temperatures.unit;
     }
     
-    // Stretch folds
-    const performedFolds = formData.stretchFolds.filter(sf => sf.performed && sf.time);
-    if (performedFolds.length > 0) {
-      data.stretch_folds = performedFolds.map(sf => ({
-        fold_number: sf.id,
-        timestamp: sf.time!.toISOString()
-      }));
-    }
-    
+    // Stretch & fold count
+    data.stretch_fold_count = formData.stretchFoldCount;
+
     // Notes
     if (formData.notes && formData.notes.trim()) {
       data.notes = formData.notes;
@@ -394,7 +337,7 @@ export const useBreadForm = () => {
         preferment_temp: submissionData.preferment_temp || null,
         dough_temp: submissionData.dough_temp || null,
         temperature_unit: submissionData.temperature_unit,
-        stretch_folds: submissionData.stretch_folds || null,
+        stretch_fold_count: submissionData.stretch_fold_count ?? 0,
         notes: submissionData.notes || null,
       };
 
@@ -432,9 +375,6 @@ export const useBreadForm = () => {
     handleTemperatureChange,
     toggleTemperatureUnit,
     handleProcessTimeChange,
-    addStretchFold,
-    removeStretchFold,
-    updateStretchFold,
     resetForm,
     submitForm,
     populateFormWithDough,

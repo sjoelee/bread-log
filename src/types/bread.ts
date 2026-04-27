@@ -19,18 +19,12 @@ export interface DoughProcess {
   time: Dayjs | null;
 }
 
-export interface StretchFold {
-  id: number;
-  performed: boolean;
-  time: Dayjs | null;
-}
-
 export interface BreadFormData {
   date: Dayjs | null;
   teamMake: string;
   temperatures: TemperatureSettings;
   processes: DoughProcess[];
-  stretchFolds: StretchFold[];
+  stretchFoldCount: number;
   notes: string;
 }
 
@@ -56,15 +50,10 @@ export interface DoughMake {
   preferment_temp?: number;
   dough_temp?: number;
   temperature_unit?: string;
-  stretch_folds?: any[];
   notes?: string;
 }
 
 // New Bread Timing types for REST API
-export interface BreadTimingStretchFold {
-  fold_number: number;
-  timestamp: string; // ISO datetime string
-}
 
 export interface BreadTimingCreate {
   recipe_name?: string;
@@ -82,7 +71,7 @@ export interface BreadTimingCreate {
   preferment_temp?: number;
   dough_temp?: number;
   temperature_unit?: string;
-  stretch_folds?: BreadTimingStretchFold[];
+  stretch_fold_count?: number;
   notes?: string;
 }
 
@@ -101,7 +90,7 @@ export interface BreadTimingUpdate {
   preferment_temp?: number | null;
   dough_temp?: number | null;
   temperature_unit?: string;
-  stretch_folds?: BreadTimingStretchFold[] | null;
+  stretch_fold_count?: number | null;
   notes?: string | null;
 }
 
@@ -124,7 +113,7 @@ export interface BreadTiming {
   preferment_temp?: number;
   dough_temp?: number;
   temperature_unit: string;
-  stretch_folds: BreadTimingStretchFold[];
+  stretch_fold_count: number;
   notes?: string;
 }
 
@@ -179,6 +168,3 @@ export const INITIAL_TEMP_SETTINGS: TemperatureSettings = {
   doughTemp: 0,
 };
 
-export const INITIAL_STRETCH_FOLDS: StretchFold[] = [
-  { id: 1, performed: false, time: null },
-];

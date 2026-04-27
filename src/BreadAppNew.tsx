@@ -16,7 +16,6 @@ const BreadApp: React.FC = () => {
   const [activeMainTab, setActiveMainTab] = useState<MainTabType>('timing');
   const [activeTab, setActiveTab] = useState<TabType>('create');
   const [activeRecipeTab, setActiveRecipeTab] = useState<TabType>('create');
-  const [isStretchFoldsExpanded, setIsStretchFoldsExpanded] = useState(false);
   const [selectedDough, setSelectedDough] = useState<BreadTiming | null>(null);
   const [savedCreateFormData, setSavedCreateFormData] = useState<any>(null);
   
@@ -81,9 +80,6 @@ const BreadApp: React.FC = () => {
     handleTemperatureChange,
     toggleTemperatureUnit,
     handleProcessTimeChange,
-    addStretchFold,
-    removeStretchFold,
-    updateStretchFold,
     resetForm,
     submitForm,
     updateBreadTiming,
@@ -142,7 +138,7 @@ const BreadApp: React.FC = () => {
   // Load distinct bread names from timings for the dropdown
   const loadAllDistinctBreadNames = async () => {
     try {
-      const response = await breadTimingApi.list({ page: 1, limit: 100, order_by: 'created_at', order_direction: 'desc' });
+      const response = await breadTimingApi.list({ page: 1, limit: 100, sort_by: 'created_at', order_direction: 'desc' });
       const seen = new Set<string>();
       const distinctNames: { name: string; created_at: Date }[] = [];
       for (const timing of response.timings) {
@@ -166,8 +162,8 @@ const BreadApp: React.FC = () => {
       // Prepare filter parameters
       const params: any = {
         page: page + 1, // API expects 1-based pages
-        limit: 10,
-        order_by: sortBy,
+        limit: 50,
+        sort_by: sortBy,
         order_direction: sortDirection
       };
       
@@ -286,12 +282,6 @@ const BreadApp: React.FC = () => {
     return () => clearTimeout(timeoutId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, sortBy, sortDirection, searchQuery]);
-
-  // Local handlers
-  const handleStretchFoldsToggle = () => {
-    setIsStretchFoldsExpanded(!isStretchFoldsExpanded);
-  };
-
 
   const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
     updateBreadTiming(selectedTiming.id, () => {
@@ -962,23 +952,16 @@ const BreadApp: React.FC = () => {
 
                 <CreateTab
                 formData={formData}
-                teamMakes={[]}
-                isLoadingMakes={false}
                 loading={loading}
                 error={error}
                 success={success}
-                isStretchFoldsExpanded={isStretchFoldsExpanded}
                 onDateChange={handleDateChange}
                 onInputChange={handleInputChange}
                 onTemperatureChange={handleTemperatureChange}
                 onToggleTemperatureUnit={toggleTemperatureUnit}
                 onProcessTimeChange={handleProcessTimeChange}
-                onStretchFoldsToggle={handleStretchFoldsToggle}
-                onAddStretchFold={addStretchFold}
-                onRemoveStretchFold={removeStretchFold}
-                onUpdateStretchFold={updateStretchFold}
+                onStretchFoldCountChange={(count) => setFormData(prev => ({ ...prev, stretchFoldCount: count }))}
                 onSubmit={editingTiming ? () => handleUpdateRecentTiming(editingTiming) : submitForm}
-                isEditing={!!editingTiming}
               />
               </>
             ) : (
