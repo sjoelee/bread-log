@@ -589,23 +589,6 @@ def validate_timing_data(timing: BreadTimingCreate) -> None:
     if current_ts >= next_ts:
       raise ValueError(f"{next_name} must be after {current_name}")
 
-  # Validate stretch folds
-  if timing.stretch_folds:
-    if len(timing.stretch_folds) > 8:
-      raise ValueError("Maximum 8 stretch folds allowed")
-
-    # Check for duplicate fold numbers
-    fold_numbers = [sf.fold_number for sf in timing.stretch_folds]
-    if len(fold_numbers) != len(set(fold_numbers)):
-      raise ValueError("Stretch fold numbers must be unique")
-
-    # Validate fold timestamps are within process time range
-    earliest_process_ts = next((ts for _, ts in valid_timestamps if ts), None)
-    if earliest_process_ts:
-      for fold in timing.stretch_folds:
-        if fold.timestamp < earliest_process_ts:
-          raise ValueError("Stretch fold timestamp cannot be before process start")
-
   # Validate process duration (max 48 hours)
   if valid_timestamps and len(valid_timestamps) >= 2:
     start_ts = valid_timestamps[0][1]
