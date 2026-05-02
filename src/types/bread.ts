@@ -16,6 +16,7 @@ export interface TemperatureSettings {
 
 export interface DoughProcess {
   step: string;
+  date: Dayjs | null;
   time: Dayjs | null;
 }
 
@@ -64,7 +65,8 @@ export interface BreadTimingCreate {
   bulk_ts?: string;
   preshape_ts?: string;
   final_shape_ts?: string;
-  fridge_ts?: string;
+  final_proof_ts?: string;
+  bake_ts?: string;
   room_temp?: number;
   water_temp?: number;
   flour_temp?: number;
@@ -83,7 +85,8 @@ export interface BreadTimingUpdate {
   bulk_ts?: string | null;
   preshape_ts?: string | null;
   final_shape_ts?: string | null;
-  fridge_ts?: string | null;
+  final_proof_ts?: string | null;
+  bake_ts?: string | null;
   room_temp?: number | null;
   water_temp?: number | null;
   flour_temp?: number | null;
@@ -106,7 +109,8 @@ export interface BreadTiming {
   bulk_ts?: string;
   preshape_ts?: string;
   final_shape_ts?: string;
-  fridge_ts?: string;
+  final_proof_ts?: string;
+  bake_ts?: string;
   room_temp?: number;
   water_temp?: number;
   flour_temp?: number;

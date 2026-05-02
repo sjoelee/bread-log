@@ -638,11 +638,10 @@ class DBConnector:
     bulk_ts,
     preshape_ts,
     final_shape_ts,
-    fridge_ts,
-    room_temp,
-    dough_temp,
+    final_proof_ts,
+    bake_ts,
   ) -> str:
-    """A timing is complete when all process timestamps and key temperatures are present."""
+    """A timing is complete when all 7 process timestamps are present."""
     complete = all(
       [
         autolyse_ts,
@@ -650,9 +649,8 @@ class DBConnector:
         bulk_ts,
         preshape_ts,
         final_shape_ts,
-        fridge_ts,
-        room_temp is not None,
-        dough_temp is not None,
+        final_proof_ts,
+        bake_ts,
       ]
     )
     return "completed" if complete else "in_progress"
@@ -667,18 +665,17 @@ class DBConnector:
         timing_data.bulk_ts,
         timing_data.preshape_ts,
         timing_data.final_shape_ts,
-        timing_data.fridge_ts,
-        timing_data.room_temp,
-        timing_data.dough_temp,
+        timing_data.final_proof_ts,
+        timing_data.bake_ts,
       )
 
       query = """
         INSERT INTO bread_timings (
           recipe_name, date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
-          final_shape_ts, fridge_ts, room_temp, water_temp, flour_temp,
+          final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp, flour_temp,
           preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         ) VALUES (
-          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
 
@@ -691,7 +688,8 @@ class DBConnector:
         timing_data.bulk_ts,
         timing_data.preshape_ts,
         timing_data.final_shape_ts,
-        timing_data.fridge_ts,
+        timing_data.final_proof_ts,
+        timing_data.bake_ts,
         timing_data.room_temp,
         timing_data.water_temp,
         timing_data.flour_temp,
@@ -721,7 +719,8 @@ class DBConnector:
             bulk_ts=timing_data.bulk_ts,
             preshape_ts=timing_data.preshape_ts,
             final_shape_ts=timing_data.final_shape_ts,
-            fridge_ts=timing_data.fridge_ts,
+            final_proof_ts=timing_data.final_proof_ts,
+            bake_ts=timing_data.bake_ts,
             room_temp=timing_data.room_temp,
             water_temp=timing_data.water_temp,
             flour_temp=timing_data.flour_temp,
@@ -740,10 +739,10 @@ class DBConnector:
     """Get a specific bread timing by ID"""
     try:
       query = """
-        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
-               bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
+        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts,
+               bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp,
                flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
-        FROM bread_timings 
+        FROM bread_timings
         WHERE id = %s
       """
 
@@ -820,10 +819,10 @@ class DBConnector:
 
       # Main query
       main_query = f"""
-        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts, 
-               bulk_ts, preshape_ts, final_shape_ts, fridge_ts, room_temp, water_temp, 
+        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts,
+               bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp,
                flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
-        FROM bread_timings 
+        FROM bread_timings
         {where_clause}
         ORDER BY {order_by} {order_direction.upper()}
         LIMIT %s OFFSET %s
@@ -911,9 +910,8 @@ class DBConnector:
         updated_timing.bulk_ts,
         updated_timing.preshape_ts,
         updated_timing.final_shape_ts,
-        updated_timing.fridge_ts,
-        updated_timing.room_temp,
-        updated_timing.dough_temp,
+        updated_timing.final_proof_ts,
+        updated_timing.bake_ts,
       )
       if new_status != updated_timing.status:
         with self.db_pool.get_connection() as conn:
@@ -962,7 +960,8 @@ class DBConnector:
       bulk_ts,
       preshape_ts,
       final_shape_ts,
-      fridge_ts,
+      final_proof_ts,
+      bake_ts,
       room_temp,
       water_temp,
       flour_temp,
@@ -985,7 +984,8 @@ class DBConnector:
       bulk_ts=bulk_ts,
       preshape_ts=preshape_ts,
       final_shape_ts=final_shape_ts,
-      fridge_ts=fridge_ts,
+      final_proof_ts=final_proof_ts,
+      bake_ts=bake_ts,
       room_temp=float(room_temp) if room_temp is not None else None,
       water_temp=float(water_temp) if water_temp is not None else None,
       flour_temp=float(flour_temp) if flour_temp is not None else None,

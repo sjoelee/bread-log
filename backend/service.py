@@ -539,26 +539,18 @@ def delete_timing(timing_id: UUID):
 def calculate_timing_status(timing_data: dict) -> str:
   """
   Calculate the completion status of a timing based on required fields.
-  Returns 'completed' if all required fields are populated, 'in_progress' otherwise.
+  Returns 'completed' if all 7 process timestamps are populated, 'in_progress' otherwise.
   """
   required_fields = [
-    "recipe_name",
-    "date",
     "autolyse_ts",
     "mix_ts",
     "bulk_ts",
     "preshape_ts",
     "final_shape_ts",
-    "fridge_ts",
-    "room_temp",
-    "water_temp",
-    "flour_temp",
-    "preferment_temp",
-    "dough_temp",
-    "temperature_unit",
+    "final_proof_ts",
+    "bake_ts",
   ]
 
-  # Check if all required fields have non-None values
   for field in required_fields:
     if timing_data.get(field) is None:
       return "in_progress"
@@ -569,6 +561,11 @@ def calculate_timing_status(timing_data: dict) -> str:
 def validate_timing_data(timing: BreadTimingCreate) -> None:
   """Validate timing data for creation"""
 
+  if not timing.recipe_name:
+    raise ValueError("recipe_name is required")
+  if not timing.date:
+    raise ValueError("date is required")
+
   # Validate timestamp ordering
   timestamps = [
     ("autolyse_ts", timing.autolyse_ts),
@@ -576,7 +573,8 @@ def validate_timing_data(timing: BreadTimingCreate) -> None:
     ("bulk_ts", timing.bulk_ts),
     ("preshape_ts", timing.preshape_ts),
     ("final_shape_ts", timing.final_shape_ts),
-    ("fridge_ts", timing.fridge_ts),
+    ("final_proof_ts", timing.final_proof_ts),
+    ("bake_ts", timing.bake_ts),
   ]
 
   # Filter out None timestamps and validate order
@@ -588,15 +586,6 @@ def validate_timing_data(timing: BreadTimingCreate) -> None:
 
     if current_ts >= next_ts:
       raise ValueError(f"{next_name} must be after {current_name}")
-
-  # Validate process duration (max 48 hours)
-  if valid_timestamps and len(valid_timestamps) >= 2:
-    start_ts = valid_timestamps[0][1]
-    end_ts = valid_timestamps[-1][1]
-    duration_hours = (end_ts - start_ts).total_seconds() / 3600
-
-    if duration_hours > 48:
-      raise ValueError("Process duration cannot exceed 48 hours")
 
 
 def validate_timing_updates(updates: BreadTimingUpdate, existing: BreadTiming) -> None:
@@ -625,9 +614,10 @@ def validate_timing_updates(updates: BreadTimingUpdate, existing: BreadTiming) -
       "final_shape_ts": updates.final_shape_ts
       if updates.final_shape_ts is not None
       else existing.final_shape_ts,
-      "fridge_ts": updates.fridge_ts
-      if updates.fridge_ts is not None
-      else existing.fridge_ts,
+      "final_proof_ts": updates.final_proof_ts
+      if updates.final_proof_ts is not None
+      else existing.final_proof_ts,
+      "bake_ts": updates.bake_ts if updates.bake_ts is not None else existing.bake_ts,
     }
 
     # Validate merged timestamps

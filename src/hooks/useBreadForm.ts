@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import {
   BreadFormData,
@@ -12,12 +12,13 @@ import { breadTimingApi } from '../services/api.ts';
 import { BreadTiming, BreadTimingCreate } from '../types/bread.ts';
 
 const INITIAL_PROCESSES: DoughProcess[] = [
-  { step: 'Autolyse', time: null },
-  { step: 'Mix', time: null },
-  { step: 'Bulk', time: null },
-  { step: 'Preshape', time: null },
-  { step: 'Final Shape', time: null },
-  { step: 'Fridge', time: null },
+  { step: 'Autolyse', date: dayjs(), time: null },
+  { step: 'Mix', date: dayjs(), time: null },
+  { step: 'Bulk', date: dayjs(), time: null },
+  { step: 'Preshape', date: dayjs(), time: null },
+  { step: 'Final Shape', date: dayjs(), time: null },
+  { step: 'Final Proof', date: dayjs(), time: null },
+  { step: 'Bake', date: dayjs(), time: null },
 ];
 
 const INITIAL_FORM_DATA: BreadFormData = {
@@ -35,7 +36,6 @@ export const useBreadForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [customSuccessMessage, setCustomSuccessMessage] = useState<string | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -49,6 +49,9 @@ export const useBreadForm = () => {
     setFormData((prev) => ({
       ...prev,
       date: newDate,
+      processes: prev.processes.map((process, index) =>
+        index === 0 ? { ...process, date: newDate } : process
+      ),
     }));
   };
 
@@ -86,46 +89,42 @@ export const useBreadForm = () => {
   };
 
   const handleProcessTimeChange = (step: string, time: Dayjs | null) => {
-    setFormData((prev) => {
-      const updatedProcesses = prev.processes.map((process) =>
+    setFormData((prev) => ({
+      ...prev,
+      processes: prev.processes.map((process) =>
         process.step === step ? { ...process, time } : process
-      );
+      ),
+    }));
+  };
 
-      return {
-        ...prev,
-        processes: updatedProcesses,
-      };
+  const handleProcessTimeOpen = (step: string) => {
+    setFormData((prev) => {
+      const currentIndex = prev.processes.findIndex(p => p.step === step);
+      const current = prev.processes[currentIndex];
+      if (current.time !== null) return prev; // already set, don't override
+
+      const updatedProcesses = [...prev.processes];
+      if (currentIndex === 0) {
+        updatedProcesses[0] = { ...current, time: dayjs() };
+      } else {
+        const prevStep = prev.processes[currentIndex - 1];
+        updatedProcesses[currentIndex] = {
+          ...current,
+          time: prevStep.time ?? dayjs(),
+          date: prevStep.date ?? current.date,
+        };
+      }
+      return { ...prev, processes: updatedProcesses };
     });
+  };
 
-    // Progressive time logic: Use a debounced approach to auto-fill next slot
-    // Clear any existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    // Set a new timeout to auto-fill the next process after a brief delay
-    // This ensures the user has finished selecting both hour and minute
-    if (time && time.isValid()) {
-      timeoutRef.current = setTimeout(() => {
-        setFormData((prev) => {
-          const currentIndex = prev.processes.findIndex(p => p.step === step);
-          const nextIndex = currentIndex + 1;
-          
-          // Only auto-fill if next process exists and doesn't have a time set
-          if (nextIndex < prev.processes.length && !prev.processes[nextIndex].time) {
-            const updatedProcesses = [...prev.processes];
-            updatedProcesses[nextIndex] = { ...updatedProcesses[nextIndex], time };
-            
-            return {
-              ...prev,
-              processes: updatedProcesses,
-            };
-          }
-          
-          return prev;
-        });
-      }, 1000); // 1 second delay to ensure complete selection
-    }
+  const handleProcessDateChange = (step: string, date: Dayjs | null) => {
+    setFormData((prev) => ({
+      ...prev,
+      processes: prev.processes.map((process) =>
+        process.step === step ? { ...process, date } : process
+      ),
+    }));
   };
 
   const resetForm = () => {
@@ -133,7 +132,7 @@ export const useBreadForm = () => {
       date: dayjs(),
       teamMake: '',
       temperatures: INITIAL_TEMP_SETTINGS,
-      processes: INITIAL_PROCESSES,
+      processes: INITIAL_PROCESSES.map(p => ({ ...p, date: dayjs() })),
       stretchFoldCount: 0,
       notes: '',
     });
@@ -150,21 +149,21 @@ export const useBreadForm = () => {
   };
 
   const populateFormWithBreadTiming = (timing: BreadTiming) => {
-    // Convert timestamp strings to dayjs objects
-    const convertToDayjs = (timestamp: string | undefined) => 
-      timestamp ? dayjs(timestamp) : null;
+    const getDate = (ts: string | undefined) => ts ? dayjs(ts) : dayjs();
+    const getTime = (ts: string | undefined) => ts ? dayjs(ts) : null;
 
     // Convert temperature unit string to enum
     const tempUnit = timing.temperature_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
 
-    // Create updated processes array with times from timing
+    // Create updated processes array with per-step dates and times from timing
     const updatedProcesses = [
-      { step: 'Autolyse', time: convertToDayjs(timing.autolyse_ts) },
-      { step: 'Mix', time: convertToDayjs(timing.mix_ts) },
-      { step: 'Bulk', time: convertToDayjs(timing.bulk_ts) },
-      { step: 'Preshape', time: convertToDayjs(timing.preshape_ts) },
-      { step: 'Final Shape', time: convertToDayjs(timing.final_shape_ts) },
-      { step: 'Fridge', time: convertToDayjs(timing.fridge_ts) },
+      { step: 'Autolyse', date: getDate(timing.autolyse_ts), time: getTime(timing.autolyse_ts) },
+      { step: 'Mix', date: getDate(timing.mix_ts), time: getTime(timing.mix_ts) },
+      { step: 'Bulk', date: getDate(timing.bulk_ts), time: getTime(timing.bulk_ts) },
+      { step: 'Preshape', date: getDate(timing.preshape_ts), time: getTime(timing.preshape_ts) },
+      { step: 'Final Shape', date: getDate(timing.final_shape_ts), time: getTime(timing.final_shape_ts) },
+      { step: 'Final Proof', date: getDate(timing.final_proof_ts), time: getTime(timing.final_proof_ts) },
+      { step: 'Bake', date: getDate(timing.bake_ts), time: getTime(timing.bake_ts) },
     ];
 
     setFormData({
@@ -195,12 +194,13 @@ export const useBreadForm = () => {
 
     // Create updated processes array with times from dough
     const updatedProcesses = [
-      { step: 'Autolyse', time: convertToDayjs(dough.autolyse_ts) },
-      { step: 'Mix', time: convertToDayjs(dough.mix_ts) },
-      { step: 'Bulk', time: convertToDayjs(dough.bulk_ts) },
-      { step: 'Preshape', time: convertToDayjs(dough.preshape_ts) },
-      { step: 'Final Shape', time: convertToDayjs(dough.final_shape_ts) },
-      { step: 'Fridge', time: convertToDayjs(dough.fridge_ts) },
+      { step: 'Autolyse', date: dayjs(dough.date), time: convertToDayjs(dough.autolyse_ts) },
+      { step: 'Mix', date: dayjs(dough.date), time: convertToDayjs(dough.mix_ts) },
+      { step: 'Bulk', date: dayjs(dough.date), time: convertToDayjs(dough.bulk_ts) },
+      { step: 'Preshape', date: dayjs(dough.date), time: convertToDayjs(dough.preshape_ts) },
+      { step: 'Final Shape', date: dayjs(dough.date), time: convertToDayjs(dough.final_shape_ts) },
+      { step: 'Final Proof', date: dayjs(dough.date), time: convertToDayjs(dough.fridge_ts) },
+      { step: 'Bake', date: dayjs(dough.date), time: null },
     ];
 
     setFormData({
@@ -233,24 +233,41 @@ export const useBreadForm = () => {
       data.date = formData.date.format('YYYY-MM-DD');
     }
     
+    // Combine per-step date + time into a full ISO timestamp
+    const combineDateTime = (process: DoughProcess | undefined): string | undefined => {
+      if (!process?.time) return undefined;
+      const d = process.date ?? dayjs();
+      return d.hour(process.time.hour()).minute(process.time.minute()).second(0).millisecond(0).toISOString();
+    };
+
     // Process timestamps - only include if time is set
-    const autolyse = formData.processes.find(p => p.step === 'Autolyse')?.time;
-    if (autolyse) data.autolyse_ts = autolyse.toISOString();
-    
-    const mix = formData.processes.find(p => p.step === 'Mix')?.time;
-    if (mix) data.mix_ts = mix.toISOString();
-    
-    const bulk = formData.processes.find(p => p.step === 'Bulk')?.time;
-    if (bulk) data.bulk_ts = bulk.toISOString();
-    
-    const preshape = formData.processes.find(p => p.step === 'Preshape')?.time;
-    if (preshape) data.preshape_ts = preshape.toISOString();
-    
-    const finalShape = formData.processes.find(p => p.step === 'Final Shape')?.time;
-    if (finalShape) data.final_shape_ts = finalShape.toISOString();
-    
-    const fridge = formData.processes.find(p => p.step === 'Fridge')?.time;
-    if (fridge) data.fridge_ts = fridge.toISOString();
+    const autolyse = formData.processes.find(p => p.step === 'Autolyse');
+    const autolyseTs = combineDateTime(autolyse);
+    if (autolyseTs) data.autolyse_ts = autolyseTs;
+
+    const mix = formData.processes.find(p => p.step === 'Mix');
+    const mixTs = combineDateTime(mix);
+    if (mixTs) data.mix_ts = mixTs;
+
+    const bulk = formData.processes.find(p => p.step === 'Bulk');
+    const bulkTs = combineDateTime(bulk);
+    if (bulkTs) data.bulk_ts = bulkTs;
+
+    const preshape = formData.processes.find(p => p.step === 'Preshape');
+    const preshapeTs = combineDateTime(preshape);
+    if (preshapeTs) data.preshape_ts = preshapeTs;
+
+    const finalShape = formData.processes.find(p => p.step === 'Final Shape');
+    const finalShapeTs = combineDateTime(finalShape);
+    if (finalShapeTs) data.final_shape_ts = finalShapeTs;
+
+    const finalProof = formData.processes.find(p => p.step === 'Final Proof');
+    const finalProofTs = combineDateTime(finalProof);
+    if (finalProofTs) data.final_proof_ts = finalProofTs;
+
+    const bake = formData.processes.find(p => p.step === 'Bake');
+    const bakeTs = combineDateTime(bake);
+    if (bakeTs) data.bake_ts = bakeTs;
     
     // Temperature data - only include if set
     if (formData.temperatures.roomTemp !== null) data.room_temp = formData.temperatures.roomTemp;
@@ -330,7 +347,8 @@ export const useBreadForm = () => {
         bulk_ts: submissionData.bulk_ts || null,
         preshape_ts: submissionData.preshape_ts || null,
         final_shape_ts: submissionData.final_shape_ts || null,
-        fridge_ts: submissionData.fridge_ts || null,
+        final_proof_ts: submissionData.final_proof_ts || null,
+        bake_ts: submissionData.bake_ts || null,
         room_temp: submissionData.room_temp || null,
         water_temp: submissionData.water_temp || null,
         flour_temp: submissionData.flour_temp || null,
@@ -375,6 +393,8 @@ export const useBreadForm = () => {
     handleTemperatureChange,
     toggleTemperatureUnit,
     handleProcessTimeChange,
+    handleProcessTimeOpen,
+    handleProcessDateChange,
     resetForm,
     submitForm,
     populateFormWithDough,

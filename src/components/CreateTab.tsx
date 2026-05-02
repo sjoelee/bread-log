@@ -1,5 +1,6 @@
 import React from 'react';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Dayjs } from 'dayjs';
 import { BreadFormData, TemperatureSettings } from '../types/bread.ts';
 import { TemperatureSection } from './TemperatureSection.tsx';
@@ -14,6 +15,8 @@ interface CreateTabProps {
   onTemperatureChange: (field: keyof TemperatureSettings, value: string) => void;
   onToggleTemperatureUnit: (unit: any) => void;
   onProcessTimeChange: (step: string, time: Dayjs | null) => void;
+  onProcessTimeOpen: (step: string) => void;
+  onProcessDateChange: (step: string, date: Dayjs | null) => void;
   onStretchFoldCountChange: (count: number) => void;
   onSubmit: () => void;
 }
@@ -28,6 +31,8 @@ export const CreateTab: React.FC<CreateTabProps> = ({
   onTemperatureChange,
   onToggleTemperatureUnit,
   onProcessTimeChange,
+  onProcessTimeOpen,
+  onProcessDateChange,
   onStretchFoldCountChange,
   onSubmit,
 }) => {
@@ -58,6 +63,44 @@ export const CreateTab: React.FC<CreateTabProps> = ({
     }
   };
 
+  const renderProcessRow = (process: { step: string; date: Dayjs | null; time: Dayjs | null }) => (
+    <div key={process.step} className="flex items-center gap-2">
+      <label className="shrink-0 w-28 text-sm font-medium">
+        {process.step}
+      </label>
+      <div className="flex-1">
+        <DatePicker
+          value={process.date}
+          onChange={(newDate) => onProcessDateChange(process.step, newDate)}
+          slotProps={{
+            textField: {
+              size: 'small',
+              fullWidth: true,
+            },
+          }}
+        />
+      </div>
+      <div className="flex-1">
+        <div className="relative">
+          <span className="absolute left-2 top-1 text-xs text-gray-500 z-10">Time</span>
+          <TimePicker
+            value={process.time}
+            onChange={(newTime) => onProcessTimeChange(process.step, newTime)}
+            onOpen={() => onProcessTimeOpen(process.step)}
+            slotProps={{
+              textField: {
+                size: 'small',
+                fullWidth: true,
+                sx: { '& .MuiInputBase-input': { paddingTop: '20px' } },
+                onFocus: () => onProcessTimeOpen(process.step),
+              },
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
 
@@ -71,32 +114,10 @@ export const CreateTab: React.FC<CreateTabProps> = ({
       {/* Process Section */}
       <div className="space-y-4 p-4 border rounded-lg bg-blue-50">
         <h2 className="text-xl font-bold text-gray-800">Process</h2>
-        
+
         {/* First part: Autolyse, Mix, Bulk */}
         <div className="space-y-4">
-          {formData.processes.slice(0, 3).map((process) => (
-            <div key={process.step} className="flex items-center gap-4">
-              <label className="w-20 text-sm font-medium">
-                {process.step}
-              </label>
-              <div className="flex-1">
-                <div className="relative">
-                  <span className="absolute left-2 top-1 text-xs text-gray-500 z-10">Time</span>
-                  <TimePicker
-                    value={process.time}
-                    onChange={(newTime) => onProcessTimeChange(process.step, newTime)}
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        fullWidth: true,
-                        sx: { '& .MuiInputBase-input': { paddingTop: '20px' } }
-                      },
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+          {formData.processes.slice(0, 3).map(renderProcessRow)}
         </div>
 
         {/* Stretch & Folds Counter */}
@@ -122,31 +143,9 @@ export const CreateTab: React.FC<CreateTabProps> = ({
           </div>
         </div>
 
-        {/* Remaining process steps: Preshape, Final Shape, Fridge */}
+        {/* Remaining process steps: Preshape, Final Shape, Final Proof, Bake */}
         <div className="space-y-4">
-          {formData.processes.slice(3).map((process) => (
-            <div key={process.step} className="flex items-center gap-4">
-              <label className="w-20 text-sm font-medium">
-                {process.step}
-              </label>
-              <div className="flex-1">
-                <div className="relative">
-                  <span className="absolute left-2 top-1 text-xs text-gray-500 z-10">Time</span>
-                  <TimePicker
-                    value={process.time}
-                    onChange={(newTime) => onProcessTimeChange(process.step, newTime)}
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        fullWidth: true,
-                        sx: { '& .MuiInputBase-input': { paddingTop: '20px' } }
-                      },
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+          {formData.processes.slice(3).map(renderProcessRow)}
         </div>
       </div>
 

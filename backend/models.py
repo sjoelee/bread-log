@@ -259,7 +259,8 @@ class BreadTimingCreate(BaseModel):
   bulk_ts: Optional[datetime] = None
   preshape_ts: Optional[datetime] = None
   final_shape_ts: Optional[datetime] = None
-  fridge_ts: Optional[datetime] = None
+  final_proof_ts: Optional[datetime] = None
+  bake_ts: Optional[datetime] = None
 
   # Temperature data (ranges accommodate both Celsius and Fahrenheit)
   room_temp: Optional[float] = Field(
@@ -319,7 +320,8 @@ class BreadTimingUpdate(BaseModel):
   bulk_ts: Optional[datetime] = None
   preshape_ts: Optional[datetime] = None
   final_shape_ts: Optional[datetime] = None
-  fridge_ts: Optional[datetime] = None
+  final_proof_ts: Optional[datetime] = None
+  bake_ts: Optional[datetime] = None
 
   # Temperature data
   room_temp: Optional[float] = Field(None, ge=-20, le=120)
@@ -359,7 +361,8 @@ class BreadTiming(BaseModel):
   bulk_ts: Optional[datetime] = None
   preshape_ts: Optional[datetime] = None
   final_shape_ts: Optional[datetime] = None
-  fridge_ts: Optional[datetime] = None
+  final_proof_ts: Optional[datetime] = None
+  bake_ts: Optional[datetime] = None
 
   # Temperature data
   room_temp: Optional[float] = None

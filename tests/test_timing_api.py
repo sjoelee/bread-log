@@ -32,11 +32,12 @@ class TestTimingEndpointCreation:
     assert "created_at" in timing
     assert "updated_at" in timing
     assert timing["temperature_unit"] == "Fahrenheit"  # Default value
+    assert timing["status"] == "in_progress"  # No timestamps yet
 
   def test_create_complete_timing(self):
-    """Test creating a timing entry with all fields populated"""
+    """Test creating a timing entry with all 7 process timestamps populated"""
 
-    # GIVEN: Complete timing data
+    # GIVEN: Complete timing data with all process timestamps
     timing_data = {
       "recipe_name": "Complex Sourdough",
       "date": "2024-01-16",
@@ -45,34 +46,34 @@ class TestTimingEndpointCreation:
       "bulk_ts": "2024-01-16T09:00:00",
       "preshape_ts": "2024-01-16T13:00:00",
       "final_shape_ts": "2024-01-16T13:30:00",
-      "fridge_ts": "2024-01-16T14:00:00",
+      "final_proof_ts": "2024-01-16T14:00:00",
+      "bake_ts": "2024-01-17T08:00:00",
       "room_temp": 75.0,
       "water_temp": 85.0,
       "flour_temp": 70.0,
       "preferment_temp": 78.0,
       "dough_temp": 80.0,
       "temperature_unit": "Fahrenheit",
-      "stretch_folds": [
-        {"fold_number": 1, "timestamp": "2024-01-16T09:30:00"},
-        {"fold_number": 2, "timestamp": "2024-01-16T10:00:00"},
-      ],
+      "stretch_fold_count": 4,
       "notes": "Perfect fermentation conditions today",
     }
 
     # WHEN: Timing creation is attempted
     response = client.post("/timings", json=timing_data)
 
-    # THEN: Timing is created successfully with all fields
+    # THEN: Timing is created successfully with all fields and status completed
     assert response.status_code == 201
     timing = response.json()
 
     assert timing["recipe_name"] == "Complex Sourdough"
     assert timing["autolyse_ts"] == "2024-01-16T08:00:00"
+    assert timing["final_proof_ts"] == "2024-01-16T14:00:00"
+    assert timing["bake_ts"] == "2024-01-17T08:00:00"
     assert timing["dough_temp"] == 80.0
     assert timing["temperature_unit"] == "Fahrenheit"
-    assert len(timing["stretch_folds"]) == 2
-    assert timing["stretch_folds"][0]["fold_number"] == 1
+    assert timing["stretch_fold_count"] == 4
     assert timing["notes"] == "Perfect fermentation conditions today"
+    assert timing["status"] == "completed"
 
   def test_create_timing_with_celsius(self):
     """Test creating a timing entry with Celsius temperature unit"""
@@ -90,8 +91,6 @@ class TestTimingEndpointCreation:
     response = client.post("/timings", json=timing_data)
 
     # THEN: Timing is created with Celsius unit
-    if response.status_code != 201:
-      print("Response:", response.status_code, response.json())
     assert response.status_code == 201
     timing = response.json()
 
@@ -131,6 +130,23 @@ class TestTimingEndpointValidation:
     error_data = response.json()
     assert "date" in str(error_data["detail"])
 
+  def test_temperature_range_validation(self):
+    """Test temperature range validation"""
+
+    # GIVEN: Timing data with out-of-range temperatures
+    timing_data = {
+      "recipe_name": "Test Bread",
+      "date": "2024-01-15",
+      "room_temp": -50.0,  # Too cold
+      "water_temp": 300.0,  # Too hot
+    }
+
+    # WHEN: Timing creation is attempted
+    response = client.post("/timings", json=timing_data)
+
+    # THEN: Validation error is returned
+    assert response.status_code == 422
+
   def test_invalid_temperature_unit(self):
     """Test validation of temperature unit"""
 
@@ -149,56 +165,14 @@ class TestTimingEndpointValidation:
     error_data = response.json()
     assert "temperature_unit" in str(error_data["detail"])
 
-  def test_temperature_range_validation(self):
-    """Test temperature range validation"""
-
-    # GIVEN: Timing data with out-of-range temperatures
-    timing_data = {
-      "recipe_name": "Test Bread",
-      "date": "2024-01-15",
-      "room_temp": -50.0,  # Too cold
-      "water_temp": 300.0,  # Too hot
-    }
-
-    # WHEN: Timing creation is attempted
-    response = client.post("/timings", json=timing_data)
-
-    # THEN: Validation error is returned
-    assert response.status_code == 422
-
-  def test_excessive_stretch_folds(self):
-    """Test validation of stretch folds limit"""
-
-    # GIVEN: Timing data with too many stretch folds
-    stretch_folds = [
-      {"fold_number": i, "timestamp": f"2024-01-15T09:{i:02d}:00"}
-      for i in range(1, 11)  # 10 stretch folds (max is 8)
-    ]
-
-    timing_data = {
-      "recipe_name": "Over-folded Bread",
-      "date": "2024-01-15",
-      "stretch_folds": stretch_folds,
-    }
-
-    # WHEN: Timing creation is attempted
-    response = client.post("/timings", json=timing_data)
-
-    # THEN: Validation error is returned
-    assert response.status_code == 422
-    error_data = response.json()
-    assert "stretch_folds" in str(error_data["detail"])
-
   def test_invalid_stretch_fold_number(self):
-    """Test validation of stretch fold numbers"""
+    """Test validation of stretch fold count"""
 
-    # GIVEN: Timing data with invalid fold number
+    # GIVEN: Timing data with negative stretch fold count
     timing_data = {
       "recipe_name": "Bad Fold Bread",
       "date": "2024-01-15",
-      "stretch_folds": [
-        {"fold_number": 0, "timestamp": "2024-01-15T09:00:00"}  # Invalid: must be > 0
-      ],
+      "stretch_fold_count": -1,
     }
 
     # WHEN: Timing creation is attempted
@@ -447,8 +421,8 @@ class TestTimingEndpointUpdate:
     assert updated_timing["mix_ts"] == "2024-01-21T08:30:00"
     assert updated_timing["bulk_ts"] == "2024-01-21T09:00:00"
 
-  def test_update_stretch_folds(self):
-    """Test updating stretch folds data"""
+  def test_update_stretch_fold_count(self):
+    """Test updating stretch fold count"""
 
     # GIVEN: An existing timing entry
     timing_data = {"recipe_name": "Folded Bread", "date": "2024-01-22"}
@@ -456,24 +430,16 @@ class TestTimingEndpointUpdate:
     create_response = client.post("/timings", json=timing_data)
     timing_id = create_response.json()["id"]
 
-    # WHEN: Stretch folds are added
-    update_data = {
-      "stretch_folds": [
-        {"fold_number": 1, "timestamp": "2024-01-22T09:30:00"},
-        {"fold_number": 2, "timestamp": "2024-01-22T10:00:00"},
-        {"fold_number": 3, "timestamp": "2024-01-22T10:30:00"},
-      ]
-    }
+    # WHEN: Stretch fold count is updated
+    update_data = {"stretch_fold_count": 4}
 
     response = client.patch(f"/timings/{timing_id}", json=update_data)
 
-    # THEN: Stretch folds are updated correctly
+    # THEN: Stretch fold count is updated correctly
     assert response.status_code == 200
     updated_timing = response.json()
 
-    assert len(updated_timing["stretch_folds"]) == 3
-    assert updated_timing["stretch_folds"][0]["fold_number"] == 1
-    assert updated_timing["stretch_folds"][2]["fold_number"] == 3
+    assert updated_timing["stretch_fold_count"] == 4
 
   def test_update_nonexistent_timing(self):
     """Test updating a timing that doesn't exist"""
@@ -609,3 +575,53 @@ class TestTimingEndpointEdgeCases:
 
     # THEN: Future dates are accepted
     assert response.status_code == 201
+
+
+class TestTimingStatusComputation:
+  """Test that status is correctly computed based on bake_ts inclusion"""
+
+  def test_status_in_progress_when_bake_ts_missing(self):
+    """Status must remain in_progress when all timestamps except bake_ts are present"""
+
+    # GIVEN: All 6 prep timestamps filled but bake_ts missing
+    timing_data = {
+      "recipe_name": "Unbaked Bread",
+      "date": "2024-02-01",
+      "autolyse_ts": "2024-02-01T08:00:00",
+      "mix_ts": "2024-02-01T08:30:00",
+      "bulk_ts": "2024-02-01T09:00:00",
+      "preshape_ts": "2024-02-01T13:00:00",
+      "final_shape_ts": "2024-02-01T13:30:00",
+      "final_proof_ts": "2024-02-01T14:00:00",
+      # bake_ts intentionally omitted
+    }
+
+    # WHEN: Timing is created
+    response = client.post("/timings", json=timing_data)
+
+    # THEN: Status is in_progress since bake_ts is missing
+    assert response.status_code == 201
+    assert response.json()["status"] == "in_progress"
+
+  def test_status_completed_with_all_seven_timestamps_no_temperatures(self):
+    """Status is completed when all 7 timestamps are present, even without temperatures"""
+
+    # GIVEN: All 7 timestamps filled, no temperature data
+    timing_data = {
+      "recipe_name": "Complete Bread",
+      "date": "2024-02-02",
+      "autolyse_ts": "2024-02-02T08:00:00",
+      "mix_ts": "2024-02-02T08:30:00",
+      "bulk_ts": "2024-02-02T09:00:00",
+      "preshape_ts": "2024-02-02T13:00:00",
+      "final_shape_ts": "2024-02-02T13:30:00",
+      "final_proof_ts": "2024-02-02T14:00:00",
+      "bake_ts": "2024-02-03T08:00:00",  # Bake the next day
+    }
+
+    # WHEN: Timing is created
+    response = client.post("/timings", json=timing_data)
+
+    # THEN: Status is completed — temperatures are not required
+    assert response.status_code == 201
+    assert response.json()["status"] == "completed"

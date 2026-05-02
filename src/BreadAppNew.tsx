@@ -80,6 +80,8 @@ const BreadApp: React.FC = () => {
     handleTemperatureChange,
     toggleTemperatureUnit,
     handleProcessTimeChange,
+    handleProcessTimeOpen,
+    handleProcessDateChange,
     resetForm,
     submitForm,
     updateBreadTiming,
@@ -960,6 +962,8 @@ const BreadApp: React.FC = () => {
                 onTemperatureChange={handleTemperatureChange}
                 onToggleTemperatureUnit={toggleTemperatureUnit}
                 onProcessTimeChange={handleProcessTimeChange}
+                onProcessTimeOpen={handleProcessTimeOpen}
+                onProcessDateChange={handleProcessDateChange}
                 onStretchFoldCountChange={(count) => setFormData(prev => ({ ...prev, stretchFoldCount: count }))}
                 onSubmit={editingTiming ? () => handleUpdateRecentTiming(editingTiming) : submitForm}
               />
