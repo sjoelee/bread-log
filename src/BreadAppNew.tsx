@@ -47,6 +47,7 @@ const BreadApp: React.FC = () => {
   
   // State for viewing/editing a specific timing
   const [editingTiming, setEditingTiming] = useState<BreadTiming | null>(null);
+  const [templateSourceName, setTemplateSourceName] = useState<string | null>(null);
   
   // Filters and sorting for timings
   const [statusFilter, setStatusFilter] = useState<string>('all'); // 'all' | 'in_progress' | 'completed'
@@ -288,6 +289,7 @@ const BreadApp: React.FC = () => {
   const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
     updateBreadTiming(selectedTiming.id, () => {
       setEditingTiming(null);
+      setTemplateSourceName(null);
       loadRecentTimings(0, true);
     });
   };
@@ -392,6 +394,7 @@ const BreadApp: React.FC = () => {
       setSavedCreateFormData(null);
       setSelectedRecipePreview(null);
       setIsRecipePreviewExpanded(false);
+      setTemplateSourceName(null);
     }
   }, [success, activeTab]);
 
@@ -496,6 +499,7 @@ const BreadApp: React.FC = () => {
                     setSelectedDough(null);
                     // Clear editing state when switching to Create tab
                     setEditingTiming(null);
+                    setTemplateSourceName(null);
                     // Clear recipe preview when switching to Create tab
                     setSelectedRecipePreview(null);
                     setIsRecipePreviewExpanded(false);
@@ -549,12 +553,38 @@ const BreadApp: React.FC = () => {
                 </div>
                 <button
                   onClick={() => {
+                    setTemplateSourceName(editingTiming.recipe_name);
                     setEditingTiming(null);
-                    resetForm();
                   }}
                   className="text-blue-600 hover:text-blue-800 text-sm"
                 >
-                  Cancel Edit
+                  Use as Template
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Template Mode Notification - form prefilled from a saved timing */}
+          {activeMainTab === 'timing' && activeTab === 'create' && !editingTiming && templateSourceName && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <div>
+                    <p className="text-green-800 font-medium">New entry — prefilled from {templateSourceName}</p>
+                    <p className="text-green-600 text-sm">Submitting will create a new timing entry</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setTemplateSourceName(null);
+                    resetForm();
+                  }}
+                  className="text-green-600 hover:text-green-800 text-sm"
+                >
+                  ✕
                 </button>
               </div>
             </div>
@@ -1013,6 +1043,8 @@ const BreadApp: React.FC = () => {
                       >
                         <option value="created_at:desc">Date Created (Newest First)</option>
                         <option value="created_at:asc">Date Created (Oldest First)</option>
+                        <option value="bake_ts:desc">Date Baked (Newest First)</option>
+                        <option value="bake_ts:asc">Date Baked (Oldest First)</option>
                         <option value="recipe_name:asc">Recipe Name (A → Z)</option>
                         <option value="recipe_name:desc">Recipe Name (Z → A)</option>
                       </select>
@@ -1067,6 +1099,7 @@ const BreadApp: React.FC = () => {
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Mix</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Bulk</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Final Shape</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Bake</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Dough Temp</th>
                             <th className="px-3 py-2"></th>
                           </tr>
@@ -1091,6 +1124,7 @@ const BreadApp: React.FC = () => {
                                     className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-0.5 text-xs rounded font-medium"
                                     onClick={() => {
                                       setEditingTiming(null);
+                                      setTemplateSourceName(timing.recipe_name);
                                       populateFormWithBreadTiming(timing);
                                       setFormData(prev => ({ ...prev, date: dayjs() }));
                                       setActiveTab('create');
@@ -1117,6 +1151,9 @@ const BreadApp: React.FC = () => {
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                                 {timing.final_shape_ts ? new Date(timing.final_shape_ts).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {timing.bake_ts ? new Date(timing.bake_ts).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : '—'}
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                                 {timing.dough_temp ? `${timing.dough_temp}°${timing.temperature_unit?.charAt(0) || 'F'}` : '—'}

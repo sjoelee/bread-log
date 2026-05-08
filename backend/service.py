@@ -358,7 +358,7 @@ def list_timings(
       )
 
     # Validate sort_by parameter
-    valid_sort_fields = ["created_at", "updated_at", "date", "recipe_name"]
+    valid_sort_fields = ["created_at", "updated_at", "date", "recipe_name", "bake_ts"]
     if sort_by not in valid_sort_fields:
       raise HTTPException(
         status_code=400, detail=f"sort_by must be one of {valid_sort_fields}"

@@ -804,7 +804,13 @@ class DBConnector:
       )
 
       # Validate order_by field
-      valid_order_fields = ["created_at", "updated_at", "date", "recipe_name"]
+      valid_order_fields = [
+        "created_at",
+        "updated_at",
+        "date",
+        "recipe_name",
+        "bake_ts",
+      ]
       if order_by not in valid_order_fields:
         raise ValueError(
           f"Invalid order_by field. Must be one of: {valid_order_fields}"
@@ -824,7 +830,7 @@ class DBConnector:
                flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         FROM bread_timings
         {where_clause}
-        ORDER BY {order_by} {order_direction.upper()}
+        ORDER BY {order_by} {order_direction.upper()} NULLS LAST
         LIMIT %s OFFSET %s
       """
 
