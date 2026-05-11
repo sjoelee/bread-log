@@ -205,6 +205,7 @@ class RecipeListItem(BaseModel):
   description: Optional[str] = None
   category: Optional[str] = None
   version: str  # e.g., "2", "3"
+  current_version_id: UUID
   ingredient_count: int
   step_count: int
   flour_ingredient_names: Optional[str] = None
@@ -249,6 +250,10 @@ class BreadTimingCreate(BaseModel):
 
   recipe_name: Optional[str] = Field(
     None, min_length=1, max_length=255, description="Recipe name"
+  )
+  recipe_id: Optional[UUID] = Field(None, description="Linked recipe ID")
+  recipe_version_id: Optional[UUID] = Field(
+    None, description="Linked recipe version ID"
   )
   date: Optional[python_date] = Field(None, description="Date when bread was made")
   status: Optional[str] = Field(None, pattern="^(in_progress|completed)$")
@@ -310,6 +315,8 @@ class BreadTimingUpdate(BaseModel):
   """Request model for updating a bread timing"""
 
   recipe_name: Optional[str] = Field(None, min_length=1, max_length=255)
+  recipe_id: Optional[UUID] = None
+  recipe_version_id: Optional[UUID] = None
 
   # Status can be manually updated
   status: Optional[str] = Field(None, pattern="^(in_progress|completed)$")
@@ -350,6 +357,8 @@ class BreadTiming(BaseModel):
 
   id: UUID = Field(..., description="Unique timing identifier")
   recipe_name: Optional[str] = None
+  recipe_id: Optional[UUID] = None
+  recipe_version_id: Optional[UUID] = None
   date: Optional[python_date] = None
   status: str = Field(default="in_progress", pattern="^(in_progress|completed)$")
   created_at: datetime

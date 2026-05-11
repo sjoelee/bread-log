@@ -348,7 +348,7 @@ class DBConnector:
     """
     base_query = """
       SELECT r.id, r.name, r.description, r.category, r.created_at, r.updated_at,
-             rv.version_number,
+             rv.version_number, r.current_version_id,
              jsonb_array_length(rv.ingredients->'ingredients') as ingredient_count,
              jsonb_array_length(rv.instructions->'instructions') as step_count,
              (SELECT string_agg(ing->>'name', ', ')
@@ -405,6 +405,7 @@ class DBConnector:
         r_created_at,
         r_updated_at,
         rv_version_number,
+        r_current_version_id,
         ingredient_count,
         step_count,
         flour_ingredient_names,
@@ -419,6 +420,7 @@ class DBConnector:
           description=r_description,
           category=r_category,
           version=version_str,
+          current_version_id=r_current_version_id,
           ingredient_count=ingredient_count or 0,
           step_count=step_count or 0,
           flour_ingredient_names=flour_ingredient_names,
@@ -671,16 +673,19 @@ class DBConnector:
 
       query = """
         INSERT INTO bread_timings (
-          recipe_name, date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
+          recipe_name, recipe_id, recipe_version_id,
+          date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
           final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp, flour_temp,
           preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
         ) VALUES (
-          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
 
       params = [
         timing_data.recipe_name,
+        timing_data.recipe_id,
+        timing_data.recipe_version_id,
         timing_data.date,
         status,
         timing_data.autolyse_ts,
@@ -710,6 +715,8 @@ class DBConnector:
           return BreadTiming(
             id=timing_id,
             recipe_name=timing_data.recipe_name,
+            recipe_id=timing_data.recipe_id,
+            recipe_version_id=timing_data.recipe_version_id,
             date=timing_data.date,
             status=status,
             created_at=created_at,
@@ -739,9 +746,10 @@ class DBConnector:
     """Get a specific bread timing by ID"""
     try:
       query = """
-        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts,
-               bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp,
-               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
+        SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
+               autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
+               room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
+               stretch_fold_count, notes
         FROM bread_timings
         WHERE id = %s
       """
@@ -825,9 +833,10 @@ class DBConnector:
 
       # Main query
       main_query = f"""
-        SELECT id, recipe_name, date, status, created_at, updated_at, autolyse_ts, mix_ts,
-               bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp,
-               flour_temp, preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
+        SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
+               autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
+               room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
+               stretch_fold_count, notes
         FROM bread_timings
         {where_clause}
         ORDER BY {order_by} {order_direction.upper()} NULLS LAST
@@ -957,6 +966,8 @@ class DBConnector:
     (
       timing_id,
       recipe_name,
+      recipe_id,
+      recipe_version_id,
       date,
       status,
       created_at,
@@ -981,6 +992,8 @@ class DBConnector:
     return BreadTiming(
       id=timing_id,
       recipe_name=recipe_name,
+      recipe_id=recipe_id,
+      recipe_version_id=recipe_version_id,
       date=date,
       status=status or "in_progress",
       created_at=created_at,

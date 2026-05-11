@@ -12,6 +12,13 @@ client = TestClient(app)
 class TestTimingEndpointCreation:
   """Test timing creation endpoint"""
 
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
+
   def test_create_basic_timing(self):
     """Test creating a basic timing entry with minimal required fields"""
 
@@ -24,6 +31,7 @@ class TestTimingEndpointCreation:
     # THEN: Timing is created successfully
     assert response.status_code == 201
     timing = response.json()
+    self.created_ids.append(timing["id"])
 
     # Verify required fields
     assert timing["recipe_name"] == "Basic Sourdough"
@@ -64,6 +72,7 @@ class TestTimingEndpointCreation:
     # THEN: Timing is created successfully with all fields and status completed
     assert response.status_code == 201
     timing = response.json()
+    self.created_ids.append(timing["id"])
 
     assert timing["recipe_name"] == "Complex Sourdough"
     assert timing["autolyse_ts"] == "2024-01-16T08:00:00"
@@ -93,6 +102,7 @@ class TestTimingEndpointCreation:
     # THEN: Timing is created with Celsius unit
     assert response.status_code == 201
     timing = response.json()
+    self.created_ids.append(timing["id"])
 
     assert timing["temperature_unit"] == "Celsius"
     assert timing["room_temp"] == 24.0
@@ -100,7 +110,7 @@ class TestTimingEndpointCreation:
 
 
 class TestTimingEndpointValidation:
-  """Test timing endpoint validation rules"""
+  """Test timing endpoint validation rules — no timings are persisted"""
 
   def test_missing_recipe_name(self):
     """Test validation when recipe_name is missing"""
@@ -185,6 +195,13 @@ class TestTimingEndpointValidation:
 class TestTimingEndpointRetrieval:
   """Test timing retrieval operations"""
 
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
+
   def test_get_timing_by_id(self):
     """Test retrieving a specific timing by UUID"""
 
@@ -198,6 +215,7 @@ class TestTimingEndpointRetrieval:
     create_response = client.post("/timings", json=timing_data)
     assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    self.created_ids.append(timing_id)
 
     # WHEN: Timing is retrieved by ID
     response = client.get(f"/timings/{timing_id}")
@@ -240,8 +258,6 @@ class TestTimingEndpointList:
 
   def setup_method(self):
     """Setup test data for list operations"""
-
-    # Create multiple timing entries for testing
     self.test_timings = []
 
     for i in range(15):
@@ -253,6 +269,10 @@ class TestTimingEndpointList:
       response = client.post("/timings", json=timing_data)
       if response.status_code == 201:
         self.test_timings.append(response.json())
+
+  def teardown_method(self):
+    for timing in self.test_timings:
+      client.delete(f"/timings/{timing['id']}")
 
   def test_list_timings_default_pagination(self):
     """Test listing timings with default pagination"""
@@ -353,7 +373,7 @@ class TestTimingEndpointList:
     """Test ordering of timing results"""
 
     # WHEN: Timings are ordered by created_at descending
-    response = client.get("/timings?order_by=created_at&order_direction=desc")
+    response = client.get("/timings?sort_by=created_at&order_direction=desc")
 
     # THEN: Results are properly ordered
     assert response.status_code == 200
@@ -366,6 +386,13 @@ class TestTimingEndpointList:
 
 class TestTimingEndpointUpdate:
   """Test timing update operations"""
+
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
 
   def test_update_timing_partial(self):
     """Test partial update of timing entry"""
@@ -380,6 +407,7 @@ class TestTimingEndpointUpdate:
     create_response = client.post("/timings", json=timing_data)
     assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    self.created_ids.append(timing_id)
 
     # WHEN: Timing is partially updated
     update_data = {"recipe_name": "Updated Bread", "dough_temp": 80.0}
@@ -402,7 +430,9 @@ class TestTimingEndpointUpdate:
     timing_data = {"recipe_name": "Process Bread", "date": "2024-01-21"}
 
     create_response = client.post("/timings", json=timing_data)
+    assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    self.created_ids.append(timing_id)
 
     # WHEN: Process timestamps are added
     update_data = {
@@ -428,7 +458,9 @@ class TestTimingEndpointUpdate:
     timing_data = {"recipe_name": "Folded Bread", "date": "2024-01-22"}
 
     create_response = client.post("/timings", json=timing_data)
+    assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    self.created_ids.append(timing_id)
 
     # WHEN: Stretch fold count is updated
     update_data = {"stretch_fold_count": 4}
@@ -461,7 +493,9 @@ class TestTimingEndpointUpdate:
     timing_data = {"recipe_name": "Valid Bread", "date": "2024-01-23"}
 
     create_response = client.post("/timings", json=timing_data)
+    assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    self.created_ids.append(timing_id)
 
     # WHEN: Invalid update data is submitted
     update_data = {
@@ -478,6 +512,13 @@ class TestTimingEndpointUpdate:
 class TestTimingEndpointDeletion:
   """Test timing deletion operations"""
 
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
+
   def test_delete_timing(self):
     """Test deleting a timing entry"""
 
@@ -485,7 +526,9 @@ class TestTimingEndpointDeletion:
     timing_data = {"recipe_name": "Doomed Bread", "date": "2024-01-24"}
 
     create_response = client.post("/timings", json=timing_data)
+    assert create_response.status_code == 201
     timing_id = create_response.json()["id"]
+    # Not adding to created_ids — this test deletes it explicitly
 
     # WHEN: Timing is deleted
     response = client.delete(f"/timings/{timing_id}")
@@ -512,6 +555,13 @@ class TestTimingEndpointDeletion:
 
 class TestTimingEndpointEdgeCases:
   """Test edge cases and error scenarios"""
+
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
 
   def test_malformed_json(self):
     """Test handling of malformed JSON"""
@@ -575,10 +625,18 @@ class TestTimingEndpointEdgeCases:
 
     # THEN: Future dates are accepted
     assert response.status_code == 201
+    self.created_ids.append(response.json()["id"])
 
 
 class TestTimingStatusComputation:
   """Test that status is correctly computed based on bake_ts inclusion"""
+
+  def setup_method(self):
+    self.created_ids = []
+
+  def teardown_method(self):
+    for tid in self.created_ids:
+      client.delete(f"/timings/{tid}")
 
   def test_status_in_progress_when_bake_ts_missing(self):
     """Status must remain in_progress when all timestamps except bake_ts are present"""
@@ -601,6 +659,7 @@ class TestTimingStatusComputation:
 
     # THEN: Status is in_progress since bake_ts is missing
     assert response.status_code == 201
+    self.created_ids.append(response.json()["id"])
     assert response.json()["status"] == "in_progress"
 
   def test_status_completed_with_all_seven_timestamps_no_temperatures(self):
@@ -624,4 +683,5 @@ class TestTimingStatusComputation:
 
     # THEN: Status is completed — temperatures are not required
     assert response.status_code == 201
+    self.created_ids.append(response.json()["id"])
     assert response.json()["status"] == "completed"

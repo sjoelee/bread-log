@@ -149,16 +149,20 @@ class RecipeService:
     return self.db.get_recipe_versions(recipe_id)
 
   def get_recipe_version_diff(
-    self, version_id_1: UUID, version_id_2: UUID
+    self, recipe_id: UUID, version_id_1: UUID, version_id_2: UUID
   ) -> Dict[str, Any]:
     """
-    Get diff between two recipe versions
+    Get diff between two versions of a recipe.
+    Raises ValueError if either version doesn't exist or doesn't belong to recipe_id.
     """
     version_1 = self.db.get_recipe_version(version_id_1)
     version_2 = self.db.get_recipe_version(version_id_2)
 
     if not version_1 or not version_2:
       raise ValueError("One or both versions not found")
+
+    if version_1.recipe_id != recipe_id or version_2.recipe_id != recipe_id:
+      raise ValueError("One or both versions do not belong to the specified recipe")
 
     ingredients_1 = [ing.model_dump() for ing in version_1.ingredients]
     ingredients_2 = [ing.model_dump() for ing in version_2.ingredients]
@@ -244,8 +248,12 @@ class RecipeService:
     current_version = current_recipe.current_version
 
     # Prepare new ingredients and instructions with IDs
-    new_ingredients = [ingredient.dict() for ingredient in recipe_data.ingredients]
-    new_instructions = [instruction.dict() for instruction in recipe_data.instructions]
+    new_ingredients = [
+      ingredient.model_dump() for ingredient in recipe_data.ingredients
+    ]
+    new_instructions = [
+      instruction.model_dump() for instruction in recipe_data.instructions
+    ]
 
     # Add IDs if not present
     new_ingredients = generate_ingredient_ids(new_ingredients)
@@ -253,10 +261,10 @@ class RecipeService:
 
     # Compare with current version to detect changes
     current_ingredients = [
-      ingredient.dict() for ingredient in current_version.ingredients
+      ingredient.model_dump() for ingredient in current_version.ingredients
     ]
     current_instructions = [
-      instruction.dict() for instruction in current_version.instructions
+      instruction.model_dump() for instruction in current_version.instructions
     ]
 
     ingredient_diff = compare_ingredients(current_ingredients, new_ingredients)

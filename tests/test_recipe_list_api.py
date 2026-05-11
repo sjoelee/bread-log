@@ -76,9 +76,11 @@ class TestRecipeListSorting:
       _delete_recipe(rid)
 
   def _list(self, **params) -> list:
-    response = client.get("/recipes/", params=params)
+    response = client.get("/recipes/", params={"limit": 500, **params})
     assert response.status_code == 200
-    return response.json()
+    all_results = response.json()
+    # Filter to only the recipes created by this fixture so DB pollution can't affect results
+    return [r for r in all_results if r["id"] in self.ids]
 
   def test_sort_by_name_ascending(self):
     # GIVEN: three recipes with distinct names

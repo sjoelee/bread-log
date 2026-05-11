@@ -23,6 +23,8 @@ export interface DoughProcess {
 export interface BreadFormData {
   date: Dayjs | null;
   teamMake: string;
+  recipeId?: string;
+  recipeVersionId?: string;
   temperatures: TemperatureSettings;
   processes: DoughProcess[];
   stretchFoldCount: number;
@@ -58,6 +60,8 @@ export interface DoughMake {
 
 export interface BreadTimingCreate {
   recipe_name?: string;
+  recipe_id?: string;
+  recipe_version_id?: string;
   date?: string; // YYYY-MM-DD format
   status?: string; // 'in_progress' | 'completed'
   autolyse_ts?: string; // ISO datetime strings
@@ -79,6 +83,8 @@ export interface BreadTimingCreate {
 
 export interface BreadTimingUpdate {
   recipe_name?: string;
+  recipe_id?: string | null;
+  recipe_version_id?: string | null;
   status?: string; // 'in_progress' | 'completed'
   autolyse_ts?: string | null;
   mix_ts?: string | null;
@@ -100,6 +106,8 @@ export interface BreadTimingUpdate {
 export interface BreadTiming {
   id: string; // UUID
   recipe_name?: string;
+  recipe_id?: string;
+  recipe_version_id?: string;
   date?: string; // YYYY-MM-DD format
   status: string; // 'in_progress' | 'completed'
   created_at: string; // ISO datetime string
@@ -153,6 +161,38 @@ export interface DropdownOption {
   displayName: string;     // What to show in dropdown
   type: 'make' | 'recipe' | 'recent'; // Source type
   lastUsed?: Date;         // When last used in timing entry
+  recipeId?: string;       // UUID of the matching recipe, if any
+  recipeVersionId?: string; // UUID of the current version, if any
+}
+
+export interface RecipeVersion {
+  id: string;
+  recipe_id: string;
+  version_number: number;
+  description?: string;
+  ingredients: any[];
+  instructions: any[];
+  created_at: string;
+  change_summary?: Record<string, any>;
+}
+
+export interface RecipeVersionDiff {
+  from_version: string;
+  to_version: string;
+  ingredient_changes: {
+    added: any[];
+    removed: any[];
+    modified: { old: any; new: any }[];
+    unchanged: any[];
+  };
+  step_changes: {
+    added: any[];
+    removed: any[];
+    modified: { old: any; new: any }[];
+    reordered: any[];
+    unchanged: any[];
+  };
+  created_at: string;
 }
 
 // Default values

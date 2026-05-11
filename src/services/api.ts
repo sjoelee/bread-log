@@ -1,9 +1,11 @@
-import { 
-  TeamMake, 
+import {
+  TeamMake,
   BreadTiming,
   BreadTimingCreate,
   BreadTimingUpdate,
-  BreadTimingListResponse
+  BreadTimingListResponse,
+  RecipeVersion,
+  RecipeVersionDiff,
 } from '../types/bread';
 import { parseValidationErrors } from '../utils/errorParser.ts';
 
@@ -180,7 +182,7 @@ export const breadTimingApi = {
 
   // Convenience method to get timings by date (uses the list API with date filter)
   async getByDate(date: string): Promise<BreadTiming[]> {
-    const response = await this.list({ 
+    const response = await this.list({
       date,
       limit: 100,
       sort_by: 'created_at',
@@ -188,4 +190,23 @@ export const breadTimingApi = {
     });
     return response.timings;
   }
+};
+
+export const recipeApi = {
+  async getVersions(recipeId: string): Promise<RecipeVersion[]> {
+    const response = await fetch(`${getApiBaseUrl()}/recipes/${recipeId}/versions`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch versions');
+    return response.json();
+  },
+
+  async getVersionDiff(recipeId: string, v1Id: string, v2Id: string): Promise<RecipeVersionDiff> {
+    const response = await fetch(
+      `${getApiBaseUrl()}/recipes/${recipeId}/versions/${v1Id}/diff/${v2Id}`,
+      { headers: getHeaders() }
+    );
+    if (!response.ok) throw new Error('Failed to fetch version diff');
+    return response.json();
+  },
 };

@@ -131,6 +131,8 @@ export const useBreadForm = () => {
     setFormData({
       date: dayjs(),
       teamMake: '',
+      recipeId: undefined,
+      recipeVersionId: undefined,
       temperatures: INITIAL_TEMP_SETTINGS,
       processes: INITIAL_PROCESSES.map(p => ({ ...p, date: dayjs() })),
       stretchFoldCount: 0,
@@ -169,6 +171,8 @@ export const useBreadForm = () => {
     setFormData({
       date: timing.date ? dayjs(timing.date) : dayjs(),
       teamMake: timing.recipe_name || '',
+      recipeId: timing.recipe_id,
+      recipeVersionId: timing.recipe_version_id,
       temperatures: {
         unit: tempUnit,
         roomTemp: timing.room_temp ?? 0,
@@ -228,6 +232,9 @@ export const useBreadForm = () => {
     if (formData.teamMake && formData.teamMake.trim()) {
       data.recipe_name = formData.teamMake;
     }
+
+    if (formData.recipeId) data.recipe_id = formData.recipeId;
+    if (formData.recipeVersionId) data.recipe_version_id = formData.recipeVersionId;
     
     if (formData.date) {
       data.date = formData.date.format('YYYY-MM-DD');
@@ -357,6 +364,8 @@ export const useBreadForm = () => {
         temperature_unit: submissionData.temperature_unit,
         stretch_fold_count: submissionData.stretch_fold_count ?? 0,
         notes: submissionData.notes || null,
+        recipe_id: submissionData.recipe_id ?? null,
+        recipe_version_id: submissionData.recipe_version_id ?? null,
       };
 
       const updatedTiming = await breadTimingApi.update(timingId, updates);

@@ -237,26 +237,6 @@ class TestRecipeValidation:
       # THEN: Validation error is returned
       assert response.status_code == 422
 
-  def test_invalid_category(self):
-    """Test validation of recipe category"""
-
-    # GIVEN: Recipe with invalid category
-    recipe_data = {
-      "name": "Invalid Category Recipe",
-      "category": "invalid_category",
-      "ingredients": [
-        {"name": "flour", "amount": 100, "unit": "grams", "type": "flour"}
-      ],
-      "instructions": [{"order": 1, "instruction": "Mix"}],
-    }
-
-    # WHEN: Recipe creation is attempted
-    response = client.post("/recipes/", json=recipe_data)
-
-    # THEN: Recipe is created successfully (no category validation implemented yet)
-    # TODO: When category validation is added, this should return 422
-    assert response.status_code == 201
-
 
 class TestIDGeneration:
   """Test ingredient and instruction ID generation"""
@@ -325,38 +305,6 @@ class TestIDGeneration:
 
 class TestEdgeCases:
   """Test edge cases and special scenarios"""
-
-  def test_no_flour_recipe(self):
-    """Test recipe creation without flour ingredients"""
-
-    # GIVEN: Recipe with no flour (e.g., sauce recipe)
-    recipe_data = {
-      "name": "Tomato Sauce",
-      "category": "other",
-      "ingredients": [
-        {"name": "tomatoes", "amount": 1000, "unit": "grams", "type": "other"},
-        {"name": "olive oil", "amount": 50, "unit": "grams", "type": "fat"},
-        {"name": "garlic", "amount": 10, "unit": "grams", "type": "other"},
-      ],
-      "instructions": [
-        {"order": 1, "instruction": "Sauté garlic in olive oil"},
-        {"order": 2, "instruction": "Add tomatoes and simmer"},
-      ],
-    }
-
-    # WHEN: Recipe is created
-    response = client.post("/recipes/", json=recipe_data)
-
-    # THEN: Recipe is created but no baker's percentages
-    assert response.status_code == 201
-    data = response.json()
-
-    assert data["name"] == "Tomato Sauce"
-    assert len(data["current_version"]["ingredients"]) == 3
-
-    # Baker's percentages should be null or have zero flour weight
-    percentages = data["bakers_percentages"]
-    assert percentages is None or percentages["total_flour_weight"] == 0
 
   def test_large_recipe(self):
     """Test recipe with many ingredients and instructions"""

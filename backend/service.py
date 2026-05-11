@@ -265,13 +265,14 @@ def get_recipe_versions(recipe_id: UUID):
     raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/recipes/versions/{version_id_1}/diff/{version_id_2}")
-def get_version_diff(version_id_1: UUID, version_id_2: UUID):
+@app.get("/recipes/{recipe_id}/versions/{version_id_1}/diff/{version_id_2}")
+def get_version_diff(recipe_id: UUID, version_id_1: UUID, version_id_2: UUID):
   """
-  Get diff between two recipe versions
+  Get diff between two versions of a recipe.
+  Both versions must belong to the given recipe_id.
   """
   try:
-    diff = recipe_service.get_recipe_version_diff(version_id_1, version_id_2)
+    diff = recipe_service.get_recipe_version_diff(recipe_id, version_id_1, version_id_2)
     return diff
 
   except ValueError as e:

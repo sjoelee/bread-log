@@ -8,6 +8,7 @@ import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
 import { RecipeTab } from './components/RecipeTab.tsx';
 import { StatusBadge } from './components/StatusBadge.tsx';
+import RecipeVersionHistory from './components/RecipeVersionHistory.tsx';
 
 // Add main tab types
 type MainTabType = 'recipe' | 'timing';
@@ -210,14 +211,19 @@ const BreadApp: React.FC = () => {
     const usedNames = new Set<string>();
     const recipeNames = new Set(savedRecipes.map(r => r.name.toLowerCase()));
 
+    const recipeByName = new Map(savedRecipes.map(r => [r.name.toLowerCase(), r]));
+
     timingDropdownNames.forEach(({ name, created_at }) => {
       if (!usedNames.has(name.toLowerCase())) {
-        const isRecipe = recipeNames.has(name.toLowerCase());
+        const matchingRecipe = recipeByName.get(name.toLowerCase());
+        const isRecipe = !!matchingRecipe;
         options.push({
           value: name,
           displayName: isRecipe ? `${name} (Recipe)` : name,
           type: isRecipe ? 'recipe' : 'recent',
           lastUsed: created_at,
+          recipeId: matchingRecipe?.id,
+          recipeVersionId: matchingRecipe?.current_version_id,
         });
         usedNames.add(name.toLowerCase());
       }
@@ -230,6 +236,8 @@ const BreadApp: React.FC = () => {
           displayName: `${recipe.name} (Recipe)`,
           type: 'recipe',
           lastUsed: new Date(recipe.created_at),
+          recipeId: recipe.id,
+          recipeVersionId: recipe.current_version_id,
         });
         usedNames.add(recipe.name.toLowerCase());
       }
@@ -323,10 +331,15 @@ const BreadApp: React.FC = () => {
   // Handle recipe selection for preview and suggestions
   const handleRecipeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
-    
-    // Call the original handler
-    handleInputChange(e);
-    
+
+    // When the user types freely, clear the recipe link (free-text, no FK)
+    setFormData(prev => ({
+      ...prev,
+      teamMake: inputValue,
+      recipeId: undefined,
+      recipeVersionId: undefined,
+    }));
+
     // Filter suggestions based on input
     const filtered = dropdownOptions.filter(option =>
       option.displayName.toLowerCase().includes(inputValue.toLowerCase()) ||
@@ -334,10 +347,9 @@ const BreadApp: React.FC = () => {
     );
     setFilteredOptions(filtered);
     setShowSuggestions(inputValue.length > 0 && filtered.length > 0);
-    
+
     // Check if selected value matches a saved recipe
     const matchingRecipe = savedRecipes.find(recipe => recipe.name === inputValue);
-    
     if (matchingRecipe) {
       setSelectedRecipePreview(matchingRecipe);
       setIsRecipePreviewExpanded(true);
@@ -349,15 +361,17 @@ const BreadApp: React.FC = () => {
 
   // Handle suggestion selection
   const handleSuggestionSelect = (option: DropdownOption) => {
-    // Update the form data
+    // Update the form data, storing recipe link if the option came from a saved recipe
     setFormData(prev => ({
       ...prev,
-      teamMake: option.value
+      teamMake: option.value,
+      recipeId: option.recipeId,
+      recipeVersionId: option.recipeVersionId,
     }));
-    
+
     // Hide suggestions
     setShowSuggestions(false);
-    
+
     // Check if it's a recipe for preview
     const matchingRecipe = savedRecipes.find(recipe => recipe.name === option.value);
     if (matchingRecipe) {
@@ -660,6 +674,7 @@ const BreadApp: React.FC = () => {
           {/* Tab Content */}
           {activeMainTab === 'recipe' ? (
             activeRecipeTab === 'create' ? (
+              <>
               <RecipeTab
                 loading={recipeLoading}
                 error={recipeError}
@@ -703,13 +718,13 @@ const BreadApp: React.FC = () => {
                     if (response.ok) {
                       const result = await response.json();
                       console.log(`Recipe ${isEditing ? 'updated' : 'created'} successfully:`, result);
-                      console.log('Version:', `${result.recipe.current_version.version_number}`);
-                      if (result.recipe.bakers_percentages) {
-                        console.log('Baker\'s percentages calculated:', result.recipe.bakers_percentages);
+                      console.log('Version:', `${result.current_version?.version_number}`);
+                      if (result.bakers_percentages) {
+                        console.log('Baker\'s percentages calculated:', result.bakers_percentages);
                       }
-                      
+
                       setRecipeSuccess(true);
-                      setRecipeSuccessMessage(result.message);
+                      setRecipeSuccessMessage(null);
                       
                       // Clear editing state after successful save
                       if (isEditing) {
@@ -732,6 +747,13 @@ const BreadApp: React.FC = () => {
                   }
                 }}
               />
+              {editingRecipeId && editingRecipe?.current_version_id && (
+                <RecipeVersionHistory
+                  recipeId={editingRecipeId}
+                  currentVersionId={editingRecipe.current_version_id}
+                />
+              )}
+              </>
             ) : (
               // Recipe Saved tab content
               <div className="p-6">
@@ -1108,14 +1130,38 @@ const BreadApp: React.FC = () => {
                           {recentTimings.map((timing) => (
                             <tr key={timing.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-3 py-2 whitespace-nowrap">
-                                <div className="font-medium text-gray-900">{timing.recipe_name || 'Untitled'}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-900">{timing.recipe_name || 'Untitled'}</span>
+                                  {timing.recipe_version_id && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                                      {(() => {
+                                        const recipe = savedRecipes.find(r => r.id === timing.recipe_id);
+                                        const version = recipe?.version ?? '?';
+                                        return `v${version}`;
+                                      })()}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex gap-1.5 mt-1">
                                   <button
                                     className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 text-xs rounded font-medium"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       populateFormWithBreadTiming(timing);
                                       setEditingTiming(timing);
                                       setActiveTab('create');
+                                      if (timing.recipe_id) {
+                                        const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                                          ? 'http://localhost:8000' : '';
+                                        try {
+                                          const res = await fetch(`${apiBaseUrl}/recipes/${timing.recipe_id}`);
+                                          if (res.ok) {
+                                            setSelectedRecipePreview(await res.json());
+                                            setIsRecipePreviewExpanded(false);
+                                          }
+                                        } catch { /* ignore */ }
+                                      } else {
+                                        setSelectedRecipePreview(null);
+                                      }
                                     }}
                                   >
                                     View & Edit
