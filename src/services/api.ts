@@ -10,9 +10,10 @@ import {
 import { parseValidationErrors } from '../utils/errorParser.ts';
 
 const getApiBaseUrl = (): string => {
+  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
   const isDevelopment = window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1';
-  return isDevelopment ? 'http://localhost:8000' : 'https://your-production-api.com';
+  return isDevelopment ? 'http://localhost:8000' : '';
 };
 
 const getHeaders = () => ({

@@ -20,6 +20,7 @@ from typing import List, Optional
 from uuid import UUID
 
 import logging
+import os
 
 # Import recipe service
 from .recipe_service import RecipeService
@@ -27,18 +28,16 @@ from .recipe_service import RecipeService
 app = FastAPI()
 
 # Configure CORS
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=[
-    "*"
-  ],  # For development only - replace with specific origins in production
+  allow_origins=ALLOWED_ORIGINS,
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],
 )
 
-DBNAME = "bread_makes"
-db_conn = DBConnector(dbname=DBNAME)
+db_conn = DBConnector()
 recipe_service = RecipeService(db_conn)
 
 logging.basicConfig(level=logging.DEBUG)

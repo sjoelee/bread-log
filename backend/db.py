@@ -20,6 +20,8 @@ from uuid import UUID
 
 import json
 import logging
+import os
+from urllib.parse import urlparse
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("psycopg")
@@ -28,19 +30,32 @@ logger.setLevel(logging.DEBUG)
 db_logger = logging.getLogger("db")
 
 
+def _build_conninfo() -> str:
+  url = urlparse(
+    os.environ.get("DATABASE_URL", "postgresql://sammylee@localhost/bread_makes")
+  )
+  parts = [
+    f"host={url.hostname or 'localhost'}",
+    f"port={url.port or 5432}",
+    f"dbname={url.path.lstrip('/')}",
+    f"user={url.username or ''}",
+  ]
+  if url.password:
+    parts.append(f"password={url.password}")
+  return " ".join(parts)
+
+
 class DatabasePool:
   _instance: Optional["DatabasePool"] = None
 
-  def __init__(self, dbname: str, user: str, min_size: int = 2, max_size: int = 10):
-    self.pool = ConnectionPool(
-      f"dbname={dbname} user={user}", min_size=min_size, max_size=max_size
-    )
+  def __init__(self, min_size: int = 2, max_size: int = 10):
+    self.pool = ConnectionPool(_build_conninfo(), min_size=min_size, max_size=max_size)
     self.pool.open()
 
   @classmethod
-  def get_instance(cls, dbname: str, user: str) -> "DatabasePool":
+  def get_instance(cls) -> "DatabasePool":
     if cls._instance is None:
-      cls._instance = DatabasePool(dbname, user)
+      cls._instance = DatabasePool()
     return cls._instance
 
   @contextmanager
@@ -61,12 +76,8 @@ class DatabasePool:
 
 
 class DBConnector:
-  USER = "sammylee"
-
-  def __init__(self, dbname):
-    self.user = DBConnector.USER
-    self.dbname = dbname
-    self.db_pool = DatabasePool.get_instance(self.dbname, self.user)
+  def __init__(self):
+    self.db_pool = DatabasePool.get_instance()
 
   def create_recipe(self, recipe_data: dict):
     """
