@@ -108,7 +108,7 @@ const BreadApp: React.FC = () => {
       setRecipeError(null);
 
       const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:8000' : 'https://your-production-api.com';
+        ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
 
       const params = new URLSearchParams({ sort_by: sortBy, sort_direction: sortDir });
       if (search.trim()) params.set('search', search.trim());
@@ -316,7 +316,7 @@ const BreadApp: React.FC = () => {
     if (!window.confirm(`Delete recipe "${recipeName}"? This cannot be undone.`)) return;
     try {
       const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:8000' : 'https://your-production-api.com';
+        ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
       const res = await fetch(`${apiBaseUrl}/recipes/${recipeId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -862,7 +862,7 @@ const BreadApp: React.FC = () => {
                                         setRecipeLoading(true);
                                         setRecipeError(null);
                                         const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                                          ? 'http://localhost:8000' : 'https://your-production-api.com';
+                                          ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
                                         const res = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
                                           headers: { 'Content-Type': 'application/json' },
                                         });
@@ -893,7 +893,7 @@ const BreadApp: React.FC = () => {
                                         setRecipeLoading(true);
                                         setRecipeError(null);
                                         const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                                          ? 'http://localhost:8000' : 'https://your-production-api.com';
+                                          ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
                                         const res = await fetch(`${apiBaseUrl}/recipes/${recipe.id}`, {
                                           headers: { 'Content-Type': 'application/json' },
                                         });

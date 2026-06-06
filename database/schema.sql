@@ -21,6 +21,26 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: temperature_unit_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.temperature_unit_type AS ENUM ('Fahrenheit', 'Celsius');
+
+
+--
+-- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+
+--
 -- Name: bakers_percentages; Type: TABLE; Schema: public; Owner: -
 --
 
