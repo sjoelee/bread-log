@@ -695,7 +695,7 @@ const BreadApp: React.FC = () => {
 
                     const apiBaseUrl = isDevelopment
                       ? 'http://localhost:8000'
-                      : 'https://your-production-api.com';
+                      : (process.env.REACT_APP_API_URL || '');
                     const url = isEditing 
                       ? `${apiBaseUrl}/recipes/${editingRecipeId}`
                       : `${apiBaseUrl}/recipes/`;
