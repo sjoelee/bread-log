@@ -46,7 +46,7 @@ export const parseValidationErrors = (errorResponse: any): string[] => {
         errors.push(`${displayName} is required`);
         break;
       case 'value_error':
-        errors.push(`${displayName} has an invalid value`);
+        errors.push(error.msg || `${displayName} has an invalid value`);
         break;
       case 'type_error':
         errors.push(`${displayName} must be the correct type`);

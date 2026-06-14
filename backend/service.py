@@ -584,7 +584,7 @@ def validate_timing_data(timing: BreadTimingCreate) -> None:
     current_name, current_ts = valid_timestamps[i]
     next_name, next_ts = valid_timestamps[i + 1]
 
-    if current_ts >= next_ts:
+    if current_ts > next_ts:
       raise ValueError(f"{next_name} must be after {current_name}")
 
 
@@ -628,5 +628,5 @@ def validate_timing_updates(updates: BreadTimingUpdate, existing: BreadTiming) -
       current_name, current_ts = timestamps[i]
       next_name, next_ts = timestamps[i + 1]
 
-      if current_ts >= next_ts:
+      if current_ts > next_ts:
         raise ValueError(f"{next_name} must be after {current_name}")
