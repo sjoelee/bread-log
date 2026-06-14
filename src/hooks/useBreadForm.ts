@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import {
   BreadFormData,
@@ -10,6 +10,41 @@ import {
 import { convertTemperature } from '../utils/temperature.ts';
 import { breadTimingApi } from '../services/api.ts';
 import { BreadTiming, BreadTimingCreate } from '../types/bread.ts';
+
+const TIMING_DRAFT_KEY = 'bread-log:timing-draft';
+
+const serializeDraft = (data: BreadFormData) => ({
+  ...data,
+  date: data.date?.toISOString() ?? null,
+  processes: data.processes.map(p => ({
+    ...p,
+    date: p.date?.toISOString() ?? null,
+    time: p.time?.toISOString() ?? null,
+  })),
+});
+
+const deserializeDraft = (raw: any): BreadFormData => ({
+  ...raw,
+  date: raw.date ? dayjs(raw.date) : dayjs(),
+  processes: raw.processes.map((p: any) => ({
+    ...p,
+    date: p.date ? dayjs(p.date) : dayjs(),
+    time: p.time ? dayjs(p.time) : null,
+  })),
+});
+
+const loadTimingDraft = (): BreadFormData | null => {
+  try {
+    const raw = localStorage.getItem(TIMING_DRAFT_KEY);
+    return raw ? deserializeDraft(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearTimingDraft = () => {
+  try { localStorage.removeItem(TIMING_DRAFT_KEY); } catch {}
+};
 
 const INITIAL_PROCESSES: DoughProcess[] = [
   { step: 'Autolyse', date: dayjs(), time: null },
@@ -31,11 +66,18 @@ const INITIAL_FORM_DATA: BreadFormData = {
 };
 
 export const useBreadForm = () => {
-  const [formData, setFormData] = useState<BreadFormData>(INITIAL_FORM_DATA);
+  const isDraftMode = useRef(true);
+  const [formData, setFormData] = useState<BreadFormData>(() => loadTimingDraft() ?? INITIAL_FORM_DATA);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [customSuccessMessage, setCustomSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isDraftMode.current) {
+      try { localStorage.setItem(TIMING_DRAFT_KEY, JSON.stringify(serializeDraft(formData))); } catch {}
+    }
+  }, [formData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -128,6 +170,8 @@ export const useBreadForm = () => {
   };
 
   const resetForm = () => {
+    isDraftMode.current = true;
+    clearTimingDraft();
     setFormData({
       date: dayjs(),
       teamMake: '',
@@ -151,6 +195,7 @@ export const useBreadForm = () => {
   };
 
   const populateFormWithBreadTiming = (timing: BreadTiming) => {
+    isDraftMode.current = false;
     const getDate = (ts: string | undefined) => ts ? dayjs(ts) : dayjs();
     const getTime = (ts: string | undefined) => ts ? dayjs(ts) : null;
 
@@ -315,12 +360,13 @@ export const useBreadForm = () => {
     try {
       const submissionData = prepareSubmissionData();
       const createdTiming = await breadTimingApi.create(submissionData);
-      
+      clearTimingDraft();
+
       // Show different message based on completeness
-      const statusMessage = createdTiming.status === 'completed' 
-        ? 'Timing saved successfully!' 
+      const statusMessage = createdTiming.status === 'completed'
+        ? 'Timing saved successfully!'
         : 'Draft saved! You can continue editing later.';
-      
+
       setCustomSuccessMessage(statusMessage);
       setSuccess(true);
     } catch (err) {

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+const RECIPE_DRAFT_KEY = 'bread-log:recipe-draft';
 
 interface Ingredient {
   id?: string;
@@ -80,7 +82,6 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
 }) => {
   const [formData, setFormData] = useState<RecipeFormData>(() => {
     if (recipe) {
-      // Load existing recipe for editing
       return {
         name: recipe.name,
         description: recipe.description || '',
@@ -89,8 +90,12 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
         instructions: recipe.current_version.instructions
       };
     }
-    
-    // Default for new recipe
+
+    try {
+      const raw = localStorage.getItem(RECIPE_DRAFT_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+
     return {
       name: '',
       description: '',
@@ -102,6 +107,18 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       instructions: [{ order: 1, instruction: '' }]
     };
   });
+
+  useEffect(() => {
+    if (!recipe) {
+      try { localStorage.setItem(RECIPE_DRAFT_KEY, JSON.stringify(formData)); } catch {}
+    }
+  }, [formData, recipe]);
+
+  useEffect(() => {
+    if (success) {
+      try { localStorage.removeItem(RECIPE_DRAFT_KEY); } catch {}
+    }
+  }, [success]);
 
   const handleInputChange = (field: keyof RecipeFormData, value: string) => {
     setFormData(prev => ({
