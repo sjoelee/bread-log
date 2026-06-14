@@ -293,6 +293,9 @@ class BreadTimingCreate(BaseModel):
     None, max_length=2000, description="Notes cannot exceed 2000 characters"
   )
 
+  # Timezone of the baker (IANA timezone string, e.g. "America/Los_Angeles")
+  timezone: str = Field(default="UTC", max_length=50)
+
   @field_validator("recipe_name")
   @classmethod
   def recipe_name_not_empty(cls, v):
@@ -386,6 +389,9 @@ class BreadTiming(BaseModel):
 
   # Notes
   notes: Optional[str] = None
+
+  # Timezone of the baker (IANA timezone string)
+  timezone: str = "UTC"
 
 
 class BreadTimingListResponse(BaseModel):

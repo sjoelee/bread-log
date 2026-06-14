@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import {
   BreadFormData,
   TemperatureUnit,
@@ -196,8 +201,9 @@ export const useBreadForm = () => {
 
   const populateFormWithBreadTiming = (timing: BreadTiming) => {
     isDraftMode.current = false;
-    const getDate = (ts: string | undefined) => ts ? dayjs(ts) : dayjs();
-    const getTime = (ts: string | undefined) => ts ? dayjs(ts) : null;
+    const tz = timing.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const getDate = (ts: string | undefined) => ts ? dayjs.utc(ts).tz(tz) : dayjs();
+    const getTime = (ts: string | undefined) => ts ? dayjs.utc(ts).tz(tz) : null;
 
     // Convert temperature unit string to enum
     const tempUnit = timing.temperature_unit === 'Celsius' ? TemperatureUnit.CELSIUS : TemperatureUnit.FAHRENHEIT;
@@ -342,7 +348,9 @@ export const useBreadForm = () => {
     if (formData.notes && formData.notes.trim()) {
       data.notes = formData.notes;
     }
-    
+
+    data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     return data;
   };
 

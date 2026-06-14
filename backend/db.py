@@ -687,9 +687,9 @@ class DBConnector:
           recipe_name, recipe_id, recipe_version_id,
           date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
           final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp, flour_temp,
-          preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
+          preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes, timezone
         ) VALUES (
-          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
 
@@ -714,6 +714,7 @@ class DBConnector:
         timing_data.temperature_unit,
         timing_data.stretch_fold_count,
         timing_data.notes,
+        timing_data.timezone,
       ]
 
       with self.db_pool.get_connection() as conn:
@@ -747,6 +748,7 @@ class DBConnector:
             temperature_unit=timing_data.temperature_unit,
             stretch_fold_count=timing_data.stretch_fold_count,
             notes=timing_data.notes,
+            timezone=timing_data.timezone,
           )
 
     except Exception as e:
@@ -760,7 +762,7 @@ class DBConnector:
         SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
                autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
-               stretch_fold_count, notes
+               stretch_fold_count, notes, timezone
         FROM bread_timings
         WHERE id = %s
       """
@@ -847,7 +849,7 @@ class DBConnector:
         SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
                autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
-               stretch_fold_count, notes
+               stretch_fold_count, notes, timezone
         FROM bread_timings
         {where_clause}
         ORDER BY {order_by} {order_direction.upper()} NULLS LAST
@@ -998,6 +1000,7 @@ class DBConnector:
       temperature_unit,
       stretch_fold_count,
       notes,
+      timezone,
     ) = row
 
     return BreadTiming(
@@ -1024,4 +1027,5 @@ class DBConnector:
       temperature_unit=temperature_unit or "Fahrenheit",
       stretch_fold_count=stretch_fold_count or 0,
       notes=notes,
+      timezone=timezone or "UTC",
     )
