@@ -737,7 +737,18 @@ const BreadApp: React.FC = () => {
                     } else {
                       const errorText = await response.text();
                       console.error(`Failed to ${isEditing ? 'update' : 'create'} recipe:`, response.statusText, errorText);
-                      setRecipeError(`Failed to ${isEditing ? 'update' : 'create'} recipe: ${response.statusText}`);
+                      let errorMessage = response.statusText || `HTTP ${response.status}`;
+                      try {
+                        const errorJson = JSON.parse(errorText);
+                        if (Array.isArray(errorJson.detail)) {
+                          errorMessage = errorJson.detail.map((e: { loc: string[]; msg: string }) =>
+                            `${e.loc.slice(1).join('.')}: ${e.msg}`
+                          ).join('; ');
+                        } else if (typeof errorJson.detail === 'string') {
+                          errorMessage = errorJson.detail;
+                        }
+                      } catch {}
+                      setRecipeError(`Failed to ${isEditing ? 'update' : 'create'} recipe: ${errorMessage}`);
                     }
                   } catch (error) {
                     console.error(`Error ${isEditing ? 'updating' : 'creating'} recipe:`, error);
