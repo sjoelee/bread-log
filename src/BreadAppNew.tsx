@@ -254,9 +254,33 @@ const BreadApp: React.FC = () => {
   };
 
   // Load recipes and distinct bread names on component mount for timing dropdown
+  // Also auto-load today's in-progress timing if one exists
   React.useEffect(() => {
     loadSavedRecipes();
-    loadAllDistinctBreadNames(); // Load ALL distinct names for dropdown
+    loadAllDistinctBreadNames();
+
+    const loadTodayInProgress = async () => {
+      try {
+        const today = dayjs().format('YYYY-MM-DD');
+        const response = await breadTimingApi.list({
+          page: 1,
+          limit: 1,
+          status: 'in_progress',
+          date: today,
+          sort_by: 'created_at',
+          order_direction: 'desc',
+        });
+        if (response.timings.length > 0) {
+          const timing = response.timings[0];
+          populateFormWithBreadTiming(timing);
+          setEditingTiming(timing);
+        }
+      } catch {
+        // silently ignore — don't block app load
+      }
+    };
+
+    loadTodayInProgress();
   }, []);
 
   // Load recipes when switching to saved tab
