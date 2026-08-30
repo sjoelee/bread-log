@@ -48,7 +48,10 @@ const BreadApp: React.FC = () => {
   
   // State for viewing/editing a specific timing
   const [editingTiming, setEditingTiming] = useState<BreadTiming | null>(null);
-  const [templateSourceName, setTemplateSourceName] = useState<string | null>(null);
+
+  // In-progress timings list
+  const [inProgressTimings, setInProgressTimings] = useState<BreadTiming[]>([]);
+  const [loadingInProgress, setLoadingInProgress] = useState(false);
   
   // Filters and sorting for timings
   const [statusFilter, setStatusFilter] = useState<string>('all'); // 'all' | 'in_progress' | 'completed'
@@ -253,34 +256,28 @@ const BreadApp: React.FC = () => {
     setDropdownOptions(options);
   };
 
-  // Load recipes and distinct bread names on component mount for timing dropdown
-  // Also auto-load today's in-progress timing if one exists
+  const loadInProgressTimings = async () => {
+    try {
+      setLoadingInProgress(true);
+      const response = await breadTimingApi.list({
+        status: 'in_progress',
+        limit: 50,
+        sort_by: 'created_at',
+        order_direction: 'desc',
+      });
+      setInProgressTimings(response.timings);
+    } catch {
+      // silently ignore
+    } finally {
+      setLoadingInProgress(false);
+    }
+  };
+
+  // Load recipes, distinct bread names, and in-progress count on mount
   React.useEffect(() => {
     loadSavedRecipes();
     loadAllDistinctBreadNames();
-
-    const loadTodayInProgress = async () => {
-      try {
-        const today = dayjs().format('YYYY-MM-DD');
-        const response = await breadTimingApi.list({
-          page: 1,
-          limit: 1,
-          status: 'in_progress',
-          date: today,
-          sort_by: 'created_at',
-          order_direction: 'desc',
-        });
-        if (response.timings.length > 0) {
-          const timing = response.timings[0];
-          populateFormWithBreadTiming(timing);
-          setEditingTiming(timing);
-        }
-      } catch {
-        // silently ignore — don't block app load
-      }
-    };
-
-    loadTodayInProgress();
+    loadInProgressTimings();
   }, []);
 
   // Load recipes when switching to saved tab
@@ -321,7 +318,7 @@ const BreadApp: React.FC = () => {
   const handleUpdateRecentTiming = (selectedTiming: BreadTiming) => {
     updateBreadTiming(selectedTiming.id, () => {
       setEditingTiming(null);
-      setTemplateSourceName(null);
+
       loadRecentTimings(0, true);
     });
   };
@@ -432,43 +429,40 @@ const BreadApp: React.FC = () => {
       setSavedCreateFormData(null);
       setSelectedRecipePreview(null);
       setIsRecipePreviewExpanded(false);
-      setTemplateSourceName(null);
+
     }
   }, [success, activeTab]);
 
   return (
     <div className="min-w-[720px] bg-white shadow-sm p-6">
-      <div className="flex gap-6">
-        {/* Left Sidebar - Tab Navigation */}
-        <div className="w-16 flex-shrink-0">
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setActiveMainTab('recipe')}
-              className={`w-full h-24 px-2 font-medium text-sm border rounded-r-lg transition-all flex items-center justify-center ${
-                activeMainTab === 'recipe'
-                  ? 'bg-blue-50 text-blue-600 border-blue-300 border-l-4 border-l-blue-600'
-                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              <span className="transform -rotate-90 whitespace-nowrap">Recipe</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveMainTab('timing')}
-              className={`w-full h-24 px-2 font-medium text-sm border rounded-r-lg transition-all flex items-center justify-center ${
-                activeMainTab === 'timing'
-                  ? 'bg-blue-50 text-blue-600 border-blue-300 border-l-4 border-l-blue-600'
-                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              <span className="transform -rotate-90 whitespace-nowrap">Timing</span>
-            </button>
-          </div>
-        </div>
+      {/* Top-level Tab Navigation */}
+      <div className="flex border-b mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('timing')}
+          className={`px-6 py-2 font-medium text-sm transition-all ${
+            activeMainTab === 'timing'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Timing
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('recipe')}
+          className={`px-6 py-2 font-medium text-sm transition-all ${
+            activeMainTab === 'recipe'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Recipe
+        </button>
+      </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1">
+      {/* Main Content Area */}
+      <div className="flex-1">
 
           {/* Sub Tab Navigation for Recipe tab */}
           {activeMainTab === 'recipe' && (
@@ -537,7 +531,7 @@ const BreadApp: React.FC = () => {
                     setSelectedDough(null);
                     // Clear editing state when switching to Create tab
                     setEditingTiming(null);
-                    setTemplateSourceName(null);
+              
                     // Clear recipe preview when switching to Create tab
                     setSelectedRecipePreview(null);
                     setIsRecipePreviewExpanded(false);
@@ -559,8 +553,20 @@ const BreadApp: React.FC = () => {
               </button>
               <button
                 onClick={() => {
+                  setActiveTab('inprogress');
+                  loadInProgressTimings();
+                }}
+                className={`px-4 py-2 font-medium ${
+                  activeTab === 'inprogress'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                In Progress{inProgressTimings.length > 0 ? ` (${inProgressTimings.length})` : ''}
+              </button>
+              <button
+                onClick={() => {
                   if (activeTab === 'create') {
-                    // Switching from Create to Saved - save the current form data
                     setSavedCreateFormData(formData);
                   }
                   setActiveTab('saved');
@@ -589,44 +595,22 @@ const BreadApp: React.FC = () => {
                     <p className="text-blue-600 text-sm">Made on {new Date(editingTiming.date).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setTemplateSourceName(editingTiming.recipe_name);
-                    setEditingTiming(null);
-                  }}
-                  className="text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  Use as Template
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      resetForm();
+                      setEditingTiming(null);
+                    }}
+                    className="text-gray-500 hover:text-gray-700 text-sm"
+                  >
+                    Start Fresh
+                  </button>
+
+                </div>
               </div>
             </div>
           )}
 
-          {/* Template Mode Notification - form prefilled from a saved timing */}
-          {activeMainTab === 'timing' && activeTab === 'create' && !editingTiming && templateSourceName && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  <svg className="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <div>
-                    <p className="text-green-800 font-medium">New entry — prefilled from {templateSourceName}</p>
-                    <p className="text-green-600 text-sm">Submitting will create a new timing entry</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setTemplateSourceName(null);
-                    resetForm();
-                  }}
-                  className="text-green-600 hover:text-green-800 text-sm"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Date and Make Name Row - Only for Timing Create tab */}
           {activeMainTab === 'timing' && activeTab === 'create' && (
@@ -1055,6 +1039,39 @@ const BreadApp: React.FC = () => {
                 onSubmit={editingTiming ? () => handleUpdateRecentTiming(editingTiming) : submitForm}
               />
               </>
+            ) : activeTab === 'inprogress' ? (
+              <div className="p-6 space-y-3">
+                {loadingInProgress && <p className="text-gray-500">Loading...</p>}
+                {!loadingInProgress && inProgressTimings.length === 0 && (
+                  <p className="text-gray-500">No in-progress timings.</p>
+                )}
+                {inProgressTimings.map(timing => {
+                  const stepsLogged = [timing.autolyse_ts, timing.mix_ts, timing.bulk_ts,
+                    timing.preshape_ts, timing.final_shape_ts, timing.final_proof_ts, timing.bake_ts]
+                    .filter(Boolean).length;
+                  return (
+                    <div key={timing.id} className="border rounded-lg p-4 flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{timing.recipe_name}</p>
+                        <p className="text-sm text-gray-500">
+                          {timing.date ? new Date(timing.date).toLocaleDateString() : ''}
+                          {stepsLogged > 0 ? ` · ${stepsLogged} step${stepsLogged !== 1 ? 's' : ''} logged` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          populateFormWithBreadTiming(timing);
+                          setEditingTiming(timing);
+                          setActiveTab('create');
+                        }}
+                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm font-medium"
+                      >
+                        Resume
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               // Recent Timings Display for Timing Saved tab
               <div className="p-6">
@@ -1201,18 +1218,7 @@ const BreadApp: React.FC = () => {
                                   >
                                     View & Edit
                                   </button>
-                                  <button
-                                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-0.5 text-xs rounded font-medium"
-                                    onClick={() => {
-                                      setEditingTiming(null);
-                                      setTemplateSourceName(timing.recipe_name);
-                                      populateFormWithBreadTiming(timing);
-                                      setFormData(prev => ({ ...prev, date: dayjs() }));
-                                      setActiveTab('create');
-                                    }}
-                                  >
-                                    Use Template
-                                  </button>
+
                                 </div>
                               </td>
                               <td className="px-3 py-2 whitespace-nowrap">
@@ -1273,7 +1279,6 @@ const BreadApp: React.FC = () => {
             )
           )}
         </div>
-      </div>
     </div>
   );
 };

@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
+import timezonePlugin from 'dayjs/plugin/timezone';
 import {
   BreadFormData,
   TemperatureUnit,
@@ -15,6 +12,9 @@ import {
 import { convertTemperature } from '../utils/temperature.ts';
 import { breadTimingApi } from '../services/api.ts';
 import { BreadTiming, BreadTimingCreate } from '../types/bread.ts';
+
+dayjs.extend(utc);
+dayjs.extend(timezonePlugin);
 
 const TIMING_DRAFT_KEY = 'bread-log:timing-draft';
 

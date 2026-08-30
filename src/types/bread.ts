@@ -156,7 +156,7 @@ export interface CreateMakeRequest {
   key: string;
 }
 
-export type TabType = 'create' | 'saved';
+export type TabType = 'create' | 'inprogress' | 'saved';
 
 export interface DropdownOption {
   value: string;           // The actual name to use
