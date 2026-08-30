@@ -7,7 +7,7 @@ interface Ingredient {
   name: string;
   amount: number;
   unit: string;
-  type: string; // 'flour', 'liquid', 'preferment', 'other', etc.
+  type: string;
   notes?: string;
 }
 
@@ -66,8 +66,8 @@ interface RecipeTabProps {
   error?: string | null;
   success?: boolean;
   successMessage?: string | null;
-  recipe?: RecipeResponse | null; // For editing existing recipes
-  isTemplate?: boolean; // Pre-filled from template but saving as new
+  recipe?: RecipeResponse | null;
+  isTemplate?: boolean;
   onSubmit?: (data: RecipeFormData) => void;
 }
 
@@ -102,11 +102,12 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       category: '',
       ingredients: [
         { name: '', amount: 0, unit: 'grams', type: 'flour', notes: '' },
-        { name: '', amount: 0, unit: 'grams', type: 'liquid', notes: '' }
+        { name: '', amount: 0, unit: 'grams', type: 'other', notes: '' }
       ],
       instructions: [{ order: 1, instruction: '' }]
     };
   });
+
 
   useEffect(() => {
     if (!recipe) {
@@ -121,36 +122,31 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   }, [success]);
 
   const handleInputChange = (field: keyof RecipeFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleIngredientChange = (
-    index: number,
-    field: keyof Ingredient,
-    value: string | number
-  ) => {
+  const handleIngredientChange = (index: number, field: keyof Ingredient, value: string | number | boolean) => {
     setFormData(prev => ({
       ...prev,
-      ingredients: prev.ingredients.map((ingredient, i) =>
-        i === index ? { ...ingredient, [field]: value } : ingredient
+      ingredients: prev.ingredients.map((ing, i) =>
+        i === index ? { ...ing, [field]: value } : ing
       )
     }));
   };
 
-  const addIngredient = (type: string = 'other') => {
-    const newOrder = Math.max(...formData.ingredients.map((_, i) => i + 1)) + 1;
+  const toggleFlour = (index: number, isFlour: boolean) => {
+    handleIngredientChange(index, 'type', isFlour ? 'flour' : 'other');
+  };
+
+  const addIngredient = () => {
     setFormData(prev => ({
       ...prev,
-      ingredients: [...prev.ingredients, { name: '', amount: 0, unit: 'grams', type, notes: '' }]
+      ingredients: [...prev.ingredients, { name: '', amount: 0, unit: 'grams', type: 'other', notes: '' }]
     }));
   };
 
   const removeIngredient = (index: number) => {
-    if (formData.ingredients.length <= 1) return; // Keep at least one ingredient
-    
+    if (formData.ingredients.length <= 1) return;
     setFormData(prev => ({
       ...prev,
       ingredients: prev.ingredients.filter((_, i) => i !== index)
@@ -160,29 +156,24 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   const handleInstructionChange = (index: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      instructions: prev.instructions.map((instruction, i) =>
-        i === index ? { ...instruction, instruction: value } : instruction
+      instructions: prev.instructions.map((inst, i) =>
+        i === index ? { ...inst, instruction: value } : inst
       )
     }));
   };
 
   const addInstruction = () => {
-    const newOrder = formData.instructions.length + 1;
     setFormData(prev => ({
       ...prev,
-      instructions: [...prev.instructions, { order: newOrder, instruction: '' }]
+      instructions: [...prev.instructions, { order: prev.instructions.length + 1, instruction: '' }]
     }));
   };
 
   const removeInstruction = (index: number) => {
-    if (formData.instructions.length <= 1) return; // Keep at least one instruction
-    
+    if (formData.instructions.length <= 1) return;
     setFormData(prev => ({
       ...prev,
-      instructions: prev.instructions.filter((_, i) => i !== index).map((inst, i) => ({
-        ...inst,
-        order: i + 1 // Reorder remaining instructions
-      }))
+      instructions: prev.instructions.filter((_, i) => i !== index).map((inst, i) => ({ ...inst, order: i + 1 }))
     }));
   };
 
@@ -191,132 +182,16 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
     onSubmit?.(formData);
   };
 
-  // Group ingredients by type for display
-  const flourIngredients = formData.ingredients.filter(ing => ing.type === 'flour');
-  const liquidIngredients = formData.ingredients.filter(ing => ing.type === 'liquid');
-  const otherIngredients = formData.ingredients.filter(ing => !['flour', 'liquid'].includes(ing.type));
+  const totalFlourWeight = formData.ingredients
+    .filter(ing => ing.type === 'flour')
+    .reduce((sum, ing) => sum + (ing.amount || 0), 0);
 
-  // Calculate baker's percentages for display
-  const calculateBakersPercentages = () => {
-    const totalFlourWeight = flourIngredients.reduce((sum, ing) => sum + (ing.amount || 0), 0);
-    
-    if (totalFlourWeight === 0) return null;
-
-    const flourPercentages = flourIngredients.map(ing => ({
-      name: ing.name,
-      amount: ing.amount || 0,
-      percentage: totalFlourWeight > 0 ? ((ing.amount || 0) / totalFlourWeight) * 100 : 100
-    }));
-
-    const otherPercentages = [...liquidIngredients, ...otherIngredients]
-      .filter(ing => (ing.amount || 0) > 0)
-      .map(ing => ({
-        name: ing.name,
-        amount: ing.amount || 0,
-        percentage: totalFlourWeight > 0 ? ((ing.amount || 0) / totalFlourWeight) * 100 : 0
-      }));
-
-    return {
-      totalFlourWeight,
-      flourPercentages,
-      otherPercentages
-    };
-  };
-
-  const bakersPercentages = calculateBakersPercentages();
-
-  const renderIngredientsByType = (ingredients: Ingredient[], title: string, type: string, backgroundColor: string) => (
-    <div className="mb-6">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="font-medium">{title}</h3>
-        <button
-          type="button"
-          onClick={() => addIngredient(type)}
-          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-        >
-          + Add {title.toLowerCase()}
-        </button>
-      </div>
-      <div className={`p-4 rounded-lg ${backgroundColor} space-y-3`}>
-        <div className="grid grid-cols-12 gap-4 font-medium text-sm text-gray-600">
-          <div className="col-span-4">Name</div>
-          <div className="col-span-2">Amount</div>
-          <div className="col-span-2">Unit</div>
-          <div className="col-span-2">Type</div>
-          <div className="col-span-2">Actions</div>
-        </div>
-        
-        {ingredients.map((ingredient) => {
-          const index = formData.ingredients.findIndex(ing => ing === ingredient);
-          return (
-            <div key={index} className="grid grid-cols-12 gap-4 items-center">
-              <input
-                type="text"
-                value={ingredient.name}
-                onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                placeholder="Ingredient name"
-                className="col-span-4 border rounded p-2 bg-white"
-              />
-              <input
-                type="number"
-                value={ingredient.amount || ''}
-                onChange={(e) => handleIngredientChange(index, 'amount', parseFloat(e.target.value) || 0)}
-                placeholder="Amount"
-                className="col-span-2 border rounded p-2 bg-white"
-              />
-              <select
-                value={ingredient.unit}
-                onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                className="col-span-2 border rounded p-2 bg-white"
-              >
-                <option value="grams">g</option>
-                <option value="kg">kg</option>
-                <option value="ml">ml</option>
-                <option value="cups">cups</option>
-                <option value="tbsp">tbsp</option>
-                <option value="tsp">tsp</option>
-              </select>
-              <select
-                value={ingredient.type}
-                onChange={(e) => handleIngredientChange(index, 'type', e.target.value)}
-                className="col-span-2 border rounded p-2 bg-white"
-              >
-                <option value="flour">Flour</option>
-                <option value="liquid">Liquid</option>
-                <option value="preferment">Preferment</option>
-                <option value="fat">Fat</option>
-                <option value="other">Other</option>
-              </select>
-              <div className="col-span-2">
-                {formData.ingredients.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeIngredient(index)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                    title="Remove ingredient"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        
-        {ingredients.length === 0 && (
-          <div className="text-center py-4 text-gray-500">
-            No {title.toLowerCase()} added yet
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const bakersPercentage = (amount: number) =>
+    totalFlourWeight > 0 ? ((amount / totalFlourWeight) * 100).toFixed(1) + '%' : '—';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Recipe Name */}
+      {/* Name */}
       <div>
         <label className="block text-sm font-medium mb-1">Name</label>
         <input
@@ -358,101 +233,144 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
         </select>
       </div>
 
-      {/* Flour Ingredients */}
-      {renderIngredientsByType(flourIngredients, 'Flour Ingredients', 'flour', 'bg-yellow-50')}
+      {/* Ingredients */}
+      <div>
+        <label className="block text-sm font-medium mb-3">Ingredients</label>
 
-      {/* Liquid Ingredients */}
-      {renderIngredientsByType(liquidIngredients, 'Liquid Ingredients', 'liquid', 'bg-blue-50')}
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b text-gray-600 text-left">
+              <th className="py-2 pr-3 font-medium w-24">Amount</th>
+              <th className="py-2 pr-3 font-medium w-20">Unit</th>
+              <th className="py-2 pr-3 font-medium">Ingredient</th>
+              <th className="py-2 pr-3 font-medium text-right w-28">Baker's %</th>
+              <th className="py-2 pr-3 font-medium text-center w-16">Flour</th>
+              <th className="py-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {formData.ingredients.map((ing, index) => (
+              <tr key={index} className={`border-b last:border-b-0 ${index % 2 === 1 ? 'bg-blue-50' : ''}`}>
+                <td className="py-2 pr-3">
+                  <input
+                    type="number"
+                    value={ing.amount || ''}
+                    onChange={(e) => handleIngredientChange(index, 'amount', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-full border rounded p-1 text-right"
+                  />
+                </td>
+                <td className="py-2 pr-3">
+                  <select
+                    value={ing.unit}
+                    onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                    className="w-full border rounded p-1"
+                  >
+                    <option value="grams">g</option>
+                    <option value="kg">kg</option>
+                    <option value="ml">ml</option>
+                    <option value="cups">cups</option>
+                    <option value="tbsp">tbsp</option>
+                    <option value="tsp">tsp</option>
+                  </select>
+                </td>
+                <td className="py-2 pr-3">
+                  <input
+                    type="text"
+                    value={ing.name}
+                    onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                    placeholder="Ingredient name"
+                    className="w-full border rounded p-1"
+                  />
+                </td>
+                <td className="py-2 pr-3 text-right text-gray-600">
+                  {ing.amount > 0 ? bakersPercentage(ing.amount) : '—'}
+                </td>
+                <td className="py-2 pr-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={ing.type === 'flour'}
+                    onChange={(e) => toggleFlour(index, e.target.checked)}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                </td>
+                <td className="py-2">
+                  {formData.ingredients.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(index)}
+                      className="text-gray-400 hover:text-red-500"
+                    >
+                      ×
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      {/* Other Ingredients */}
-      {renderIngredientsByType(otherIngredients, 'Other Ingredients', 'other', 'bg-gray-50')}
-
-      {/* Baker's Percentages */}
-      {bakersPercentages && (
-        <div className="mb-6">
-          <h3 className="font-medium mb-3">Baker's Percentages</h3>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="text-sm text-gray-600 mb-2">
-              Total Flour Weight: {bakersPercentages.totalFlourWeight}g
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="font-medium text-gray-700 mb-1">Flour (100%)</div>
-                {bakersPercentages.flourPercentages.map((flour, index) => (
-                  <div key={index} className="flex justify-between">
-                    <span>{flour.name}:</span>
-                    <span>{flour.percentage.toFixed(1)}% ({flour.amount}g)</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="font-medium text-gray-700 mb-1">Other Ingredients</div>
-                {bakersPercentages.otherPercentages.map((other, index) => (
-                  <div key={index} className="flex justify-between">
-                    <span>{other.name}:</span>
-                    <span>{other.percentage.toFixed(1)}% ({other.amount}g)</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {totalFlourWeight > 0 && (
+          <div className="mt-2 text-xs text-gray-500 text-right">
+            Total flour: {totalFlourWeight}g
           </div>
-        </div>
-      )}
+        )}
+
+        <button
+          type="button"
+          onClick={addIngredient}
+          className="mt-3 w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors text-sm"
+        >
+          + Add Ingredient
+        </button>
+      </div>
 
       {/* Instructions */}
       <div>
         <label className="block text-sm font-medium mb-3">Instructions</label>
-        <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+        <div className="space-y-2">
           {formData.instructions.map((instruction, index) => (
             <div key={index} className="flex gap-2 items-start">
-              <span className="text-sm font-medium text-gray-600 mt-2 min-w-[20px]">
+              <span className="text-sm font-medium text-gray-500 mt-2 min-w-[20px]">
                 {index + 1}.
               </span>
               <textarea
                 value={instruction.instruction}
                 onChange={(e) => handleInstructionChange(index, e.target.value)}
                 placeholder="Describe this step..."
-                className="flex-1 border rounded p-2 bg-white resize-none"
+                className="flex-1 border rounded p-2 resize-none"
                 rows={2}
               />
               {formData.instructions.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeInstruction(index)}
-                  className="text-red-500 hover:text-red-700 p-1 mt-1"
-                  title="Remove step"
+                  className="text-gray-400 hover:text-red-500 mt-2"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  ×
                 </button>
               )}
             </div>
           ))}
-          
           <button
             type="button"
             onClick={addInstruction}
-            className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
+            className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors text-sm"
           >
             + Add Step
           </button>
         </div>
       </div>
 
-      {/* Version Info - Show if editing existing recipe */}
+      {/* Version Info */}
       {recipe && (
-        <div className="bg-blue-50 p-4 rounded-lg mb-6">
+        <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <div className="text-sm text-gray-600">Current Version</div>
-              <div className="font-medium">
-                v{recipe.current_version.version_number}
-              </div>
+              <div className="font-medium">v{recipe.current_version.version_number}</div>
               {recipe.current_version.description && (
-                <div className="text-sm text-gray-500 mt-1">
-                  {recipe.current_version.description}
-                </div>
+                <div className="text-sm text-gray-500 mt-1">{recipe.current_version.description}</div>
               )}
             </div>
             <div className="text-sm text-gray-500">
@@ -462,16 +380,14 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
         </div>
       )}
 
-      {/* Error and Success Messages */}
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {error && <div className="text-red-500">{error}</div>}
       {success && (
-        <div className="text-green-500 mb-4">
+        <div className="text-green-500">
           {successMessage || 'Recipe saved successfully!'}
           {recipe && !successMessage && ` New version: v${recipe.current_version.version_number}`}
         </div>
       )}
 
-      {/* Submit Buttons */}
       <div className="flex justify-center">
         <button
           type="submit"

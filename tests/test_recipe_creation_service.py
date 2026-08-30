@@ -4,26 +4,12 @@ Tests for the RecipeService.create_recipe() method before testing API layer
 """
 
 import pytest
-import sys
-import os
+from unittest.mock import MagicMock
 
-# Add the parent directory to the path so we can import backend modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Mock imports since we don't have a database setup for tests yet
-try:
-  from unittest.mock import MagicMock, patch
-
-  # Mock the database connector
-  mock_db = MagicMock()
-
-  # Import after setting up mocks
-  with patch("backend.recipe_service.DBConnector", mock_db):
-    from backend.recipe_service import RecipeService
-    from backend.models import RecipeRequest, Ingredient, RecipeStep
-
-except ImportError as e:
-  pytest.skip(f"Cannot import backend modules: {e}", allow_module_level=True)
+# RecipeService receives its DBConnector — it never constructs one — so tests
+# can just hand it a MagicMock. No import-time patching needed.
+from backend.recipe_service import RecipeService
+from backend.models import RecipeRequest, Ingredient, RecipeStep
 
 
 class TestRecipeCreationService:

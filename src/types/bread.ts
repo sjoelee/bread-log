@@ -79,6 +79,7 @@ export interface BreadTimingCreate {
   temperature_unit?: string;
   stretch_fold_count?: number;
   notes?: string;
+  timezone?: string;
 }
 
 export interface BreadTimingUpdate {
@@ -127,6 +128,7 @@ export interface BreadTiming {
   temperature_unit: string;
   stretch_fold_count: number;
   notes?: string;
+  timezone: string;
 }
 
 export interface BreadTimingListResponse {
@@ -154,7 +156,7 @@ export interface CreateMakeRequest {
   key: string;
 }
 
-export type TabType = 'create' | 'saved';
+export type TabType = 'create' | 'inprogress' | 'saved';
 
 export interface DropdownOption {
   value: string;           // The actual name to use

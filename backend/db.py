@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import date, datetime
+from .config import Settings, get_settings
 from .exceptions import DatabaseError
 from .models import (
   Recipe,
@@ -20,7 +21,6 @@ from uuid import UUID
 
 import json
 import logging
-import os
 from urllib.parse import urlparse
 
 logging.basicConfig(level=logging.DEBUG)
@@ -30,10 +30,8 @@ logger.setLevel(logging.DEBUG)
 db_logger = logging.getLogger("db")
 
 
-def _build_conninfo() -> str:
-  url = urlparse(
-    os.environ.get("DATABASE_URL", "postgresql://sammylee@localhost/bread_makes")
-  )
+def _build_conninfo(settings: Settings) -> str:
+  url = urlparse(settings.database_url)
   parts = [
     f"host={url.hostname or 'localhost'}",
     f"port={url.port or 5432}",
@@ -46,17 +44,18 @@ def _build_conninfo() -> str:
 
 
 class DatabasePool:
-  _instance: Optional["DatabasePool"] = None
+  """Owns a psycopg connection pool. Construct one per process, in the app
+  lifespan (or per test session); call ``close()`` on shutdown."""
 
-  def __init__(self, min_size: int = 2, max_size: int = 10):
-    self.pool = ConnectionPool(_build_conninfo(), min_size=min_size, max_size=max_size)
+  def __init__(self, settings: Optional[Settings] = None):
+    settings = settings or get_settings()
+    self.pool = ConnectionPool(
+      _build_conninfo(settings),
+      min_size=settings.pool_min_size,
+      max_size=settings.pool_max_size,
+      open=False,
+    )
     self.pool.open()
-
-  @classmethod
-  def get_instance(cls) -> "DatabasePool":
-    if cls._instance is None:
-      cls._instance = DatabasePool()
-    return cls._instance
 
   @contextmanager
   def get_connection(self):
@@ -76,8 +75,8 @@ class DatabasePool:
 
 
 class DBConnector:
-  def __init__(self):
-    self.db_pool = DatabasePool.get_instance()
+  def __init__(self, db_pool: DatabasePool):
+    self.db_pool = db_pool
 
   def create_recipe(self, recipe_data: dict):
     """
@@ -113,7 +112,7 @@ class DBConnector:
           conn.commit()
     except Exception as e:
       logger.error(f"Error creating recipe: {str(e)}")
-      raise DatabaseError(f"Error creating recipe: {e}")
+      raise DatabaseError(f"Error creating recipe: {e}") from e
 
   # New versioned recipe methods
   def create_versioned_recipe(self, recipe_data: dict) -> dict:
@@ -192,7 +191,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error creating versioned recipe: {str(e)}")
-      raise DatabaseError(f"Error creating versioned recipe: {e}")
+      raise DatabaseError(f"Error creating versioned recipe: {e}") from e
 
   def create_recipe_version(self, version_data: dict) -> dict:
     """
@@ -252,7 +251,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error creating recipe version: {str(e)}")
-      raise DatabaseError(f"Error creating recipe version: {e}")
+      raise DatabaseError(f"Error creating recipe version: {e}") from e
 
   def get_versioned_recipe(self, recipe_id: UUID) -> Optional[Recipe]:
     """
@@ -275,7 +274,7 @@ class DBConnector:
           result = cur.fetchone()
     except Exception as e:
       logger.error(f"Error getting versioned recipe: {str(e)}")
-      raise DatabaseError(f"Error getting versioned recipe: {e}")
+      raise DatabaseError(f"Error getting versioned recipe: {e}") from e
 
     if not result:
       return None
@@ -404,7 +403,7 @@ class DBConnector:
           results = cur.fetchall()
     except Exception as e:
       logger.error(f"Error listing recipes: {str(e)}")
-      raise DatabaseError(f"Error listing recipes: {e}")
+      raise DatabaseError(f"Error listing recipes: {e}") from e
 
     recipes = []
     for result in results:
@@ -461,7 +460,7 @@ class DBConnector:
           results = cur.fetchall()
     except Exception as e:
       logger.error(f"Error getting recipe versions: {str(e)}")
-      raise DatabaseError(f"Error getting recipe versions: {e}")
+      raise DatabaseError(f"Error getting recipe versions: {e}") from e
 
     versions = []
     for result in results:
@@ -521,7 +520,7 @@ class DBConnector:
           result = cur.fetchone()
     except Exception as e:
       logger.error(f"Error getting recipe version: {str(e)}")
-      raise DatabaseError(f"Error getting recipe version: {e}")
+      raise DatabaseError(f"Error getting recipe version: {e}") from e
 
     if not result:
       return None
@@ -599,7 +598,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error updating recipe basic fields: {str(e)}")
-      raise DatabaseError(f"Failed to update recipe basic fields: {str(e)}")
+      raise DatabaseError(f"Failed to update recipe basic fields: {str(e)}") from e
 
   def delete_recipe(self, recipe_id: UUID) -> bool:
     """
@@ -640,7 +639,7 @@ class DBConnector:
 
     except Exception as e:
       db_logger.error(f"[delete_recipe] Error deleting recipe {recipe_id}: {str(e)}")
-      raise DatabaseError(f"Failed to delete recipe: {str(e)}")
+      raise DatabaseError(f"Failed to delete recipe: {str(e)}") from e
 
   # New Bread Timing Methods for REST API
 
@@ -687,9 +686,9 @@ class DBConnector:
           recipe_name, recipe_id, recipe_version_id,
           date, status, autolyse_ts, mix_ts, bulk_ts, preshape_ts,
           final_shape_ts, final_proof_ts, bake_ts, room_temp, water_temp, flour_temp,
-          preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes
+          preferment_temp, dough_temp, temperature_unit, stretch_fold_count, notes, timezone
         ) VALUES (
-          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id, created_at, updated_at
       """
 
@@ -714,6 +713,7 @@ class DBConnector:
         timing_data.temperature_unit,
         timing_data.stretch_fold_count,
         timing_data.notes,
+        timing_data.timezone,
       ]
 
       with self.db_pool.get_connection() as conn:
@@ -747,11 +747,12 @@ class DBConnector:
             temperature_unit=timing_data.temperature_unit,
             stretch_fold_count=timing_data.stretch_fold_count,
             notes=timing_data.notes,
+            timezone=timing_data.timezone,
           )
 
     except Exception as e:
       logger.error(f"Error creating bread timing: {str(e)}")
-      raise DatabaseError(f"Failed to create bread timing: {str(e)}")
+      raise DatabaseError(f"Failed to create bread timing: {str(e)}") from e
 
   def get_bread_timing(self, timing_id: UUID) -> Optional[BreadTiming]:
     """Get a specific bread timing by ID"""
@@ -760,7 +761,7 @@ class DBConnector:
         SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
                autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
-               stretch_fold_count, notes
+               stretch_fold_count, notes, timezone
         FROM bread_timings
         WHERE id = %s
       """
@@ -778,7 +779,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error getting bread timing {timing_id}: {str(e)}")
-      raise DatabaseError(f"Failed to get bread timing: {str(e)}")
+      raise DatabaseError(f"Failed to get bread timing: {str(e)}") from e
 
   def list_bread_timings(
     self,
@@ -847,7 +848,7 @@ class DBConnector:
         SELECT id, recipe_name, recipe_id, recipe_version_id, date, status, created_at, updated_at,
                autolyse_ts, mix_ts, bulk_ts, preshape_ts, final_shape_ts, final_proof_ts, bake_ts,
                room_temp, water_temp, flour_temp, preferment_temp, dough_temp, temperature_unit,
-               stretch_fold_count, notes
+               stretch_fold_count, notes, timezone
         FROM bread_timings
         {where_clause}
         ORDER BY {order_by} {order_direction.upper()} NULLS LAST
@@ -888,7 +889,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error listing bread timings: {str(e)}")
-      raise DatabaseError(f"Failed to list bread timings: {str(e)}")
+      raise DatabaseError(f"Failed to list bread timings: {str(e)}") from e
 
   def update_bread_timing(
     self, timing_id: UUID, updates: BreadTimingUpdate
@@ -953,7 +954,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error updating bread timing {timing_id}: {str(e)}")
-      raise DatabaseError(f"Failed to update bread timing: {str(e)}")
+      raise DatabaseError(f"Failed to update bread timing: {str(e)}") from e
 
   def delete_bread_timing(self, timing_id: UUID) -> bool:
     """Delete a bread timing record"""
@@ -970,7 +971,7 @@ class DBConnector:
 
     except Exception as e:
       logger.error(f"Error deleting bread timing {timing_id}: {str(e)}")
-      raise DatabaseError(f"Failed to delete bread timing: {str(e)}")
+      raise DatabaseError(f"Failed to delete bread timing: {str(e)}") from e
 
   def _parse_timing_row(self, row) -> BreadTiming:
     """Helper method to parse a database row into a BreadTiming object"""
@@ -998,6 +999,7 @@ class DBConnector:
       temperature_unit,
       stretch_fold_count,
       notes,
+      timezone,
     ) = row
 
     return BreadTiming(
@@ -1024,4 +1026,5 @@ class DBConnector:
       temperature_unit=temperature_unit or "Fahrenheit",
       stretch_fold_count=stretch_fold_count or 0,
       notes=notes,
+      timezone=timezone or "UTC",
     )
