@@ -6,6 +6,52 @@ import pytest
 from datetime import datetime
 from uuid import uuid4
 
+from fastapi.testclient import TestClient
+
+from backend.service import app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _app_lifespan():
+  """Run the app's lifespan once for the whole test session.
+
+  Entering ``TestClient(app)`` as a context manager triggers startup (which
+  opens ``app.state.pool``) and, on exit, shutdown (which closes it). Keeping
+  it open for the session means the plain ``client = TestClient(app)`` that
+  each test module still constructs at import time has a live pool to talk to.
+  """
+  with TestClient(app):
+    yield
+
+
+@pytest.fixture
+def client():
+  """A TestClient for tests that want one injected rather than module-global.
+
+  Deliberately NOT entered as a context manager: ``_app_lifespan`` already holds
+  startup open for the session, so re-running lifespan here would close and
+  replace ``app.state.pool`` on teardown and break later tests.
+  """
+  return TestClient(app)
+
+
+@pytest.fixture
+def override_dependencies():
+  """Yield app.dependency_overrides and clear whatever the test added on teardown.
+
+  Usage:
+      from backend.service import get_recipe_service
+
+      def test_x(override_dependencies):
+          override_dependencies[get_recipe_service] = lambda: fake_service
+  """
+  before = dict(app.dependency_overrides)
+  try:
+    yield app.dependency_overrides
+  finally:
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(before)
+
 
 @pytest.fixture
 def sample_ingredient():

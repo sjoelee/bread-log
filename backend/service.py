@@ -1,8 +1,9 @@
-from fastapi import Depends, FastAPI, HTTPException, Response
+from contextlib import asynccontextmanager
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
 from datetime import date, datetime
-from .db import DBConnector
+from .config import get_settings
+from .db import DatabasePool, DBConnector
 from .exceptions import DatabaseError
 from .models import (
   Recipe,
@@ -20,74 +21,62 @@ from typing import List, Optional
 from uuid import UUID
 
 import logging
-import os
 
 # Import recipe service
 from .recipe_service import RecipeService
 
-app = FastAPI()
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("service")
+logger.setLevel(logging.DEBUG)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  """Open the database pool on startup, close it on shutdown."""
+  app.state.pool = DatabasePool(get_settings())
+  logger.info("database pool opened")
+  try:
+    yield
+  finally:
+    app.state.pool.close()
+    logger.info("database pool closed")
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=ALLOWED_ORIGINS,
+  allow_origins=list(get_settings().allowed_origins),
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],
 )
 
-db_conn = DBConnector()
-recipe_service = RecipeService(db_conn)
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger("service")
-logger.setLevel(logging.DEBUG)
-logger.info("app brought up")
-
-# OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# --- Dependency providers -------------------------------------------------
+# Wiring lives here and only here: routes receive their collaborators, they
+# never reach for a module global.
 
 
-# UserContext class to hold user information
-class UserContext:
-  def __init__(self, user_id: UUID, account_id: UUID, account_name: str):
-    self.user_id = user_id
-    self.account_id = account_id
-    self.account_name = account_name
+def get_pool(request: Request) -> DatabasePool:
+  return request.app.state.pool
 
 
-# Dependency to get the current user context
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
-  """
-  Verify the authentication token and return user context
-  In a real implementation, you would:
-  1. Validate the JWT token
-  2. Extract user_id from token
-  3. Look up user and account information
-  """
-  try:
-    # Mock implementation - in reality, you'd decode the JWT and look up user info
-    # This would be replaced with actual token validation and user lookup
-    user_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example user ID
-    account_id = UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")  # Example account ID
-    account_name = "Rize Up"
+def get_db(pool: DatabasePool = Depends(get_pool)) -> DBConnector:
+  return DBConnector(pool)
 
-    return UserContext(
-      user_id=user_id, account_id=account_id, account_name=account_name
-    )
-  except Exception as e:
-    logger.error(f"Authentication error: {str(e)}")
-    raise HTTPException(
-      status_code=401,
-      detail="Invalid authentication credentials",
-      headers={"WWW-Authenticate": "Bearer"},
-    )
+
+def get_recipe_service(db: DBConnector = Depends(get_db)) -> RecipeService:
+  return RecipeService(db)
 
 
 # New versioned recipe endpoints
 @app.post("/recipes/", response_model=Recipe, status_code=201)
-def create_recipe(recipe: RecipeRequest):
+def create_recipe(
+  recipe: RecipeRequest,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Create a new versioned recipe with initial version 1.0
   """
@@ -126,6 +115,7 @@ def list_recipes(
   sort_by: str = "created_at",
   sort_direction: str = "desc",
   ingredient: str = None,
+  recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """
   List recipes with pagination, optional category filter, search, ingredient filter, and sorting
@@ -152,7 +142,10 @@ def list_recipes(
 
 
 @app.get("/recipes/{recipe_id}", response_model=Recipe)
-def get_recipe(recipe_id: UUID):
+def get_recipe(
+  recipe_id: UUID,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Get a versioned recipe by ID with current version and baker's percentages
   """
@@ -171,7 +164,11 @@ def get_recipe(recipe_id: UUID):
 
 
 @app.patch("/recipes/{recipe_id}", response_model=RecipeCreateResponse)
-def update_recipe(recipe_id: UUID, recipe_data: RecipeRequest):
+def update_recipe(
+  recipe_id: UUID,
+  recipe_data: RecipeRequest,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Update a recipe - creates new version and updates current_version_id
   Uses the same complete JSON body structure as POST creation
@@ -203,7 +200,10 @@ def update_recipe(recipe_id: UUID, recipe_data: RecipeRequest):
 
 
 @app.delete("/recipes/{recipe_id}")
-def delete_recipe(recipe_id: UUID):
+def delete_recipe(
+  recipe_id: UUID,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Delete a recipe and all its versions and baker's percentages
   """
@@ -229,7 +229,11 @@ def delete_recipe(recipe_id: UUID):
 
 
 @app.post("/recipes/{recipe_id}/versions", response_model=Recipe)
-def create_recipe_version(recipe_id: UUID, version_request: RecipeVersionRequest):
+def create_recipe_version(
+  recipe_id: UUID,
+  version_request: RecipeVersionRequest,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Manually create a new version of a recipe
   """
@@ -251,7 +255,10 @@ def create_recipe_version(recipe_id: UUID, version_request: RecipeVersionRequest
 
 
 @app.get("/recipes/{recipe_id}/versions", response_model=List[RecipeVersion])
-def get_recipe_versions(recipe_id: UUID):
+def get_recipe_versions(
+  recipe_id: UUID,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Get all versions of a recipe
   """
@@ -265,7 +272,12 @@ def get_recipe_versions(recipe_id: UUID):
 
 
 @app.get("/recipes/{recipe_id}/versions/{version_id_1}/diff/{version_id_2}")
-def get_version_diff(recipe_id: UUID, version_id_1: UUID, version_id_2: UUID):
+def get_version_diff(
+  recipe_id: UUID,
+  version_id_1: UUID,
+  version_id_2: UUID,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
   """
   Get diff between two versions of a recipe.
   Both versions must belong to the given recipe_id.
@@ -295,7 +307,10 @@ def validate_date(year: int, month: int, day: int) -> date:
 
 
 @app.post("/timings", response_model=BreadTiming, status_code=201)
-def create_timing(timing: BreadTimingCreate):
+def create_timing(
+  timing: BreadTimingCreate,
+  db_conn: DBConnector = Depends(get_db),
+):
   """Create a new bread timing record"""
   logger.info(f"POST /timings - Creating timing: {timing.model_dump()}")
   try:
@@ -338,6 +353,7 @@ def list_timings(
   search: Optional[str] = None,
   sort_by: str = "updated_at",
   order_direction: str = "desc",
+  db_conn: DBConnector = Depends(get_db),
 ):
   """List bread timings with pagination and filtering"""
   logger.info(
@@ -426,7 +442,10 @@ def list_timings(
 
 
 @app.get("/timings/{timing_id}", response_model=BreadTiming)
-def get_timing(timing_id: UUID):
+def get_timing(
+  timing_id: UUID,
+  db_conn: DBConnector = Depends(get_db),
+):
   """Get a specific bread timing by ID"""
   logger.info(f"GET /timings/{timing_id} - Getting timing")
 
@@ -454,7 +473,11 @@ def get_timing(timing_id: UUID):
 
 
 @app.patch("/timings/{timing_id}", response_model=BreadTiming)
-def update_timing(timing_id: UUID, updates: BreadTimingUpdate):
+def update_timing(
+  timing_id: UUID,
+  updates: BreadTimingUpdate,
+  db_conn: DBConnector = Depends(get_db),
+):
   """Update a bread timing record"""
   logger.info(
     f"PATCH /timings/{timing_id} - Updating timing with data: {updates.model_dump(exclude_none=True)}"
@@ -506,7 +529,10 @@ def update_timing(timing_id: UUID, updates: BreadTimingUpdate):
 
 
 @app.delete("/timings/{timing_id}")
-def delete_timing(timing_id: UUID):
+def delete_timing(
+  timing_id: UUID,
+  db_conn: DBConnector = Depends(get_db),
+):
   """Delete a bread timing record"""
   logger.info(f"DELETE /timings/{timing_id} - Deleting timing")
 
