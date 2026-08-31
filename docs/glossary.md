@@ -112,10 +112,19 @@ Ready version.
 ### Version diff **(live)**
 The structured comparison of two recipe versions (ingredients added/removed/modified,
 steps added/removed/modified/reordered). Endpoint:
-`GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `recipe_versioning.py` (target:
-`domain/versioning.py`).
+`GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
+(moved there from `recipe_versioning.py` in Stage 2).
 
-### Bake / timing **(live)**
+### Recipe session / bake / timing **(live as `BreadTiming`; redesign planned)**
+`BreadTiming` is outdated — it hardcodes a bread process (seven fixed timestamp columns,
+bread-only temps, `stretch_fold_count`). The intended model is a **generic recipe session**:
+you follow any recipe version and record `{step_id: timestamp}` against its structured steps,
+plus free-form observations. Blocked on Part II Slice C (steps need identity + `kind`); see
+"Part IV — Recipe Sessions" in the plan. Final name TBD (RecipeSession / Session / Bake /
+CookLog). Until then the current `BreadTiming` stays exactly as-is, on the `DBConnector` path
+— the DDD foundation (Stages 3–7) is **recipe-only**.
+
+Current `BreadTiming` (unchanged):
 One bread-making session — the execution of a recipe. Records process timestamps
 (`autolyse_ts` … `bake_ts`), temperatures, stretch-fold count, notes, and `status`
 (`in_progress` | `completed`). Table: `bread_timings`. Links to a recipe via `recipe_name`
@@ -140,23 +149,30 @@ This codebase targets four layers; **dependencies point inward only**:
 | Domain | `backend/domain/` | the rules; pure, no I/O | framework imports (FastAPI, psycopg) |
 | Infrastructure | `backend/infrastructure/` | talk to Postgres; implement the repository ports | business rules |
 
-### Aggregate / aggregate root **(target)**
+### Aggregate / aggregate root **(live, scaffolding)**
 A cluster of objects treated as one unit for consistency and persistence. `Recipe` is the
-aggregate root; its `RecipeVersion`s, `Component`s, and baker's percentages live **inside**
-the aggregate (no independent lifecycle — cascade delete confirms it). You load, mutate, and
-save the whole `Recipe`, never a `RecipeVersion` on its own. `BreadTiming` is a **separate**
-aggregate that references a recipe by id only.
+aggregate root; its `RecipeVersion` (and `Component`s in Part II) has no independent lifecycle
+— cascade delete confirms it. You load, mutate, and save the whole `Recipe`, never a
+`RecipeVersion` on its own. `BreadTiming` is a **separate** aggregate that references a recipe
+by id only.
+The `Recipe` dataclass (holding `current_version`, with `create()` / `add_version()`) exists
+in `backend/domain/models.py` as of Stage 2, unit-tested but not yet wired into the app. Full
+version history is a separate repository read, not held on the aggregate.
 
-### Entity **(target)**
-An object with identity that persists over time. `Recipe`, `RecipeVersion`, `BreadTiming`.
+### Entity **(live, scaffolding)**
+An object with identity that persists over time. `Recipe`, `RecipeVersion` (dataclasses in
+`backend/domain/models.py` as of Stage 2); `BreadTiming` domain entity still to come.
 
-### Value object **(target)**
-An object defined only by its attributes, immutable, no identity. `Ingredient`, `Component`,
-`Step`, `BakersPercentage`. A `@dataclass(frozen=True)`.
+### Value object **(live, scaffolding)**
+An object defined only by its attributes, immutable, no identity. `Ingredient`, `RecipeStep`
+— `@dataclass(frozen=True)` in `backend/domain/models.py` as of Stage 2. `Component` comes in
+Part II. Nothing wires through these yet — Stage 3 mappers are the first consumer.
 
-### Domain service **(target)**
-Stateless domain logic that doesn't belong to a single entity: versioning/diff math, baker's
-percentage calculation, cycle detection. Lives in `backend/domain/` (e.g. `versioning.py`).
+### Domain service **(live, partial)**
+Stateless domain logic that doesn't belong to a single entity: versioning/diff math, cycle
+detection (target). Lives in `backend/domain/versioning.py` as of Stage 2; still called with
+plain dicts until Stages 3–6 wire domain objects through. (Timing rules stay in
+`service.py` / `db.py` until Part IV — no `domain/timing.py`.)
 
 ### Application service **(live, being reshaped)**
 One method per use case. Opens the *Unit of Work*, loads aggregates via *repositories*, calls
@@ -211,6 +227,9 @@ objects are stored. The goal of the Part I refactor.
 
 - **`DBConnector`** — the ~950-line god object holding all raw SQL. Being dismantled across
   Stages 4–7 into repositories.
+- **`backend/recipe_versioning.py`** — moved to `backend/domain/versioning.py` in Stage 2.
+- **`DBConnector._compute_timing_status` / `service.calculate_timing_status`** — duplicate
+  "is this timing complete?" logic. Left as-is for now; consolidated during Part IV.
 - **`force_major` / major-minor versioning / `determine_next_version`** — vestigial. Version
   numbers are a single incrementing int, and (target) advance only on promotion.
 - **`account_makes`, `dough_makes`, `DoughMake`, `AccountMake`** — legacy tables/models, not

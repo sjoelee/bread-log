@@ -1,5 +1,11 @@
-"""
-Recipe versioning service with ingredient matching and version management
+"""Recipe versioning: ingredient/step matching and diffing.
+
+Pure functions over plain dicts — no I/O, no framework imports. Moved here from
+``backend/recipe_versioning.py`` in Stage 2, otherwise unchanged.
+
+Dead code kept for now, removed in Stage 7: ``calculate_step_similarity``,
+``determine_next_version`` (major/minor versioning is gone), ``has_meaningful_changes``
+(will be wired in as a no-op guard in Stage 6).
 """
 
 import re
