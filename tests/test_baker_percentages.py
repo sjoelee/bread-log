@@ -3,7 +3,7 @@ Baker's Percentage Calculation Tests
 Tests for recipe baker's percentage calculation logic
 """
 
-from backend.recipe_versioning import calculate_bakers_percentages
+from backend.domain.versioning import calculate_bakers_percentages
 
 
 class TestBakerPercentageCalculations:

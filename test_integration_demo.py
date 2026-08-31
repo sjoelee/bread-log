@@ -13,7 +13,7 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
-from backend.recipe_versioning import (
+from backend.domain.versioning import (
   generate_ingredient_ids,
   generate_step_ids,
   calculate_bakers_percentages,

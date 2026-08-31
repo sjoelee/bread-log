@@ -2,9 +2,9 @@
 Tests for name-based ingredient matching functionality
 """
 
-import re
 import copy
-from typing import List, Dict
+
+from backend.domain.versioning import compare_ingredients, normalize_ingredient_name
 
 
 class TestIngredientNormalization:
@@ -245,55 +245,3 @@ class TestIngredientMatching:
     assert len(diff["added"]) == 1
     assert len(diff["modified"]) == 0
     assert len(diff["unchanged"]) == 0
-
-
-def normalize_ingredient_name(name: str) -> str:
-  """
-  Normalize ingredient name by removing whitespace and converting to lowercase
-  """
-  return re.sub(r"\s+", "", name.lower().strip())
-
-
-def compare_ingredients(
-  old_ingredients: List[Dict], new_ingredients: List[Dict]
-) -> Dict:
-  """
-  Compare two ingredient lists and return differences
-  Mock implementation for testing
-  """
-  result = {"added": [], "removed": [], "modified": [], "unchanged": []}
-
-  # Create maps for efficient lookup
-  old_map = {normalize_ingredient_name(ing["name"]): ing for ing in old_ingredients}
-  new_map = {normalize_ingredient_name(ing["name"]): ing for ing in new_ingredients}
-
-  # Find modified and unchanged ingredients
-  for normalized_name, old_ing in old_map.items():
-    new_ing = new_map.get(normalized_name)
-
-    if new_ing:
-      if ingredients_equal(old_ing, new_ing):
-        result["unchanged"].append(new_ing)
-      else:
-        result["modified"].append({"old": old_ing, "new": new_ing})
-    else:
-      result["removed"].append(old_ing)
-
-  # Find added ingredients
-  for normalized_name, new_ing in new_map.items():
-    if normalized_name not in old_map:
-      result["added"].append(new_ing)
-
-  return result
-
-
-def ingredients_equal(ing1: Dict, ing2: Dict) -> bool:
-  """
-  Check if two ingredients are equal in all properties except ID
-  """
-  return (
-    ing1["amount"] == ing2["amount"]
-    and ing1["unit"] == ing2["unit"]
-    and ing1.get("notes") == ing2.get("notes")
-    and ing1.get("type") == ing2.get("type")
-  )

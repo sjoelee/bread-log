@@ -16,7 +16,7 @@ from .models import (
   Ingredient,
   RecipeStep,
 )
-from .recipe_versioning import (
+from .domain.versioning import (
   compare_ingredients,
   compare_instructions,
   create_version_summary,
