@@ -193,14 +193,18 @@ use case by the application service; exposes `.recipes` / `.timings` bound to th
 connection; **commits on clean exit, rolls back on exception**. `backend/infrastructure/unit_of_work.py`.
 Replaces today's pattern where every `DBConnector` method opens its own connection and commits.
 
-### DTO (Data Transfer Object) **(target)**
+### DTO (Data Transfer Object) **(live, partial)**
 The shape crossing the HTTP boundary — Pydantic request/response models. Kept **separate**
-from domain objects. `backend/api/schemas.py`. API-level validation (regex on `unit`/`type`,
-non-empty checks) lives here, not in the domain.
+from domain objects. Recipe DTOs live in `backend/api/schemas.py` as of Stage 3 (timing DTOs
+stay in `backend/models.py` until Part IV; `models.py` re-exports the recipe names for
+now). API-level validation (regex on `unit`/`type`, non-empty checks) lives here, not in the
+domain. Dropped as dead in Stage 3: `RecipeUpdateRequest`, `IngredientDiff`, `StepDiff`,
+`RecipeVersionDiff`.
 
-### Mapper **(target)**
-Pure functions that convert between representations: `api/mappers.py` (DTO ↔ domain),
-`infrastructure/mappers.py` (database row ↔ domain).
+### Mapper **(live, partial)**
+Pure functions that convert between representations. `backend/api/mappers.py` (DTO ↔ domain)
+exists as of Stage 3, round-trip-tested but not yet wired into the routes (Stage 6).
+`infrastructure/mappers.py` (database row ↔ domain) comes in Stage 4.
 
 ### Composition root **(live)**
 The single place where concrete implementations are wired together. Here: the `Depends`
