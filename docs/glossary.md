@@ -19,7 +19,16 @@ root (see Part B).
 ### Recipe version **(live)**
 An immutable snapshot of a recipe's content: ingredients, steps, and (target) component
 references. Table: `recipe_versions`. Today every save creates one; (target) that changes —
-see *Draft* / *promotion*.
+see *Draft* / *promotion*. An **entity** — it has its own id, which bakes and component
+references pin. (Sometimes called a "recipe specification" in design discussion — same thing.)
+
+### Recipe history **(concept — not a modeled type)**
+The set of a recipe's versions, ordered by time. **Deliberately not an entity or value
+object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
+repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`. The
+`Recipe` aggregate holds only the current version (+ the Draft, in Part II); history is
+loaded on demand. Only promote it to a value object if real domain logic over the version
+sequence appears (e.g. trend analysis, adjacent-version diffs).
 
 ### Draft **(target)**
 The single mutable working copy of a recipe. Editing changes the Draft in place — it does

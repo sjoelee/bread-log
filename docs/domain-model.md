@@ -83,6 +83,12 @@ is owned by the whole. `..>` = the timing merely references a recipe by id.
 Fields typed `str` / `dict` above are `Optional` in the code where shown with `?`
 in the glossary — Mermaid drops the `?`.
 
+**No `RecipeHistory` type.** Version history is a repository query —
+`RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`, ordered by
+`created_at` — not an object on the aggregate. The aggregate hydrates only the
+current version (+ the Draft, in Part II). "Recipe specification" is a synonym
+for `RecipeVersion` you may see in design notes.
+
 ### Why each class is what it is
 
 | Class | Kind | Reason |
