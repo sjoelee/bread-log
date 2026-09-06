@@ -1,8 +1,7 @@
 """Recipe request/response DTOs and API-level validation.
 
-The HTTP edge shape — separate from the domain model in ``backend/domain/models.py``.
-Moved here from ``backend/models.py`` in Stage 3 (timing DTOs stay there until
-Part IV). All regex patterns and ``field_validator``s live here, not in the domain.
+The HTTP edge shape — regex patterns and ``field_validator``s live here, not in
+the domain model (``backend/domain/models.py``).
 """
 
 from datetime import datetime
@@ -77,7 +76,7 @@ class RecipeVersionRequest(BaseModel):
   ingredients: List[Ingredient]
   instructions: List[RecipeStep]
   description: Optional[str] = None
-  force_major: bool = False  # vestigial; removed with the versioning rewrite in Part II
+  force_major: bool = False  # accepted for compatibility; currently ignored
 
 
 # --- Response DTOs -----------------------------------------------------------
@@ -94,12 +93,6 @@ class RecipeVersion(BaseModel):
   change_summary: Optional[dict] = None
 
 
-class BakersPercentages(BaseModel):
-  total_flour_weight: float
-  flour_ingredients: List[dict]
-  other_ingredients: List[dict]
-
-
 class Recipe(BaseModel):
   id: UUID
   name: str
@@ -107,7 +100,6 @@ class Recipe(BaseModel):
   category: Optional[str] = None
   current_version_id: UUID
   current_version: RecipeVersion
-  bakers_percentages: Optional[BakersPercentages] = None
   created_at: datetime
   updated_at: datetime
 
@@ -117,11 +109,10 @@ class RecipeListItem(BaseModel):
   name: str
   description: Optional[str] = None
   category: Optional[str] = None
-  version: str  # e.g., "2", "3"
+  version: str
   current_version_id: UUID
   ingredient_count: int
   step_count: int
-  flour_ingredient_names: Optional[str] = None
   created_at: datetime
   updated_at: datetime
 

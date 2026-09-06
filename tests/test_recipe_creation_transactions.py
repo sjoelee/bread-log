@@ -30,7 +30,9 @@ class TestRecipeTransactionIntegrity:
     }
 
     # WHEN: Database error occurs during version creation (step 2)
-    with patch("backend.db.DBConnector.create_versioned_recipe") as mock_create:
+    with patch(
+      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+    ) as mock_create:
       # Simulate database error during transaction
       mock_create.side_effect = DatabaseError("Failed to insert recipe version")
 
@@ -42,32 +44,6 @@ class TestRecipeTransactionIntegrity:
 
     # Verify the error was handled properly
     mock_create.assert_called_once()
-
-  def test_transaction_rollback_on_percentage_calculation_failure(self):
-    """Test rollback when baker's percentage calculation fails"""
-
-    # GIVEN: Valid recipe data
-    recipe_data = {
-      "name": "Percentage Failure Test",
-      "ingredients": [
-        {"name": "flour", "amount": 1000, "unit": "grams", "type": "flour"},
-        {"name": "water", "amount": 750, "unit": "grams", "type": "liquid"},
-      ],
-      "instructions": [{"order": 1, "instruction": "Mix"}],
-    }
-
-    # WHEN: Error occurs during baker's percentage calculation (step 4)
-    with patch("backend.recipe_service.calculate_bakers_percentages") as mock_calc:
-      # Simulate calculation error
-      mock_calc.side_effect = ValueError(
-        "Invalid ingredient data for percentage calculation"
-      )
-
-      response = client.post("/recipes/", json=recipe_data)
-
-    # THEN: Validation error is returned
-    assert response.status_code == 422
-    assert "validation error" in response.json()["detail"].lower()
 
   def test_successful_transaction_with_all_steps(self):
     """Test that successful recipe creation completes all transaction steps"""
@@ -100,7 +76,6 @@ class TestRecipeTransactionIntegrity:
     assert data["current_version"]["version_number"] == 1
     assert len(data["current_version"]["ingredients"]) == 3
     assert len(data["current_version"]["instructions"]) == 2
-    assert data["bakers_percentages"]["total_flour_weight"] == 1000.0
 
   def test_connection_recovery_after_failed_transaction(self):
     """Test that failed transactions don't break subsequent requests"""
@@ -124,7 +99,9 @@ class TestRecipeTransactionIntegrity:
     }
 
     # WHEN: First request fails due to database error
-    with patch("backend.db.DBConnector.create_versioned_recipe") as mock_create:
+    with patch(
+      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+    ) as mock_create:
       mock_create.side_effect = DatabaseError("Simulated database failure")
 
       failing_response = client.post("/recipes/", json=failing_recipe)
@@ -219,7 +196,9 @@ class TestSpecificTransactionSteps:
     }
 
     # Mock specific database error during recipe insertion
-    with patch("backend.db.DBConnector.create_versioned_recipe") as mock_create:
+    with patch(
+      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+    ) as mock_create:
       mock_create.side_effect = DatabaseError("Failed to insert into recipes table")
 
       response = client.post("/recipes/", json=recipe_data)
@@ -241,7 +220,9 @@ class TestSpecificTransactionSteps:
       "instructions": [{"order": 1, "instruction": "Mix"}],
     }
 
-    with patch("backend.db.DBConnector.create_versioned_recipe") as mock_create:
+    with patch(
+      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+    ) as mock_create:
       # Simulate foreign key constraint violation
       mock_create.side_effect = DatabaseError("Foreign key constraint violation")
 

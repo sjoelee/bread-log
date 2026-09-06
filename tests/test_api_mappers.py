@@ -63,21 +63,6 @@ class TestDomainToDto:
     assert dto.current_version_id == recipe.current_version.id
     assert dto.current_version.version_number == 1
     assert [i.name for i in dto.current_version.ingredients] == ["bread flour", "water"]
-    assert dto.bakers_percentages is None
-
-  def test_recipe_to_dto_with_bakers_percentages(self):
-    dto = mappers.recipe_to_dto(
-      _domain_recipe(),
-      bakers_percentages={
-        "total_flour_weight": 1000.0,
-        "flour_ingredients": [
-          {"name": "bread flour", "amount": 1000, "percentage": 100}
-        ],
-        "other_ingredients": [{"name": "water", "amount": 750, "percentage": 75}],
-      },
-    )
-    assert dto.bakers_percentages is not None
-    assert dto.bakers_percentages.total_flour_weight == 1000.0
 
   def test_version_after_add_version(self):
     recipe = _domain_recipe()

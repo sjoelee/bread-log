@@ -1,12 +1,6 @@
 """Domain model: value objects and the Recipe aggregate.
 
-Plain dataclasses — no Pydantic, no psycopg, no FastAPI. Introduced in Stage 2 as
-scaffolding; nothing wires through these yet. Stage 3 (DTOs + mappers) gives them
-their first real consumer, and Part II grows the aggregate (Draft/Ready lifecycle,
-components).
-
-Current field names mirror today's reality (a step's text is ``instruction``,
-ingredient ``type`` is the old five-value vocab). Part II renames/extends.
+Plain dataclasses — no Pydantic, no psycopg, no FastAPI imports.
 """
 
 from __future__ import annotations
@@ -26,11 +20,7 @@ class Ingredient:
   name: str
   amount: float
   unit: str
-  # flour | liquid | preferment | fat | other — optional; a user may not classify
-  # an ingredient.
-  # TODO: `type` is bread-specific. A candidate to move to a bread specialization
-  # of Recipe (e.g. BreadRecipe, by inheritance or a BreadFormula value object)
-  # once the domain is recipe-general.
+  # optional classification, e.g. flour | liquid | preferment | fat | other
   type: Optional[str] = None
   notes: Optional[str] = None
   id: Optional[str] = None
@@ -41,6 +31,23 @@ class RecipeStep:
   order: int
   instruction: str
   id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class RecipeSummary:
+  """Flat read model returned by ``RecipeRepository.list()`` — a database-computed
+  projection, not part of any aggregate."""
+
+  id: UUID
+  name: str
+  description: Optional[str]
+  category: Optional[str]
+  version_number: Optional[int]
+  current_version_id: Optional[UUID]
+  ingredient_count: int
+  step_count: int
+  created_at: datetime
+  updated_at: datetime
 
 
 # --- Entities -----------------------------------------------------------------
@@ -94,7 +101,7 @@ class Recipe:
       id=version_id,
       recipe_id=recipe_id,
       version_number=1,
-      description=description or "Initial version",
+      description="Initial version",
       ingredients=list(ingredients),
       instructions=list(instructions),
       created_at=now,
@@ -118,11 +125,7 @@ class Recipe:
     description: Optional[str] = None,
     change_summary: Optional[dict] = None,
   ) -> RecipeVersion:
-    """Replace the current version with a new one, ``version_number`` += 1.
-
-    Behavior-preserving mirror of ``RecipeService._create_recipe_version``.
-    Part II Slice A replaces this with ``edit_draft()`` + ``promote()``.
-    """
+    """Replace the current version with a new one, ``version_number`` incremented."""
     next_number = self.current_version.version_number + 1
     version = RecipeVersion(
       id=uuid.uuid4(),

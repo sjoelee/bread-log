@@ -1,111 +1,122 @@
-"""
-Recipe Creation Service Tests - Test-Driven Development
-Tests for the RecipeService.create_recipe() method before testing API layer
-"""
+"""RecipeService against an in-memory repository — no database."""
+
+from datetime import datetime
 
 import pytest
-from unittest.mock import MagicMock
 
-# RecipeService receives its DBConnector — it never constructs one — so tests
-# can just hand it a MagicMock. No import-time patching needed.
+from backend.api import schemas
 from backend.recipe_service import RecipeService
-from backend.models import RecipeRequest, Ingredient, RecipeStep
+from tests.fakes import FakeRecipeRepository
+
+FIXED_NOW = datetime(2024, 5, 1, 12, 0, 0)
 
 
-class TestRecipeCreationService:
-  """Test the recipe creation service logic"""
+def _service():
+  return RecipeService(FakeRecipeRepository(), now=lambda: FIXED_NOW)
 
-  def setup_method(self):
-    """Set up test fixtures"""
-    self.mock_db = MagicMock()
-    self.recipe_service = RecipeService(self.mock_db)
 
-  def test_create_basic_recipe_data_processing(self):
-    """Test that recipe service processes basic recipe data correctly"""
+def _request(**overrides):
+  data = dict(
+    name="Simple Sourdough",
+    description="Basic country bread",
+    category="sourdough",
+    ingredients=[
+      {"name": "bread flour", "amount": 1000, "unit": "grams", "type": "flour"},
+      {"name": "water", "amount": 750, "unit": "grams", "type": "liquid"},
+    ],
+    instructions=[
+      {"order": 1, "instruction": "Autolyse"},
+      {"order": 2, "instruction": "Mix"},
+    ],
+  )
+  data.update(overrides)
+  return schemas.RecipeRequest(**data)
 
-    # GIVEN: Valid recipe request
-    recipe_request = RecipeRequest(
-      name="Simple Sourdough",
-      description="Basic country bread",
-      category="sourdough",
-      ingredients=[
-        Ingredient(name="bread flour", amount=1000, unit="grams", type="flour"),
-        Ingredient(name="water", amount=750, unit="grams", type="liquid"),
-      ],
-      instructions=[
-        RecipeStep(order=1, instruction="Autolyse flour and water for 30 minutes"),
-        RecipeStep(order=2, instruction="Add levain and mix thoroughly"),
-      ],
+
+class TestCreateRecipe:
+  def test_creates_version_one_with_generated_ids(self):
+    svc = _service()
+    recipe = svc.create_recipe(_request())
+
+    assert isinstance(recipe, schemas.Recipe)
+    assert recipe.name == "Simple Sourdough"
+    assert recipe.category == "sourdough"
+    assert recipe.current_version.version_number == 1
+    assert recipe.current_version.description == "Initial version"
+    assert all(i.id for i in recipe.current_version.ingredients)
+    assert all(s.id for s in recipe.current_version.instructions)
+    assert recipe.created_at == FIXED_NOW
+
+
+class TestUpdateRecipe:
+  def test_full_update_bumps_version_and_updates_metadata(self):
+    svc = _service()
+    created = svc.create_recipe(_request())
+
+    updated = svc.update_recipe_full(
+      created.id,
+      _request(
+        name="Renamed",
+        category="lean",
+        ingredients=[{"name": "rye", "amount": 900, "unit": "grams", "type": "flour"}],
+        instructions=[{"order": 1, "instruction": "Mix well"}],
+      ),
     )
 
-    # Mock the database operations
-    self.mock_db.create_recipe_with_transaction.return_value = True
+    assert updated.name == "Renamed"
+    assert updated.category == "lean"
+    assert updated.current_version.version_number == 2
+    assert [i.name for i in updated.current_version.ingredients] == ["rye"]
+    assert updated.current_version.change_summary["total_changes"] > 0
 
-    # WHEN: Recipe is created (this will fail until we implement it)
-    # For now, just test that the request model validation works
-    assert recipe_request.name == "Simple Sourdough"
-    assert len(recipe_request.ingredients) == 2
-    assert len(recipe_request.instructions) == 2
-    assert recipe_request.ingredients[0].type == "flour"
-    assert recipe_request.ingredients[0].amount == 1000
+  def test_update_missing_recipe_raises(self):
+    from uuid import uuid4
 
-  def test_ingredient_validation(self):
-    """Test ingredient validation works"""
-
-    # GIVEN: Invalid ingredient data
-    with pytest.raises(Exception):  # This should be a ValidationError
-      Ingredient(
-        name="",  # Empty name should fail
-        amount=100,
-        unit="grams",
-        type="flour",
-      )
-
-    with pytest.raises(Exception):  # This should be a ValidationError
-      Ingredient(
-        name="flour",
-        amount=-100,  # Negative amount should fail
-        unit="grams",
-        type="flour",
-      )
-
-  def test_recipe_request_validation(self):
-    """Test recipe request validation"""
-
-    # GIVEN: Invalid recipe data
-    with pytest.raises(Exception):  # Should be ValidationError
-      RecipeRequest(
-        name="",  # Empty name should fail
-        ingredients=[],  # Empty ingredients should fail
-        instructions=[],  # Empty instructions should fail
-      )
+    with pytest.raises(ValueError, match="not found"):
+      _service().update_recipe_full(uuid4(), _request())
 
 
-class TestBakersPercentageCalculation:
-  """Test baker's percentage calculation logic"""
+class TestQueries:
+  def test_get_and_list_and_delete(self):
+    svc = _service()
+    created = svc.create_recipe(_request(name="Findable"))
 
-  def test_single_flour_calculation(self):
-    """Test percentage calculation with single flour type"""
+    assert svc.get_recipe(created.id).name == "Findable"
 
-    # This is a unit test of the calculation logic
-    # We'll implement this when we get to the calculation functions
-    ingredients = [
-      {"name": "bread flour", "amount": 1000, "type": "flour"},
-      {"name": "water", "amount": 750, "type": "liquid"},
-      {"name": "salt", "amount": 20, "type": "other"},
-    ]
+    listed = svc.list_recipes(search="findable")
+    assert [item.name for item in listed] == ["Findable"]
+    assert listed[0].version == "1"
 
-    # Expected percentages:
-    # flour: 100% (base)
-    # water: 75% (750/1000)
-    # salt: 2% (20/1000)
+    assert svc.delete_recipe(created.id) is True
+    assert svc.get_recipe(created.id) is None
 
-    # For now, just validate the test data structure
-    flour_total = sum(ing["amount"] for ing in ingredients if ing["type"] == "flour")
-    assert flour_total == 1000
+  def test_get_missing_returns_none(self):
+    from uuid import uuid4
 
-    water_percentage = (750 / flour_total) * 100
-    assert water_percentage == 75.0
+    assert _service().get_recipe(uuid4()) is None
 
-    salt_percentage = (20 / flour_total) * 100
-    assert salt_percentage == 2.0
+  def test_delete_missing_raises(self):
+    from uuid import uuid4
+
+    with pytest.raises(ValueError):
+      _service().delete_recipe(uuid4())
+
+  def test_version_history_and_diff(self):
+    svc = _service()
+    created = svc.create_recipe(_request())
+    svc.update_recipe_full(
+      created.id,
+      _request(
+        ingredients=[
+          {"name": "bread flour", "amount": 1000, "unit": "grams", "type": "flour"}
+        ],
+        instructions=[{"order": 1, "instruction": "Autolyse"}],
+      ),
+    )
+
+    versions = svc.get_recipe_versions(created.id)
+    assert [v.version_number for v in versions] == [2, 1]
+
+    diff = svc.get_recipe_version_diff(created.id, versions[1].id, versions[0].id)
+    assert diff["from_version"] == "1"
+    assert diff["to_version"] == "2"

@@ -1,13 +1,12 @@
 """Recipe versioning: ingredient/step matching and diffing.
 
-Pure functions over plain dicts — no I/O, no framework imports. Moved here from
-``backend/recipe_versioning.py`` in Stage 2, otherwise unchanged.
+Pure functions over plain dicts — no I/O, no framework imports.
 
-Dead code kept for now, removed in Stage 7: ``calculate_step_similarity``,
-``determine_next_version`` (major/minor versioning is gone), ``has_meaningful_changes``
-(will be wired in as a no-op guard in Stage 6).
+Unused, pending removal: ``calculate_step_similarity``, ``determine_next_version``,
+``has_meaningful_changes``, ``calculate_bakers_percentages``.
 """
 
+import dataclasses
 import re
 import uuid
 from typing import List, Dict, Tuple
@@ -197,6 +196,22 @@ def generate_ingredient_ids(ingredients: List[Dict]) -> List[Dict]:
       ingredient["id"] = str(uuid.uuid4())
     updated_ingredients.append(ingredient)
   return updated_ingredients
+
+
+def assign_ingredient_ids(ingredients):
+  """Return the list with a uuid filled in for any Ingredient missing one."""
+  return [
+    ing if ing.id else dataclasses.replace(ing, id=str(uuid.uuid4()))
+    for ing in ingredients
+  ]
+
+
+def assign_step_ids(steps):
+  """Return the list with a uuid filled in for any RecipeStep missing one."""
+  return [
+    step if step.id else dataclasses.replace(step, id=str(uuid.uuid4()))
+    for step in steps
+  ]
 
 
 def determine_next_version(

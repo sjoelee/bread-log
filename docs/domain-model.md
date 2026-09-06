@@ -51,14 +51,14 @@ classDiagram
         +str id
     }
 
-    class RecipeListItem {
+    class RecipeSummary {
         <<read projection>>
         +UUID id
         +str name
-        +str version
+        +str category
+        +int version_number
         +int ingredient_count
         +int step_count
-        +str flour_ingredient_names
     }
 
     class BreadTiming {
@@ -74,14 +74,12 @@ classDiagram
     RecipeVersion "1" *-- "1..*" RecipeStep : instructions
     BreadTiming ..> Recipe : references by id only
 
-    note for Recipe "Aggregate boundary: Recipe + its RecipeVersion + the embedded value objects. Loaded and saved as ONE unit (RecipeRepository, Stage 4). Full version history is a separate repo read, not held on the aggregate."
-    note for RecipeListItem "Not a domain object. A flat summary the database computes in one query (jsonb_array_length, string_agg). repo.list() returns it directly."
+    note for Recipe "Aggregate boundary: Recipe + its RecipeVersion + the embedded value objects. Loaded and saved as one unit by RecipeRepository. Full version history is a separate repo read, not held on the aggregate."
+    note for RecipeSummary "Not a domain object. A flat DB-computed summary. RecipeRepository.list() returns it; mapped to the RecipeListItem DTO at the edge."
 ```
 
 `*--` (filled diamond) = composition: the part has no independent lifecycle and
 is owned by the whole. `..>` = the timing merely references a recipe by id.
-Fields typed `str` / `dict` above are `Optional` in the code where shown with `?`
-in the glossary — Mermaid drops the `?`.
 
 **No `RecipeHistory` type.** Version history is a repository query —
 `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`, ordered by
@@ -97,7 +95,7 @@ for `RecipeVersion` you may see in design notes.
 | `RecipeVersion` | entity | own UUID identity; a distinct thing pointed at by `current_version_id` and by timings' `recipe_version_id` |
 | `Ingredient` | value object (`frozen=True`) | fully defined by its attributes ("1000 g bread flour"); no identity; change = new value |
 | `RecipeStep` | value object (`frozen=True`) | defined by `order` + `instruction`; the optional `id` is a soft diff-matching key, not identity |
-| `RecipeListItem` | DTO / read model | DB-computed projection; never mutated, no invariants — pure query side |
+| `RecipeSummary` | read model | DB-computed projection; never mutated, no invariants — pure query side |
 | `BreadTiming` | separate aggregate | own root; its invariants (timestamp ordering, status) are unrelated to a recipe's |
 
 ---
@@ -108,7 +106,6 @@ for `RecipeVersion` you may see in design notes.
 erDiagram
     recipes ||--o{ recipe_versions : "recipe_id"
     recipes |o--|| recipe_versions : "current_version_id (circular)"
-    recipe_versions |o--o| bakers_percentages : "one per version"
     recipes |o--o{ bread_timings : "recipe_id · SET NULL"
     recipe_versions |o--o{ bread_timings : "recipe_version_id · SET NULL"
 
@@ -131,14 +128,6 @@ erDiagram
         jsonb change_summary
         timestamp created_at
     }
-    bakers_percentages {
-        uuid id PK
-        uuid recipe_id FK
-        uuid recipe_version_id FK
-        numeric total_flour_weight
-        jsonb flour_ingredients
-        jsonb other_ingredients
-    }
     bread_timings {
         uuid id PK
         varchar recipe_name
@@ -150,8 +139,7 @@ erDiagram
 
 - `Ingredient[]` / `RecipeStep[]` are **not tables** — they live in the
   `recipe_versions` JSONB columns (`{"ingredients": [...]}`, `{"instructions": [...]}`).
-- `bakers_percentages` is a table but **not part of the domain aggregate**; the
-  mapper passes it to `recipe_to_dto` as an argument.
+- A `bakers_percentages` table still exists but is unused (not read or written).
 - The circular FK (`recipes.current_version_id` ↔ `recipe_versions.recipe_id`)
   is why inserts are staged (insert recipe → insert version → set pointer).
 

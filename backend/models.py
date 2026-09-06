@@ -4,12 +4,11 @@ from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from uuid import UUID
 
-# Recipe DTOs moved to backend/api/schemas.py in Stage 3. Re-exported here so
-# existing `from backend.models import Recipe` call sites keep working until they
-# are updated (Stages 4/6). Dropped as dead: RecipeUpdateRequest, IngredientDiff,
-# StepDiff, RecipeVersionDiff.
+# Recipe DTOs live in backend/api/schemas.py. Re-exported here so existing
+# `from backend.models import Recipe` call sites keep working until updated
+# (Stage 6). Dropped: RecipeUpdateRequest, IngredientDiff, StepDiff,
+# RecipeVersionDiff (Stage 3), BakersPercentages (Stage 4).
 from .api.schemas import (  # noqa: F401
-  BakersPercentages,
   Ingredient,
   Recipe,
   RecipeCreateResponse,

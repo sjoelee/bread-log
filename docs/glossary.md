@@ -92,12 +92,11 @@ An ordered instruction. Today: `{order, text}` free text. (target) `{order, text
 where `kind ∈ prep | mix | ferment | shape | bake | finish` and `uses[]` names the
 ingredient/component ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
 
-### Baker's percentage **(live)**
-Each ingredient's weight as a percentage of **total flour weight**. Flour ingredients sum to
-100%; everything else (water, salt, a component) is expressed relative to total flour.
-`total_flour_weight = sum(amount where type == 'flour')`. A *component* (target) is treated as
-a plain non-flour line item — no decomposition into its own flour/water. Table:
-`bakers_percentages`; function: `calculate_bakers_percentages`.
+### Baker's percentage **(not modelled)**
+Each ingredient's weight as a percentage of total flour weight. Bread-specific; **not in the
+backend domain or API** — the frontend computes it for display. `calculate_bakers_percentages`
+and the `bakers_percentages` table still exist but are unused, pending removal or a
+bread-specific model.
 
 ### Overall formula vs final dough
 Pro-baking terms. *Overall formula* folds pre-ferment flour/water back into the totals;
@@ -189,12 +188,18 @@ domain methods, commits. Holds the *sequence* of a use case but no rules and no 
 Today: `RecipeService` in `backend/recipe_service.py` (still muddy — mixes concerns).
 Target: `backend/application/recipe_service.py` + `timing_service.py`.
 
-### Repository **(target)**
+### Repository **(live for recipes)**
 A collection-like interface for loading and saving **one aggregate**, hiding SQL and the
-multi-table span. Split into:
-- **Port** — the interface (`Protocol`) the application depends on. `backend/domain/repositories.py`.
-- **Adapter** — the Postgres implementation. `backend/infrastructure/recipe_repository.py`
-  (`PgRecipeRepository`). A `FakeRecipeRepository` (in-memory) is used in unit tests.
+multi-table span. `backend/infrastructure/recipe_repository.py::RecipeRepository` is the
+Postgres implementation (`get` / `get_version` / `get_versions` / `list` / `add` / `save` /
+`delete`); `tests/fakes.py::FakeRecipeRepository` is the in-memory one for DB-free tests. No
+separate `Protocol` — `RecipeService` is typed against `RecipeRepository` and the fake is
+structurally compatible. `TimingRepository` is Part IV.
+
+### RecipeSummary **(live)**
+The flat read model `RecipeRepository.list()` returns — a database-computed projection (name,
+category, counts, current version number), not part of any aggregate. Mapped to
+`api.schemas.RecipeListItem` at the edge.
 
 ### Unit of Work (UoW) **(target)**
 A context manager that owns one database connection and one transaction. Entered once per
@@ -210,10 +215,10 @@ now). API-level validation (regex on `unit`/`type`, non-empty checks) lives here
 domain. Dropped as dead in Stage 3: `RecipeUpdateRequest`, `IngredientDiff`, `StepDiff`,
 `RecipeVersionDiff`.
 
-### Mapper **(live, partial)**
-Pure functions that convert between representations. `backend/api/mappers.py` (DTO ↔ domain)
-exists as of Stage 3, round-trip-tested but not yet wired into the routes (Stage 6).
-`infrastructure/mappers.py` (database row ↔ domain) comes in Stage 4.
+### Mapper **(live)**
+Pure functions that convert between representations: `backend/api/mappers.py` (DTO ↔ domain)
+and `backend/infrastructure/mappers.py` (database row → domain). `RecipeService` uses both —
+DTO in at the API edge, row out from the repository.
 
 ### Composition root **(live)**
 The single place where concrete implementations are wired together. Here: the `Depends`
