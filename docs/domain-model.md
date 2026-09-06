@@ -11,7 +11,6 @@ Status: as of Stage 3. Part II additions shown separately at the bottom.
 
 ```mermaid
 classDiagram
-    direction TB
 
     class Recipe {
         <<aggregate root>>
@@ -156,7 +155,6 @@ erDiagram
 
 ```mermaid
 classDiagram
-    direction TB
 
     class Recipe {
         <<aggregate root>>
