@@ -19,7 +19,16 @@ root (see Part B).
 ### Recipe version **(live)**
 An immutable snapshot of a recipe's content: ingredients, steps, and (target) component
 references. Table: `recipe_versions`. Today every save creates one; (target) that changes —
-see *Draft* / *promotion*.
+see *Draft* / *promotion*. An **entity** — it has its own id, which bakes and component
+references pin. (Sometimes called a "recipe specification" in design discussion — same thing.)
+
+### Recipe history **(concept — not a modeled type)**
+The set of a recipe's versions, ordered by time. **Deliberately not an entity or value
+object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
+repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`. The
+`Recipe` aggregate holds only the current version (+ the Draft, in Part II); history is
+loaded on demand. Only promote it to a value object if real domain logic over the version
+sequence appears (e.g. trend analysis, adjacent-version diffs).
 
 ### Draft **(target)**
 The single mutable working copy of a recipe. Editing changes the Draft in place — it does
@@ -193,14 +202,18 @@ use case by the application service; exposes `.recipes` / `.timings` bound to th
 connection; **commits on clean exit, rolls back on exception**. `backend/infrastructure/unit_of_work.py`.
 Replaces today's pattern where every `DBConnector` method opens its own connection and commits.
 
-### DTO (Data Transfer Object) **(target)**
+### DTO (Data Transfer Object) **(live, partial)**
 The shape crossing the HTTP boundary — Pydantic request/response models. Kept **separate**
-from domain objects. `backend/api/schemas.py`. API-level validation (regex on `unit`/`type`,
-non-empty checks) lives here, not in the domain.
+from domain objects. Recipe DTOs live in `backend/api/schemas.py` as of Stage 3 (timing DTOs
+stay in `backend/models.py` until Part IV; `models.py` re-exports the recipe names for
+now). API-level validation (regex on `unit`/`type`, non-empty checks) lives here, not in the
+domain. Dropped as dead in Stage 3: `RecipeUpdateRequest`, `IngredientDiff`, `StepDiff`,
+`RecipeVersionDiff`.
 
-### Mapper **(target)**
-Pure functions that convert between representations: `api/mappers.py` (DTO ↔ domain),
-`infrastructure/mappers.py` (database row ↔ domain).
+### Mapper **(live, partial)**
+Pure functions that convert between representations. `backend/api/mappers.py` (DTO ↔ domain)
+exists as of Stage 3, round-trip-tested but not yet wired into the routes (Stage 6).
+`infrastructure/mappers.py` (database row ↔ domain) comes in Stage 4.
 
 ### Composition root **(live)**
 The single place where concrete implementations are wired together. Here: the `Depends`
