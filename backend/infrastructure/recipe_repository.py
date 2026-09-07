@@ -1,6 +1,7 @@
 """Recipe persistence. Speaks domain objects; callers never see a row or a query.
 
-Each method opens a pooled connection and commits itself.
+Each instance is bound to one connection (handed in by ``UnitOfWork``) and never
+commits — the Unit of Work owns the transaction boundary.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ from dataclasses import asdict
 from typing import List, Optional
 from uuid import UUID
 
-from ..db import DatabasePool
 from ..domain import models as domain
 from ..exceptions import DatabaseError
 from . import mappers
@@ -53,8 +53,8 @@ def _instructions_json(steps: List[domain.RecipeStep]) -> str:
 
 
 class RecipeRepository:
-  def __init__(self, pool: DatabasePool):
-    self._pool = pool
+  def __init__(self, conn):
+    self._conn = conn
 
   # --- reads ---------------------------------------------------------------
 
@@ -120,87 +120,83 @@ class RecipeRepository:
     """Insert a new recipe and its first version."""
     v = recipe.current_version
     try:
-      with self._pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(
-            "INSERT INTO recipes (id, name, description, category, created_at, updated_at) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            [
-              recipe.id,
-              recipe.name,
-              recipe.description,
-              recipe.category,
-              recipe.created_at,
-              recipe.updated_at,
-            ],
-          )
-          cur.execute(
-            "INSERT INTO recipe_versions "
-            "(id, recipe_id, version_number, description, ingredients, instructions, created_at) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            [
-              v.id,
-              recipe.id,
-              v.version_number,
-              v.description,
-              _ingredients_json(v.ingredients),
-              _instructions_json(v.instructions),
-              v.created_at,
-            ],
-          )
-          cur.execute(
-            "UPDATE recipes SET current_version_id = %s WHERE id = %s",
-            [v.id, recipe.id],
-          )
-          conn.commit()
+      with self._conn.cursor() as cur:
+        cur.execute(
+          "INSERT INTO recipes (id, name, description, category, created_at, updated_at) "
+          "VALUES (%s, %s, %s, %s, %s, %s)",
+          [
+            recipe.id,
+            recipe.name,
+            recipe.description,
+            recipe.category,
+            recipe.created_at,
+            recipe.updated_at,
+          ],
+        )
+        cur.execute(
+          "INSERT INTO recipe_versions "
+          "(id, recipe_id, version_number, description, ingredients, instructions, created_at) "
+          "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+          [
+            v.id,
+            recipe.id,
+            v.version_number,
+            v.description,
+            _ingredients_json(v.ingredients),
+            _instructions_json(v.instructions),
+            v.created_at,
+          ],
+        )
+        cur.execute(
+          "UPDATE recipes SET current_version_id = %s WHERE id = %s",
+          [v.id, recipe.id],
+        )
     except Exception as e:
       logger.error(f"Error adding recipe {recipe.id}: {e}")
       raise DatabaseError(f"Error adding recipe: {e}") from e
 
   def save(self, recipe: domain.Recipe) -> None:
     """Persist an existing recipe: upsert its current version, move the current
-    pointer, and update the scalar fields — in one transaction. Raises
-    ``ValueError`` if the recipe row is gone."""
+    pointer, and update the scalar fields. Raises ``ValueError`` if the recipe
+    row is gone."""
     v = recipe.current_version
     try:
-      with self._pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(
-            "INSERT INTO recipe_versions "
-            "(id, recipe_id, version_number, description, ingredients, instructions, created_at, change_summary) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT (id) DO UPDATE SET "
-            "  version_number = EXCLUDED.version_number, "
-            "  description    = EXCLUDED.description, "
-            "  ingredients    = EXCLUDED.ingredients, "
-            "  instructions   = EXCLUDED.instructions, "
-            "  change_summary = EXCLUDED.change_summary",
-            [
-              v.id,
-              recipe.id,
-              v.version_number,
-              v.description,
-              _ingredients_json(v.ingredients),
-              _instructions_json(v.instructions),
-              v.created_at,
-              json.dumps(v.change_summary or {}),
-            ],
-          )
-          cur.execute(
-            "UPDATE recipes SET name = %s, description = %s, category = %s, "
-            "current_version_id = %s, updated_at = %s WHERE id = %s",
-            [
-              recipe.name,
-              recipe.description,
-              recipe.category,
-              v.id,
-              recipe.updated_at,
-              recipe.id,
-            ],
-          )
-          if cur.rowcount == 0:
-            raise ValueError(f"Recipe {recipe.id} not found")
-          conn.commit()
+      with self._conn.cursor() as cur:
+        cur.execute(
+          "INSERT INTO recipe_versions "
+          "(id, recipe_id, version_number, description, ingredients, instructions, created_at, change_summary) "
+          "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+          "ON CONFLICT (id) DO UPDATE SET "
+          "  version_number = EXCLUDED.version_number, "
+          "  description    = EXCLUDED.description, "
+          "  ingredients    = EXCLUDED.ingredients, "
+          "  instructions   = EXCLUDED.instructions, "
+          "  change_summary = EXCLUDED.change_summary",
+          [
+            v.id,
+            recipe.id,
+            v.version_number,
+            v.description,
+            _ingredients_json(v.ingredients),
+            _instructions_json(v.instructions),
+            v.created_at,
+            json.dumps(v.change_summary or {}),
+          ],
+        )
+        cur.execute(
+          "UPDATE recipes SET name = %s, description = %s, category = %s, "
+          "current_version_id = %s, updated_at = %s WHERE id = %s",
+          [
+            recipe.name,
+            recipe.description,
+            recipe.category,
+            v.id,
+            recipe.updated_at,
+            recipe.id,
+          ],
+        )
+        if cur.rowcount == 0:
+          raise ValueError(f"Recipe {recipe.id} not found")
     except ValueError:
       raise
     except Exception as e:
@@ -210,12 +206,9 @@ class RecipeRepository:
   def delete(self, recipe_id: UUID) -> bool:
     """Delete a recipe. Cascades to its versions. Returns False if it did not exist."""
     try:
-      with self._pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute("DELETE FROM recipes WHERE id = %s", [recipe_id])
-          deleted = cur.rowcount
-          conn.commit()
-      return deleted > 0
+      with self._conn.cursor() as cur:
+        cur.execute("DELETE FROM recipes WHERE id = %s", [recipe_id])
+        return cur.rowcount > 0
     except Exception as e:
       logger.error(f"Error deleting recipe {recipe_id}: {e}")
       raise DatabaseError(f"Error deleting recipe: {e}") from e
@@ -224,20 +217,18 @@ class RecipeRepository:
 
   def _fetchone(self, query: str, params, what: str):
     try:
-      with self._pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(query, params)
-          return cur.fetchone()
+      with self._conn.cursor() as cur:
+        cur.execute(query, params)
+        return cur.fetchone()
     except Exception as e:
       logger.error(f"Error ({what}): {e}")
       raise DatabaseError(f"Error {what}: {e}") from e
 
   def _fetchall(self, query: str, params, what: str):
     try:
-      with self._pool.get_connection() as conn:
-        with conn.cursor() as cur:
-          cur.execute(query, params)
-          return cur.fetchall()
+      with self._conn.cursor() as cur:
+        cur.execute(query, params)
+        return cur.fetchall()
     except Exception as e:
       logger.error(f"Error ({what}): {e}")
       raise DatabaseError(f"Error {what}: {e}") from e

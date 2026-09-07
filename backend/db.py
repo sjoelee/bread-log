@@ -62,6 +62,17 @@ class DatabasePool:
       logger.debug(f"Returning connection to pool: {conn}")
       self.pool.putconn(conn)
 
+  def getconn(self):
+    """Check out a raw connection. The caller owns commit/rollback and must
+    return it with ``putconn``. Used by ``UnitOfWork``."""
+    conn = self.pool.getconn()
+    logger.debug(f"Checked out connection: {conn}")
+    return conn
+
+  def putconn(self, conn):
+    logger.debug(f"Returning connection: {conn}")
+    self.pool.putconn(conn)
+
   def close(self):
     self.pool.close()
 

@@ -12,12 +12,16 @@ from .domain import models as domain
 from .domain import versioning
 
 if TYPE_CHECKING:
-  from .infrastructure.recipe_repository import RecipeRepository
+  from .infrastructure.unit_of_work import UnitOfWork
 
 
 class RecipeService:
   """Recipe use cases. Each method takes/returns API DTOs (``api.schemas``) and
   works with domain objects and the repository in between.
+
+  Every method opens a ``UnitOfWork`` for the duration of the use case: all its
+  repository calls share one connection and one transaction, committed on a
+  clean return and rolled back if anything raises.
 
   ``now`` is an injectable clock — override it in tests to get deterministic
   timestamps.
@@ -25,11 +29,11 @@ class RecipeService:
 
   def __init__(
     self,
-    repo: "RecipeRepository",
+    uow_factory: Callable[[], "UnitOfWork"],
     *,
     now: Callable[[], datetime] = datetime.now,
   ):
-    self._repo = repo
+    self._uow_factory = uow_factory
     self._now = now
 
   # --- commands ----------------------------------------------------------
@@ -50,8 +54,9 @@ class RecipeService:
       description=request.description,
       category=request.category,
     )
-    self._repo.add(recipe)
-    return self._reload(recipe.id)
+    with self._uow_factory() as uow:
+      uow.recipes.add(recipe)
+      return self._reload(uow, recipe.id)
 
   def update_recipe_full(
     self, recipe_id: UUID, request: schemas.RecipeRequest
@@ -60,32 +65,33 @@ class RecipeService:
 
     Adds a new version (with a computed ``change_summary`` against the previous
     one) and updates the recipe's ``name``/``description``/``category``. The
-    version bump and the metadata update are saved in one transaction.
+    read, the version bump, and the metadata update are one transaction.
     Raises ``ValueError`` if the recipe does not exist.
     """
-    recipe = self._repo.get(recipe_id)
-    if recipe is None:
-      raise ValueError(f"Recipe with ID {recipe_id} not found")
+    with self._uow_factory() as uow:
+      recipe = uow.recipes.get(recipe_id)
+      if recipe is None:
+        raise ValueError(f"Recipe with ID {recipe_id} not found")
 
-    new_ingredients = mappers.ingredients_to_domain(request.ingredients)
-    new_steps = versioning.assign_step_ids(
-      mappers.steps_to_domain(request.instructions)
-    )
+      new_ingredients = mappers.ingredients_to_domain(request.ingredients)
+      new_steps = versioning.assign_step_ids(
+        mappers.steps_to_domain(request.instructions)
+      )
 
-    recipe.add_version(
-      ingredients=new_ingredients,
-      instructions=new_steps,
-      now=self._now(),
-      description=request.description,
-      change_summary=self._change_summary(
-        recipe.current_version, new_ingredients, new_steps
-      ),
-    )
-    recipe.name = request.name
-    recipe.description = request.description
-    recipe.category = request.category
-    self._repo.save(recipe)
-    return self._reload(recipe_id)
+      recipe.add_version(
+        ingredients=new_ingredients,
+        instructions=new_steps,
+        now=self._now(),
+        description=request.description,
+        change_summary=self._change_summary(
+          recipe.current_version, new_ingredients, new_steps
+        ),
+      )
+      recipe.name = request.name
+      recipe.description = request.description
+      recipe.category = request.category
+      uow.recipes.save(recipe)
+      return self._reload(uow, recipe_id)
 
   def create_recipe_version(
     self,
@@ -100,40 +106,43 @@ class RecipeService:
     ``version_number`` always increments by one. Raises ``ValueError`` if the
     recipe does not exist.
     """
-    recipe = self._repo.get(recipe_id)
-    if recipe is None:
-      raise ValueError(f"Recipe {recipe_id} not found")
+    with self._uow_factory() as uow:
+      recipe = uow.recipes.get(recipe_id)
+      if recipe is None:
+        raise ValueError(f"Recipe {recipe_id} not found")
 
-    new_ingredients = mappers.ingredients_to_domain(ingredients)
-    new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
+      new_ingredients = mappers.ingredients_to_domain(ingredients)
+      new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
 
-    recipe.add_version(
-      ingredients=new_ingredients,
-      instructions=new_steps,
-      now=self._now(),
-      description=description,
-      change_summary=self._change_summary(
-        recipe.current_version, new_ingredients, new_steps
-      ),
-    )
-    self._repo.save(recipe)
-    return self._reload(recipe_id)
+      recipe.add_version(
+        ingredients=new_ingredients,
+        instructions=new_steps,
+        now=self._now(),
+        description=description,
+        change_summary=self._change_summary(
+          recipe.current_version, new_ingredients, new_steps
+        ),
+      )
+      uow.recipes.save(recipe)
+      return self._reload(uow, recipe_id)
 
   def delete_recipe(self, recipe_id: UUID) -> bool:
     """Delete a recipe and (via cascade) all its versions.
 
     Raises ``ValueError`` if it does not exist; otherwise returns ``True``.
     """
-    if self._repo.get(recipe_id) is None:
-      raise ValueError(f"Recipe with ID {recipe_id} not found")
-    return self._repo.delete(recipe_id)
+    with self._uow_factory() as uow:
+      if uow.recipes.get(recipe_id) is None:
+        raise ValueError(f"Recipe with ID {recipe_id} not found")
+      return uow.recipes.delete(recipe_id)
 
   # --- queries -----------------------------------------------------------
 
   def get_recipe(self, recipe_id: UUID) -> Optional[schemas.Recipe]:
     """Return the full recipe (metadata + current version) or ``None`` if absent."""
-    recipe = self._repo.get(recipe_id)
-    return mappers.recipe_to_dto(recipe) if recipe else None
+    with self._uow_factory() as uow:
+      recipe = uow.recipes.get(recipe_id)
+      return mappers.recipe_to_dto(recipe) if recipe else None
 
   def list_recipes(
     self,
@@ -151,23 +160,25 @@ class RecipeService:
     current version; ``category`` is an exact match. ``sort_by`` is ``created_at``
     or ``name``, ``sort_direction`` is ``asc`` or ``desc``.
     """
-    summaries = self._repo.list(
-      category=category,
-      search=search,
-      ingredient=ingredient,
-      sort_by=sort_by,
-      sort_direction=sort_direction,
-      limit=limit,
-      offset=offset,
-    )
-    return [mappers.summary_to_dto(s) for s in summaries]
+    with self._uow_factory() as uow:
+      summaries = uow.recipes.list(
+        category=category,
+        search=search,
+        ingredient=ingredient,
+        sort_by=sort_by,
+        sort_direction=sort_direction,
+        limit=limit,
+        offset=offset,
+      )
+      return [mappers.summary_to_dto(s) for s in summaries]
 
   def get_recipe_versions(self, recipe_id: UUID) -> List[schemas.RecipeVersion]:
     """Return every version of the recipe, newest ``version_number`` first.
 
     Empty list if the recipe has no versions or does not exist.
     """
-    return [mappers.version_to_dto(v) for v in self._repo.get_versions(recipe_id)]
+    with self._uow_factory() as uow:
+      return [mappers.version_to_dto(v) for v in uow.recipes.get_versions(recipe_id)]
 
   def get_recipe_version_diff(
     self, recipe_id: UUID, version_id_1: UUID, version_id_2: UUID
@@ -178,30 +189,31 @@ class RecipeService:
     ``ValueError``. The result is a plain dict (``from_version``, ``to_version``,
     ``ingredient_changes``, ``step_changes``, ``created_at``) shaped for the API.
     """
-    v1 = self._repo.get_version(version_id_1)
-    v2 = self._repo.get_version(version_id_2)
-    if not v1 or not v2:
-      raise ValueError("One or both versions not found")
-    if v1.recipe_id != recipe_id or v2.recipe_id != recipe_id:
-      raise ValueError("One or both versions do not belong to the specified recipe")
-    return {
-      "from_version": str(v1.version_number),
-      "to_version": str(v2.version_number),
-      "ingredient_changes": versioning.compare_ingredients(
-        [asdict(i) for i in v1.ingredients], [asdict(i) for i in v2.ingredients]
-      ),
-      "step_changes": versioning.compare_instructions(
-        [asdict(s) for s in v1.instructions], [asdict(s) for s in v2.instructions]
-      ),
-      "created_at": v2.created_at,
-    }
+    with self._uow_factory() as uow:
+      v1 = uow.recipes.get_version(version_id_1)
+      v2 = uow.recipes.get_version(version_id_2)
+      if not v1 or not v2:
+        raise ValueError("One or both versions not found")
+      if v1.recipe_id != recipe_id or v2.recipe_id != recipe_id:
+        raise ValueError("One or both versions do not belong to the specified recipe")
+      return {
+        "from_version": str(v1.version_number),
+        "to_version": str(v2.version_number),
+        "ingredient_changes": versioning.compare_ingredients(
+          [asdict(i) for i in v1.ingredients], [asdict(i) for i in v2.ingredients]
+        ),
+        "step_changes": versioning.compare_instructions(
+          [asdict(s) for s in v1.instructions], [asdict(s) for s in v2.instructions]
+        ),
+        "created_at": v2.created_at,
+      }
 
   # --- helpers ---------------------------------------------------------
 
-  def _reload(self, recipe_id: UUID) -> schemas.Recipe:
-    """Re-fetch a recipe after a write and map it to a DTO. Used so callers
-    always get a fully persisted view. Raises ``ValueError`` if it vanished."""
-    recipe = self._repo.get(recipe_id)
+  def _reload(self, uow: "UnitOfWork", recipe_id: UUID) -> schemas.Recipe:
+    """Re-read a recipe inside the current transaction and map it to a DTO, so
+    callers get the persisted view. Raises ``ValueError`` if it vanished."""
+    recipe = uow.recipes.get(recipe_id)
     if recipe is None:
       raise ValueError(f"Failed to load recipe {recipe_id}")
     return mappers.recipe_to_dto(recipe)

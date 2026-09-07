@@ -22,7 +22,7 @@ from uuid import UUID
 
 import logging
 
-from .infrastructure.recipe_repository import RecipeRepository
+from .infrastructure.unit_of_work import UnitOfWork
 from .recipe_service import RecipeService
 
 logging.basicConfig(level=logging.DEBUG)
@@ -68,7 +68,7 @@ def get_db(pool: DatabasePool = Depends(get_pool)) -> DBConnector:
 
 
 def get_recipe_service(pool: DatabasePool = Depends(get_pool)) -> RecipeService:
-  return RecipeService(RecipeRepository(pool))
+  return RecipeService(lambda: UnitOfWork(pool))
 
 
 # New versioned recipe endpoints

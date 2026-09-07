@@ -6,13 +6,14 @@ import pytest
 
 from backend.api import schemas
 from backend.recipe_service import RecipeService
-from tests.fakes import FakeRecipeRepository
+from tests.fakes import FakeRecipeRepository, FakeUnitOfWork
 
 FIXED_NOW = datetime(2024, 5, 1, 12, 0, 0)
 
 
 def _service():
-  return RecipeService(FakeRecipeRepository(), now=lambda: FIXED_NOW)
+  repo = FakeRecipeRepository()
+  return RecipeService(lambda: FakeUnitOfWork(repo), now=lambda: FIXED_NOW)
 
 
 def _request(**overrides):

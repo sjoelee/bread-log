@@ -1,6 +1,8 @@
 """
-Recipe Creation Database Transaction Tests
-Tests for transaction integrity and rollback behavior
+Recipe transaction integrity tests.
+
+The use case runs inside one UnitOfWork transaction, so a failure anywhere in
+the use case must leave the database untouched.
 """
 
 import pytest
@@ -9,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from backend.service import app
 from backend.exceptions import DatabaseError
+from backend.infrastructure.recipe_repository import RecipeRepository
 
 client = TestClient(app)
 
@@ -229,6 +232,77 @@ class TestSpecificTransactionSteps:
       response = client.post("/recipes/", json=recipe_data)
 
     assert response.status_code == 500
+
+
+class TestUseCaseAtomicity:
+  """A failure partway through a use case rolls back the whole thing —
+  against the real database, not a mock."""
+
+  BASE = {
+    "name": "Atomicity Base",
+    "category": "sourdough",
+    "ingredients": [
+      {"name": "bread flour", "amount": 1000, "unit": "grams", "type": "flour"}
+    ],
+    "instructions": [{"order": 1, "instruction": "Mix"}],
+  }
+
+  def _create(self):
+    resp = client.post("/recipes/", json={**self.BASE, "name": f"Atomicity {id(self)}"})
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+  def test_update_write_is_rolled_back_when_a_later_step_fails(self):
+    created = self._create()
+    recipe_id = created["id"]
+    try:
+      v2_body = {
+        **self.BASE,
+        "name": "Renamed v2",
+        "ingredients": [
+          {"name": "rye", "amount": 800, "unit": "grams", "type": "flour"}
+        ],
+        "instructions": [{"order": 1, "instruction": "Fold"}],
+      }
+
+      # save() runs for real (INSERT version + UPDATE recipe), then blows up
+      # before the use case returns. The UnitOfWork must roll both statements back.
+      real_save = RecipeRepository.save
+
+      def save_then_fail(self, recipe):
+        real_save(self, recipe)
+        raise DatabaseError("failure after the write")
+
+      with patch.object(RecipeRepository, "save", save_then_fail):
+        resp = client.patch(f"/recipes/{recipe_id}", json=v2_body)
+      assert resp.status_code == 400
+
+      # Nothing from the failed update survived.
+      got = client.get(f"/recipes/{recipe_id}").json()
+      assert got["name"] == created["name"]
+      assert got["current_version"]["version_number"] == 1
+      assert [i["name"] for i in got["current_version"]["ingredients"]] == [
+        "bread flour"
+      ]
+
+      versions = client.get(f"/recipes/{recipe_id}/versions").json()
+      assert [v["version_number"] for v in versions] == [1]
+    finally:
+      client.delete(f"/recipes/{recipe_id}")
+
+  def test_create_write_is_rolled_back_on_failure(self):
+    real_add = RecipeRepository.add
+
+    def add_then_fail(self, recipe):
+      real_add(self, recipe)
+      raise DatabaseError("failure after insert")
+
+    with patch.object(RecipeRepository, "add", add_then_fail):
+      resp = client.post("/recipes/", json={**self.BASE, "name": "Should Not Persist"})
+    assert resp.status_code == 500
+
+    listed = client.get("/recipes/?search=Should Not Persist").json()
+    assert listed == []
 
 
 # Test fixtures for transaction testing
