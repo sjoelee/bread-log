@@ -18,7 +18,6 @@ def _ingredient(raw: dict) -> domain.Ingredient:
     unit=raw["unit"],
     type=raw.get("type"),
     notes=raw.get("notes"),
-    id=raw.get("id"),
   )
 
 

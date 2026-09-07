@@ -191,17 +191,17 @@ class TestRecipeValidation:
 
 
 class TestIDGeneration:
-  """Test ingredient and instruction ID generation"""
+  """Test instruction ID generation. Ingredients carry no id — they are diffed
+  by name."""
 
-  def test_ingredient_id_generation(self):
-    """Test that ingredient IDs are generated when not provided"""
+  def test_instruction_id_generation(self):
+    """Instruction IDs are generated when not provided; ingredients get none."""
 
-    # GIVEN: Recipe data without ingredient IDs
+    # GIVEN: Recipe data without any IDs
     recipe_data = {
       "name": "Auto ID Test",
       "ingredients": [
         {"name": "flour", "amount": 100, "unit": "grams", "type": "flour"}
-        # No "id" field provided
       ],
       "instructions": [
         {"order": 1, "instruction": "Mix ingredients"}
@@ -212,32 +212,25 @@ class TestIDGeneration:
     # WHEN: Recipe is created
     response = client.post("/recipes/", json=recipe_data)
 
-    # THEN: IDs are auto-generated
+    # THEN: the instruction gets an id, the ingredient does not
     assert response.status_code == 201
     data = response.json()
 
     ingredient = data["current_version"]["ingredients"][0]
     instruction = data["current_version"]["instructions"][0]
 
-    assert "id" in ingredient
+    assert "id" not in ingredient
     assert "id" in instruction
-    assert len(ingredient["id"]) >= 8  # UUID or generated ID
-    assert len(instruction["id"]) >= 8
+    assert len(instruction["id"]) >= 8  # UUID or generated ID
 
-  def test_preserve_provided_ids(self):
-    """Test that provided IDs are preserved"""
+  def test_preserve_provided_instruction_id(self):
+    """A provided instruction id is preserved through creation."""
 
-    # GIVEN: Recipe data with custom IDs
+    # GIVEN: Recipe data with a custom instruction id
     recipe_data = {
       "name": "Custom ID Test",
       "ingredients": [
-        {
-          "id": "custom_flour_id",
-          "name": "flour",
-          "amount": 100,
-          "unit": "grams",
-          "type": "flour",
-        }
+        {"name": "flour", "amount": 100, "unit": "grams", "type": "flour"}
       ],
       "instructions": [
         {"id": "custom_step_id", "order": 1, "instruction": "Mix ingredients"}
@@ -247,11 +240,10 @@ class TestIDGeneration:
     # WHEN: Recipe is created
     response = client.post("/recipes/", json=recipe_data)
 
-    # THEN: Custom IDs are preserved
+    # THEN: the custom instruction id survives
     assert response.status_code == 201
     data = response.json()
 
-    assert data["current_version"]["ingredients"][0]["id"] == "custom_flour_id"
     assert data["current_version"]["instructions"][0]["id"] == "custom_step_id"
 
 

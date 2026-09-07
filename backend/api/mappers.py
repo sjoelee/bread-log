@@ -23,7 +23,6 @@ def ingredient_to_domain(dto: schemas.Ingredient) -> domain.Ingredient:
     unit=dto.unit,
     type=dto.type,
     notes=dto.notes,
-    id=dto.id,
   )
 
 
@@ -44,7 +43,6 @@ def steps_to_domain(dtos: List[schemas.RecipeStep]) -> List[domain.RecipeStep]:
 
 def ingredient_to_dto(ing: domain.Ingredient) -> schemas.Ingredient:
   return schemas.Ingredient(
-    id=ing.id,
     name=ing.name,
     amount=ing.amount,
     unit=ing.unit,

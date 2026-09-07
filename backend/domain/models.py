@@ -23,7 +23,6 @@ class Ingredient:
   # optional classification, e.g. flour | liquid | preferment | fat | other
   type: Optional[str] = None
   notes: Optional[str] = None
-  id: Optional[str] = None
 
 
 @dataclass(frozen=True)

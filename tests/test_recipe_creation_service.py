@@ -43,7 +43,6 @@ class TestCreateRecipe:
     assert recipe.category == "sourdough"
     assert recipe.current_version.version_number == 1
     assert recipe.current_version.description == "Initial version"
-    assert all(i.id for i in recipe.current_version.ingredients)
     assert all(s.id for s in recipe.current_version.instructions)
     assert recipe.created_at == FIXED_NOW
 

@@ -14,7 +14,6 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
 from backend.domain.versioning import (
-  generate_ingredient_ids,
   generate_step_ids,
   calculate_bakers_percentages,
   compare_ingredients,
@@ -97,14 +96,13 @@ def simulate_frontend_recipe_creation():
   recipe_id = str(uuid.uuid4())
   version_id = str(uuid.uuid4())
 
-  # Generate IDs for ingredients and steps
-  ingredients_with_ids = generate_ingredient_ids(frontend_form_data["ingredients"])
+  # Ingredients carry no id; steps get one generated
+  ingredients_with_ids = frontend_form_data["ingredients"]
   instructions_with_ids = generate_step_ids(frontend_form_data["instructions"])
 
   print("✅ Backend processing:")
   print(f"   Generated recipe ID: {recipe_id[:8]}...")
   print(f"   Generated version ID: {version_id[:8]}...")
-  print(f"   Added IDs to {len(ingredients_with_ids)} ingredients")
   print(f"   Added IDs to {len(instructions_with_ids)} instructions")
   print()
 

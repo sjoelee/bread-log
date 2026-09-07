@@ -37,7 +37,7 @@ def _domain_recipe():
 
 class TestDtoToDomain:
   def test_ingredient_round_trips(self):
-    dto = _dto_ingredient(id=str(uuid4()), notes="high protein")
+    dto = _dto_ingredient(notes="high protein")
     back = mappers.ingredient_to_dto(mappers.ingredient_to_domain(dto))
     assert back == dto
 

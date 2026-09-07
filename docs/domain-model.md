@@ -46,7 +46,6 @@ classDiagram
         +str unit
         +str type
         +str notes
-        +str id
     }
 
     class RecipeStep {
@@ -93,7 +92,7 @@ specification" is a synonym for `RecipeVersion` you may see in design notes.
 |---|---|---|
 | `Recipe` | aggregate root, entity | UUID identity that persists; mutable; the consistency + transaction boundary |
 | `RecipeVersion` | entity | own UUID identity; a distinct thing pointed at by `recipes.current_version_id` (and, later, by component pins) |
-| `Ingredient` | value object (`frozen=True`) | fully defined by its attributes ("1000 g bread flour"); no identity; change = new value |
+| `Ingredient` | value object (`frozen=True`) | fully defined by its attributes ("1000 g bread flour"); no identity, no id field; diffed by name; change = new value |
 | `RecipeStep` | value object (`frozen=True`) | defined by `order` + `instruction`; the optional `id` is a soft diff-matching key, not identity |
 | `RecipeSummary` | read model | DB-computed projection; never mutated, no invariants — pure query side |
 

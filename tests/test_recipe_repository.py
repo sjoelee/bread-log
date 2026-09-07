@@ -22,9 +22,7 @@ def _recipe(name: str, *, category="sourdough"):
   return domain.Recipe.create(
     name=name,
     ingredients=[
-      domain.Ingredient(
-        name="flour", amount=1000, unit="grams", type="flour", id=str(uuid4())
-      )
+      domain.Ingredient(name="flour", amount=1000, unit="grams", type="flour")
     ],
     instructions=[domain.RecipeStep(order=1, instruction="Mix", id=str(uuid4()))],
     now=datetime.now(),
@@ -55,9 +53,7 @@ class TestRoundTrip:
     try:
       recipe.add_version(
         ingredients=[
-          domain.Ingredient(
-            name="rye", amount=500, unit="grams", type="flour", id=str(uuid4())
-          )
+          domain.Ingredient(name="rye", amount=500, unit="grams", type="flour")
         ],
         instructions=[domain.RecipeStep(order=1, instruction="Fold", id=str(uuid4()))],
         now=datetime.now(),

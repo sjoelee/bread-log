@@ -119,9 +119,14 @@ def calculate_step_similarity(old_step: str, new_step: str) -> Dict:
 def compare_instructions(
   old_instructions: List[Dict], new_instructions: List[Dict]
 ) -> Dict:
-  """
-  Compare two instruction lists and return differences
-  Uses step IDs when available, falls back to content similarity
+  """Compare two instruction lists and bucket each step into added / removed /
+  modified / reordered / unchanged.
+
+  Steps are matched **only** by ``id``. A step present in both lists (same id)
+  is ``modified`` if its text changed, ``reordered`` if only its ``order``
+  changed, else ``unchanged``. A step whose id is missing or unmatched on one
+  side is ``removed`` / ``added`` — there is no text-similarity fallback, so a
+  reworded step read without a stable id looks like a delete plus an insert.
   """
   result = {
     "added": [],
@@ -184,26 +189,6 @@ def generate_step_ids(instructions: List[Dict]) -> List[Dict]:
       instruction["id"] = str(uuid.uuid4())
     updated_instructions.append(instruction)
   return updated_instructions
-
-
-def generate_ingredient_ids(ingredients: List[Dict]) -> List[Dict]:
-  """
-  Generate IDs for ingredients that don't have them
-  """
-  updated_ingredients = []
-  for ingredient in ingredients:
-    if not ingredient.get("id"):
-      ingredient["id"] = str(uuid.uuid4())
-    updated_ingredients.append(ingredient)
-  return updated_ingredients
-
-
-def assign_ingredient_ids(ingredients):
-  """Return the list with a uuid filled in for any Ingredient missing one."""
-  return [
-    ing if ing.id else dataclasses.replace(ing, id=str(uuid.uuid4()))
-    for ing in ingredients
-  ]
 
 
 def assign_step_ids(steps):

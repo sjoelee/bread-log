@@ -37,14 +37,12 @@ class RecipeService:
   def create_recipe(self, request: schemas.RecipeRequest) -> schemas.Recipe:
     """Create a recipe and its first version (``version_number`` 1).
 
-    Fills in a UUID for any ingredient or step that lacks one, persists the
-    recipe, and returns the freshly reloaded full recipe.
+    Fills in a UUID for any step that lacks one, persists the recipe, and
+    returns the freshly reloaded full recipe.
     """
     recipe = domain.Recipe.create(
       name=request.name,
-      ingredients=versioning.assign_ingredient_ids(
-        mappers.ingredients_to_domain(request.ingredients)
-      ),
+      ingredients=mappers.ingredients_to_domain(request.ingredients),
       instructions=versioning.assign_step_ids(
         mappers.steps_to_domain(request.instructions)
       ),
@@ -69,9 +67,7 @@ class RecipeService:
     if recipe is None:
       raise ValueError(f"Recipe with ID {recipe_id} not found")
 
-    new_ingredients = versioning.assign_ingredient_ids(
-      mappers.ingredients_to_domain(request.ingredients)
-    )
+    new_ingredients = mappers.ingredients_to_domain(request.ingredients)
     new_steps = versioning.assign_step_ids(
       mappers.steps_to_domain(request.instructions)
     )
@@ -108,9 +104,7 @@ class RecipeService:
     if recipe is None:
       raise ValueError(f"Recipe {recipe_id} not found")
 
-    new_ingredients = versioning.assign_ingredient_ids(
-      mappers.ingredients_to_domain(ingredients)
-    )
+    new_ingredients = mappers.ingredients_to_domain(ingredients)
     new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
 
     recipe.add_version(

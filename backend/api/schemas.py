@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class Ingredient(BaseModel):
-  id: Optional[str] = None
   name: str = Field(..., min_length=1, description="Ingredient name cannot be empty")
   amount: float = Field(..., gt=0, description="Amount must be greater than 0")
   unit: str = Field(
