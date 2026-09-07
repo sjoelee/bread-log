@@ -1,4 +1,4 @@
-"""In-memory RecipeRepository for tests that don't need a database."""
+"""In-memory RecipeRepository + UnitOfWork for tests that don't need a database."""
 
 from __future__ import annotations
 
@@ -6,6 +6,29 @@ import copy
 from uuid import UUID
 
 from backend.domain import models as domain
+
+
+class FakeUnitOfWork:
+  """Stands in for ``infrastructure.unit_of_work.UnitOfWork``.
+
+  Holds one ``FakeRecipeRepository`` so state survives across use cases in a
+  test. Records whether the block committed or rolled back.
+  """
+
+  def __init__(self, recipes: "FakeRecipeRepository | None" = None):
+    self.recipes = recipes if recipes is not None else FakeRecipeRepository()
+    self.committed = False
+    self.rolled_back = False
+
+  def __enter__(self) -> "FakeUnitOfWork":
+    return self
+
+  def __exit__(self, exc_type, exc, tb) -> bool:
+    if exc_type is None:
+      self.committed = True
+    else:
+      self.rolled_back = True
+    return False
 
 
 class FakeRecipeRepository:
