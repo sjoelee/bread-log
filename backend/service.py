@@ -243,7 +243,6 @@ def create_recipe_version(
       ingredients=version_request.ingredients,
       instructions=version_request.instructions,
       description=version_request.description,
-      force_major=version_request.force_major,
     )
     return recipe
 

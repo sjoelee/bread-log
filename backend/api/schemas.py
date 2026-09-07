@@ -76,7 +76,6 @@ class RecipeVersionRequest(BaseModel):
   ingredients: List[Ingredient]
   instructions: List[RecipeStep]
   description: Optional[str] = None
-  force_major: bool = False  # accepted for compatibility; currently ignored
 
 
 # --- Response DTOs -----------------------------------------------------------
