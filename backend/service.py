@@ -22,7 +22,7 @@ from uuid import UUID
 
 import logging
 
-# Import recipe service
+from .infrastructure.recipe_repository import RecipeRepository
 from .recipe_service import RecipeService
 
 logging.basicConfig(level=logging.DEBUG)
@@ -67,8 +67,8 @@ def get_db(pool: DatabasePool = Depends(get_pool)) -> DBConnector:
   return DBConnector(pool)
 
 
-def get_recipe_service(db: DBConnector = Depends(get_db)) -> RecipeService:
-  return RecipeService(db)
+def get_recipe_service(pool: DatabasePool = Depends(get_pool)) -> RecipeService:
+  return RecipeService(RecipeRepository(pool))
 
 
 # New versioned recipe endpoints
@@ -243,7 +243,6 @@ def create_recipe_version(
       ingredients=version_request.ingredients,
       instructions=version_request.instructions,
       description=version_request.description,
-      force_major=version_request.force_major,
     )
     return recipe
 

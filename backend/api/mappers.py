@@ -1,17 +1,13 @@
 """Mappers between API DTOs (``api.schemas``) and domain objects (``domain.models``).
 
-Introduced in Stage 3, wired into the recipe routes in Stage 6. Row <-> domain
-mapping is separate and lives in ``infrastructure/mappers.py`` (Stage 4).
-
-Note: ``schemas.Ingredient.type`` is required (regex-validated) while
-``domain.Ingredient.type`` is optional. ``ingredient_to_dto`` on a domain
-ingredient with ``type is None`` will raise at DTO validation — acceptable for
-now (no such data exists); resolved when Part II relaxes the DTO.
+``schemas.Ingredient.type`` is required (regex-validated) while
+``domain.Ingredient.type`` is optional, so ``ingredient_to_dto`` on a domain
+ingredient with ``type is None`` raises at DTO validation.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from . import schemas
 from ..domain import models as domain
@@ -27,7 +23,6 @@ def ingredient_to_domain(dto: schemas.Ingredient) -> domain.Ingredient:
     unit=dto.unit,
     type=dto.type,
     notes=dto.notes,
-    id=dto.id,
   )
 
 
@@ -48,7 +43,6 @@ def steps_to_domain(dtos: List[schemas.RecipeStep]) -> List[domain.RecipeStep]:
 
 def ingredient_to_dto(ing: domain.Ingredient) -> schemas.Ingredient:
   return schemas.Ingredient(
-    id=ing.id,
     name=ing.name,
     amount=ing.amount,
     unit=ing.unit,
@@ -74,11 +68,7 @@ def version_to_dto(version: domain.RecipeVersion) -> schemas.RecipeVersion:
   )
 
 
-def recipe_to_dto(
-  recipe: domain.Recipe,
-  *,
-  bakers_percentages: Optional[dict] = None,
-) -> schemas.Recipe:
+def recipe_to_dto(recipe: domain.Recipe) -> schemas.Recipe:
   return schemas.Recipe(
     id=recipe.id,
     name=recipe.name,
@@ -86,11 +76,21 @@ def recipe_to_dto(
     category=recipe.category,
     current_version_id=recipe.current_version.id,
     current_version=version_to_dto(recipe.current_version),
-    bakers_percentages=(
-      schemas.BakersPercentages(**bakers_percentages)
-      if bakers_percentages is not None
-      else None
-    ),
     created_at=recipe.created_at,
     updated_at=recipe.updated_at,
+  )
+
+
+def summary_to_dto(summary: domain.RecipeSummary) -> schemas.RecipeListItem:
+  return schemas.RecipeListItem(
+    id=summary.id,
+    name=summary.name,
+    description=summary.description,
+    category=summary.category,
+    version=str(summary.version_number) if summary.version_number is not None else "1",
+    current_version_id=summary.current_version_id,
+    ingredient_count=summary.ingredient_count,
+    step_count=summary.step_count,
+    created_at=summary.created_at,
+    updated_at=summary.updated_at,
   )

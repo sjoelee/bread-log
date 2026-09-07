@@ -1,82 +1,139 @@
-"""
-Recipe service layer with versioning logic
-"""
+"""Recipe use cases: DTO in, DTO out, domain objects in between."""
 
-import uuid
+from __future__ import annotations
+
+from dataclasses import asdict
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import TYPE_CHECKING, Callable, List, Optional
 from uuid import UUID
 
-from .db import DBConnector
-from .models import (
-  Recipe,
-  RecipeRequest,
-  RecipeVersion,
-  RecipeListItem,
-  Ingredient,
-  RecipeStep,
-)
-from .domain.versioning import (
-  compare_ingredients,
-  compare_instructions,
-  create_version_summary,
-  calculate_bakers_percentages,
-  generate_step_ids,
-  generate_ingredient_ids,
-)
+from .api import mappers, schemas
+from .domain import models as domain
+from .domain import versioning
+
+if TYPE_CHECKING:
+  from .infrastructure.recipe_repository import RecipeRepository
 
 
 class RecipeService:
-  def __init__(self, db_connector: DBConnector):
-    self.db = db_connector
+  """Recipe use cases. Each method takes/returns API DTOs (``api.schemas``) and
+  works with domain objects and the repository in between.
 
-  def create_recipe(self, recipe_request: RecipeRequest) -> Recipe:
-    """
-    Create a new recipe with initial version 1.0
-    """
-    recipe_id = uuid.uuid4()
-    version_id = uuid.uuid4()
-    bp_id = uuid.uuid4()
+  ``now`` is an injectable clock — override it in tests to get deterministic
+  timestamps.
+  """
 
-    # Generate IDs for ingredients and instructions
-    ingredients_with_ids = generate_ingredient_ids(
-      [ing.model_dump() for ing in recipe_request.ingredients]
+  def __init__(
+    self,
+    repo: "RecipeRepository",
+    *,
+    now: Callable[[], datetime] = datetime.now,
+  ):
+    self._repo = repo
+    self._now = now
+
+  # --- commands ----------------------------------------------------------
+
+  def create_recipe(self, request: schemas.RecipeRequest) -> schemas.Recipe:
+    """Create a recipe and its first version (``version_number`` 1).
+
+    Fills in a UUID for any step that lacks one, persists the recipe, and
+    returns the freshly reloaded full recipe.
+    """
+    recipe = domain.Recipe.create(
+      name=request.name,
+      ingredients=mappers.ingredients_to_domain(request.ingredients),
+      instructions=versioning.assign_step_ids(
+        mappers.steps_to_domain(request.instructions)
+      ),
+      now=self._now(),
+      description=request.description,
+      category=request.category,
     )
-    instructions_with_ids = generate_step_ids(
-      [step.model_dump() for step in recipe_request.instructions]
+    self._repo.add(recipe)
+    return self._reload(recipe.id)
+
+  def update_recipe_full(
+    self, recipe_id: UUID, request: schemas.RecipeRequest
+  ) -> schemas.Recipe:
+    """Replace a recipe wholesale from a full request body.
+
+    Adds a new version (with a computed ``change_summary`` against the previous
+    one) and updates the recipe's ``name``/``description``/``category``. The
+    version bump and the metadata update are saved in one transaction.
+    Raises ``ValueError`` if the recipe does not exist.
+    """
+    recipe = self._repo.get(recipe_id)
+    if recipe is None:
+      raise ValueError(f"Recipe with ID {recipe_id} not found")
+
+    new_ingredients = mappers.ingredients_to_domain(request.ingredients)
+    new_steps = versioning.assign_step_ids(
+      mappers.steps_to_domain(request.instructions)
     )
 
-    # Calculate baker's percentages
-    bakers_percentages = calculate_bakers_percentages(ingredients_with_ids)
+    recipe.add_version(
+      ingredients=new_ingredients,
+      instructions=new_steps,
+      now=self._now(),
+      description=request.description,
+      change_summary=self._change_summary(
+        recipe.current_version, new_ingredients, new_steps
+      ),
+    )
+    recipe.name = request.name
+    recipe.description = request.description
+    recipe.category = request.category
+    self._repo.save(recipe)
+    return self._reload(recipe_id)
 
-    # Prepare data for database
-    recipe_data = {
-      "id": recipe_id,
-      "name": recipe_request.name,
-      "description": recipe_request.description,
-      "category": recipe_request.category,
-      "version_id": version_id,
-      "version_description": "Initial version",
-      "ingredients": ingredients_with_ids,
-      "instructions": instructions_with_ids,
-      "bakers_percentages": bakers_percentages,
-      "bp_id": bp_id,
-    }
+  def create_recipe_version(
+    self,
+    recipe_id: UUID,
+    ingredients: List[schemas.Ingredient],
+    instructions: List[schemas.RecipeStep],
+    description: Optional[str] = None,
+  ) -> schemas.Recipe:
+    """Add a new version to an existing recipe, leaving its name/category alone.
 
-    # Create in database
-    self.db.create_versioned_recipe(recipe_data)
-
-    # Return the created recipe
-    created_recipe = self.get_recipe(recipe_id)
-    if not created_recipe:
-      raise ValueError(f"Failed to retrieve created recipe {recipe_id}")
-    return created_recipe
-
-  def get_recipe(self, recipe_id: UUID) -> Optional[Recipe]:
+    Like ``update_recipe_full`` but scoped to version content only.
+    ``version_number`` always increments by one. Raises ``ValueError`` if the
+    recipe does not exist.
     """
-    Get a recipe by ID with current version and baker's percentages
+    recipe = self._repo.get(recipe_id)
+    if recipe is None:
+      raise ValueError(f"Recipe {recipe_id} not found")
+
+    new_ingredients = mappers.ingredients_to_domain(ingredients)
+    new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
+
+    recipe.add_version(
+      ingredients=new_ingredients,
+      instructions=new_steps,
+      now=self._now(),
+      description=description,
+      change_summary=self._change_summary(
+        recipe.current_version, new_ingredients, new_steps
+      ),
+    )
+    self._repo.save(recipe)
+    return self._reload(recipe_id)
+
+  def delete_recipe(self, recipe_id: UUID) -> bool:
+    """Delete a recipe and (via cascade) all its versions.
+
+    Raises ``ValueError`` if it does not exist; otherwise returns ``True``.
     """
-    return self.db.get_versioned_recipe(recipe_id)
+    if self._repo.get(recipe_id) is None:
+      raise ValueError(f"Recipe with ID {recipe_id} not found")
+    return self._repo.delete(recipe_id)
+
+  # --- queries -----------------------------------------------------------
+
+  def get_recipe(self, recipe_id: UUID) -> Optional[schemas.Recipe]:
+    """Return the full recipe (metadata + current version) or ``None`` if absent."""
+    recipe = self._repo.get(recipe_id)
+    return mappers.recipe_to_dto(recipe) if recipe else None
 
   def list_recipes(
     self,
@@ -87,228 +144,83 @@ class RecipeService:
     sort_by: str = "created_at",
     sort_direction: str = "desc",
     ingredient: Optional[str] = None,
-  ) -> List[RecipeListItem]:
-    return self.db.list_recipes(
+  ) -> List[schemas.RecipeListItem]:
+    """Return a page of lightweight list items (no full version content).
+
+    ``search`` matches the name; ``ingredient`` matches an ingredient name in the
+    current version; ``category`` is an exact match. ``sort_by`` is ``created_at``
+    or ``name``, ``sort_direction`` is ``asc`` or ``desc``.
+    """
+    summaries = self._repo.list(
       category=category,
-      limit=limit,
-      offset=offset,
       search=search,
+      ingredient=ingredient,
       sort_by=sort_by,
       sort_direction=sort_direction,
-      ingredient=ingredient,
+      limit=limit,
+      offset=offset,
     )
+    return [mappers.summary_to_dto(s) for s in summaries]
 
-  def create_recipe_version(
-    self,
-    recipe_id: UUID,
-    ingredients: List[Ingredient],
-    instructions: List[RecipeStep],
-    description: Optional[str] = None,
-    force_major: bool = False,
-  ) -> Recipe:
+  def get_recipe_versions(self, recipe_id: UUID) -> List[schemas.RecipeVersion]:
+    """Return every version of the recipe, newest ``version_number`` first.
+
+    Empty list if the recipe has no versions or does not exist.
     """
-    Manually create a new version of a recipe
-    """
-    current_recipe = self.get_recipe(recipe_id)
-    if not current_recipe:
-      raise ValueError(f"Recipe {recipe_id} not found")
-
-    new_ingredients_data = generate_ingredient_ids(
-      [ing.model_dump() for ing in ingredients]
-    )
-    new_instructions_data = generate_step_ids(
-      [step.model_dump() for step in instructions]
-    )
-
-    # Compare with current version
-    current_ingredients = [
-      ing.model_dump() for ing in current_recipe.current_version.ingredients
-    ]
-    current_instructions = [
-      step.model_dump() for step in current_recipe.current_version.instructions
-    ]
-
-    ingredient_diff = compare_ingredients(current_ingredients, new_ingredients_data)
-    step_diff = compare_instructions(current_instructions, new_instructions_data)
-
-    return self._create_recipe_version(
-      recipe_id=recipe_id,
-      current_version=current_recipe.current_version,
-      new_ingredients=new_ingredients_data,
-      new_instructions=new_instructions_data,
-      ingredient_diff=ingredient_diff,
-      step_diff=step_diff,
-      description=description,
-      force_major=force_major,
-    )
-
-  def get_recipe_versions(self, recipe_id: UUID) -> List[RecipeVersion]:
-    """
-    Get all versions of a recipe
-    """
-    return self.db.get_recipe_versions(recipe_id)
+    return [mappers.version_to_dto(v) for v in self._repo.get_versions(recipe_id)]
 
   def get_recipe_version_diff(
     self, recipe_id: UUID, version_id_1: UUID, version_id_2: UUID
-  ) -> Dict[str, Any]:
-    """
-    Get diff between two versions of a recipe.
-    Raises ValueError if either version doesn't exist or doesn't belong to recipe_id.
-    """
-    version_1 = self.db.get_recipe_version(version_id_1)
-    version_2 = self.db.get_recipe_version(version_id_2)
+  ) -> dict:
+    """Compare two versions and return their ingredient and step changes.
 
-    if not version_1 or not version_2:
+    Both versions must exist and belong to ``recipe_id`` — otherwise
+    ``ValueError``. The result is a plain dict (``from_version``, ``to_version``,
+    ``ingredient_changes``, ``step_changes``, ``created_at``) shaped for the API.
+    """
+    v1 = self._repo.get_version(version_id_1)
+    v2 = self._repo.get_version(version_id_2)
+    if not v1 or not v2:
       raise ValueError("One or both versions not found")
-
-    if version_1.recipe_id != recipe_id or version_2.recipe_id != recipe_id:
+    if v1.recipe_id != recipe_id or v2.recipe_id != recipe_id:
       raise ValueError("One or both versions do not belong to the specified recipe")
-
-    ingredients_1 = [ing.model_dump() for ing in version_1.ingredients]
-    ingredients_2 = [ing.model_dump() for ing in version_2.ingredients]
-
-    instructions_1 = [step.model_dump() for step in version_1.instructions]
-    instructions_2 = [step.model_dump() for step in version_2.instructions]
-
-    ingredient_diff = compare_ingredients(ingredients_1, ingredients_2)
-    step_diff = compare_instructions(instructions_1, instructions_2)
-
     return {
-      "from_version": str(version_1.version_number),
-      "to_version": str(version_2.version_number),
-      "ingredient_changes": ingredient_diff,
-      "step_changes": step_diff,
-      "created_at": version_2.created_at,
+      "from_version": str(v1.version_number),
+      "to_version": str(v2.version_number),
+      "ingredient_changes": versioning.compare_ingredients(
+        [asdict(i) for i in v1.ingredients], [asdict(i) for i in v2.ingredients]
+      ),
+      "step_changes": versioning.compare_instructions(
+        [asdict(s) for s in v1.instructions], [asdict(s) for s in v2.instructions]
+      ),
+      "created_at": v2.created_at,
     }
 
-  def _create_recipe_version(
+  # --- helpers ---------------------------------------------------------
+
+  def _reload(self, recipe_id: UUID) -> schemas.Recipe:
+    """Re-fetch a recipe after a write and map it to a DTO. Used so callers
+    always get a fully persisted view. Raises ``ValueError`` if it vanished."""
+    recipe = self._repo.get(recipe_id)
+    if recipe is None:
+      raise ValueError(f"Failed to load recipe {recipe_id}")
+    return mappers.recipe_to_dto(recipe)
+
+  def _change_summary(
     self,
-    recipe_id: UUID,
-    current_version: RecipeVersion,
-    new_ingredients: List[Dict],
-    new_instructions: List[Dict],
-    ingredient_diff: Dict,
-    step_diff: Dict,
-    description: Optional[str] = None,
-    force_major: bool = False,
-  ) -> Recipe:
-    """
-    Internal method to create a new recipe version
-    """
-    version_id = uuid.uuid4()
-    bp_id = uuid.uuid4()
-
-    # Determine next version number
-    next_version_number = current_version.version_number + 1
-
-    # Calculate baker's percentages
-    bakers_percentages = calculate_bakers_percentages(new_ingredients)
-
-    # Create version summary
-    change_summary = create_version_summary(ingredient_diff, step_diff)
-
-    # Prepare version data
-    version_data = {
-      "id": version_id,
-      "recipe_id": recipe_id,
-      "version_number": next_version_number,
-      "description": description or f"Auto-save v{next_version_number}",
-      "ingredients": new_ingredients,
-      "instructions": new_instructions,
-      "change_summary": change_summary,
-      "bakers_percentages": bakers_percentages,
-      "bp_id": bp_id,
-    }
-
-    # Create in database
-    self.db.create_recipe_version(version_data)
-
-    # Return updated recipe
-    updated_recipe = self.get_recipe(recipe_id)
-    if not updated_recipe:
-      raise ValueError(f"Failed to retrieve updated recipe {recipe_id}")
-    return updated_recipe
-
-  def update_recipe_full(self, recipe_id: UUID, recipe_data: RecipeRequest) -> Recipe:
-    """
-    Update a recipe with complete new data - creates new version and updates current_version_id
-    This implements the PATCH endpoint specification for full recipe updates.
-
-    Steps:
-    1. Get current recipe and version
-    2. Create new version with incremented version_number
-    3. Update current_version_id and updated_at in recipes table
-    4. Recalculate baker's percentages if ingredients changed
-    """
-    # Get current recipe
-    current_recipe = self.get_recipe(recipe_id)
-    if not current_recipe:
-      raise ValueError(f"Recipe with ID {recipe_id} not found")
-
-    current_version = current_recipe.current_version
-
-    # Prepare new ingredients and instructions with IDs
-    new_ingredients = [
-      ingredient.model_dump() for ingredient in recipe_data.ingredients
-    ]
-    new_instructions = [
-      instruction.model_dump() for instruction in recipe_data.instructions
-    ]
-
-    # Add IDs if not present
-    new_ingredients = generate_ingredient_ids(new_ingredients)
-    new_instructions = generate_step_ids(new_instructions)
-
-    # Compare with current version to detect changes
-    current_ingredients = [
-      ingredient.model_dump() for ingredient in current_version.ingredients
-    ]
-    current_instructions = [
-      instruction.model_dump() for instruction in current_version.instructions
-    ]
-
-    ingredient_diff = compare_ingredients(current_ingredients, new_ingredients)
-    step_diff = compare_instructions(current_instructions, new_instructions)
-
-    # Create new version - this returns the updated recipe with new current_version_id
-    self._create_recipe_version(
-      recipe_id=recipe_id,
-      current_version=current_version,
-      new_ingredients=new_ingredients,
-      new_instructions=new_instructions,
-      ingredient_diff=ingredient_diff,
-      step_diff=step_diff,
-      description=recipe_data.description,
+    previous: domain.RecipeVersion,
+    new_ingredients: List[domain.Ingredient],
+    new_steps: List[domain.RecipeStep],
+  ) -> dict:
+    """Diff the proposed content against ``previous`` and return the summary
+    counts stored on the new version's ``change_summary``."""
+    return versioning.create_version_summary(
+      versioning.compare_ingredients(
+        [asdict(i) for i in previous.ingredients],
+        [asdict(i) for i in new_ingredients],
+      ),
+      versioning.compare_instructions(
+        [asdict(s) for s in previous.instructions],
+        [asdict(s) for s in new_steps],
+      ),
     )
-
-    # Update basic recipe fields (name, description, category, updated_at)
-    # Note: current_version_id is already updated by _create_recipe_version
-    self.db.update_recipe_basic_fields(
-      recipe_id,
-      {
-        "name": recipe_data.name,
-        "description": recipe_data.description,
-        "category": recipe_data.category,
-        "updated_at": datetime.now(),
-      },
-    )
-
-    # Return the updated recipe
-    final_recipe = self.get_recipe(recipe_id)
-    if not final_recipe:
-      raise ValueError(f"Failed to retrieve updated recipe {recipe_id}")
-    return final_recipe
-
-  def delete_recipe(self, recipe_id: UUID) -> bool:
-    """
-    Delete a recipe and all its associated data (versions, baker's percentages)
-    Returns True if successful, False if recipe not found
-    """
-    # Check if recipe exists first
-    existing_recipe = self.get_recipe(recipe_id)
-    if not existing_recipe:
-      raise ValueError(f"Recipe with ID {recipe_id} not found")
-
-    # Delete from database - CASCADE should handle versions and baker's percentages
-    success = self.db.delete_recipe(recipe_id)
-    return success

@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Changing or critiquing existing code
+
+- **Verify before you flag.** Before calling shipped code buggy, fragile, or
+  risky, trace the real path that exercises it (caller → callee, client →
+  server, frontend included) and state a concrete failure with concrete inputs.
+  If you haven't verified it, label it "unverified" — don't present a hypothesis
+  as a defect.
+- **Tests are not the source of truth for whether a feature works.** A missing
+  or weak test means the test is weak, not that the feature is broken. Judge
+  behavior from the code that runs in production.
+- **When the answer is "it's fine," say that and stop.** Don't manufacture a
+  concern or a refactor to have something to act on.
+- **Answer what was asked first.** Keep unrequested findings and redesign ideas
+  in a short, clearly-labeled section at the end, phrased as an offer. Don't
+  pitch a refactor unless asked.
+- **Evaluate each item on its own merits.** Removing one unused thing doesn't
+  mean the next similar-looking thing is unused — check its consumers.
+
 ## Development Commands
 
 ### Frontend (React)

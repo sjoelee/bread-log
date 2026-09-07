@@ -78,54 +78,6 @@ class TestRecipeCreationHappyPath:
     assert instructions[0]["order"] == 1
     assert "Autolyse" in instructions[0]["instruction"]
 
-    # Verify baker's percentages calculated
-    percentages = data["bakers_percentages"]
-    assert percentages["total_flour_weight"] == 1000.0
-    assert len(percentages["flour_ingredients"]) == 1
-    assert len(percentages["other_ingredients"]) == 2
-    assert percentages["flour_ingredients"][0]["percentage"] == 100.0
-    assert percentages["other_ingredients"][0]["percentage"] == 75.0  # water
-    assert percentages["other_ingredients"][1]["percentage"] == 20.0  # levain
-
-  def test_create_recipe_with_multiple_flours(self):
-    """Test baker's percentage calculation with multiple flour types"""
-
-    # GIVEN: Recipe with multiple flour types
-    recipe_data = {
-      "name": "Mixed Flour Bread",
-      "ingredients": [
-        {"name": "bread flour", "amount": 800, "unit": "grams", "type": "flour"},
-        {"name": "whole wheat", "amount": 200, "unit": "grams", "type": "flour"},
-        {"name": "water", "amount": 700, "unit": "grams", "type": "liquid"},
-      ],
-      "instructions": [{"order": 1, "instruction": "Mix all"}],
-    }
-
-    # WHEN: Recipe is created
-    response = client.post("/recipes/", json=recipe_data)
-
-    # THEN: Flour percentages are calculated correctly
-    assert response.status_code == 201
-    percentages = response.json()["bakers_percentages"]
-
-    assert percentages["total_flour_weight"] == 1000.0
-    assert len(percentages["flour_ingredients"]) == 2
-
-    # Find each flour percentage
-    bread_flour = next(
-      f for f in percentages["flour_ingredients"] if f["name"] == "bread flour"
-    )
-    whole_wheat = next(
-      f for f in percentages["flour_ingredients"] if f["name"] == "whole wheat"
-    )
-
-    assert bread_flour["percentage"] == 80.0
-    assert whole_wheat["percentage"] == 20.0
-
-    # Total flour percentages should sum to 100
-    total_flour_percent = sum(f["percentage"] for f in percentages["flour_ingredients"])
-    assert total_flour_percent == 100.0
-
   def test_create_recipe_minimal_fields(self):
     """Test creating recipe with only required fields"""
 
@@ -239,17 +191,17 @@ class TestRecipeValidation:
 
 
 class TestIDGeneration:
-  """Test ingredient and instruction ID generation"""
+  """Test instruction ID generation. Ingredients carry no id — they are diffed
+  by name."""
 
-  def test_ingredient_id_generation(self):
-    """Test that ingredient IDs are generated when not provided"""
+  def test_instruction_id_generation(self):
+    """Instruction IDs are generated when not provided; ingredients get none."""
 
-    # GIVEN: Recipe data without ingredient IDs
+    # GIVEN: Recipe data without any IDs
     recipe_data = {
       "name": "Auto ID Test",
       "ingredients": [
         {"name": "flour", "amount": 100, "unit": "grams", "type": "flour"}
-        # No "id" field provided
       ],
       "instructions": [
         {"order": 1, "instruction": "Mix ingredients"}
@@ -260,32 +212,25 @@ class TestIDGeneration:
     # WHEN: Recipe is created
     response = client.post("/recipes/", json=recipe_data)
 
-    # THEN: IDs are auto-generated
+    # THEN: the instruction gets an id, the ingredient does not
     assert response.status_code == 201
     data = response.json()
 
     ingredient = data["current_version"]["ingredients"][0]
     instruction = data["current_version"]["instructions"][0]
 
-    assert "id" in ingredient
+    assert "id" not in ingredient
     assert "id" in instruction
-    assert len(ingredient["id"]) >= 8  # UUID or generated ID
-    assert len(instruction["id"]) >= 8
+    assert len(instruction["id"]) >= 8  # UUID or generated ID
 
-  def test_preserve_provided_ids(self):
-    """Test that provided IDs are preserved"""
+  def test_preserve_provided_instruction_id(self):
+    """A provided instruction id is preserved through creation."""
 
-    # GIVEN: Recipe data with custom IDs
+    # GIVEN: Recipe data with a custom instruction id
     recipe_data = {
       "name": "Custom ID Test",
       "ingredients": [
-        {
-          "id": "custom_flour_id",
-          "name": "flour",
-          "amount": 100,
-          "unit": "grams",
-          "type": "flour",
-        }
+        {"name": "flour", "amount": 100, "unit": "grams", "type": "flour"}
       ],
       "instructions": [
         {"id": "custom_step_id", "order": 1, "instruction": "Mix ingredients"}
@@ -295,11 +240,10 @@ class TestIDGeneration:
     # WHEN: Recipe is created
     response = client.post("/recipes/", json=recipe_data)
 
-    # THEN: Custom IDs are preserved
+    # THEN: the custom instruction id survives
     assert response.status_code == 201
     data = response.json()
 
-    assert data["current_version"]["ingredients"][0]["id"] == "custom_flour_id"
     assert data["current_version"]["instructions"][0]["id"] == "custom_step_id"
 
 
@@ -335,7 +279,6 @@ class TestEdgeCases:
 
     assert len(data["current_version"]["ingredients"]) == 20
     assert len(data["current_version"]["instructions"]) == 50
-    assert data["bakers_percentages"]["total_flour_weight"] == 10.0
 
 
 # Test fixtures for common data
