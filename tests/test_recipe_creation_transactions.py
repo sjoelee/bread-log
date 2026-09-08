@@ -275,7 +275,7 @@ class TestUseCaseAtomicity:
 
       with patch.object(RecipeRepository, "save", save_then_fail):
         resp = client.patch(f"/recipes/{recipe_id}", json=v2_body)
-      assert resp.status_code == 400
+      assert resp.status_code == 500
 
       # Nothing from the failed update survived.
       got = client.get(f"/recipes/{recipe_id}").json()

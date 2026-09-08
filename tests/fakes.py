@@ -6,6 +6,7 @@ import copy
 from uuid import UUID
 
 from backend.domain import models as domain
+from backend.exceptions import NotFoundError
 
 
 class FakeUnitOfWork:
@@ -86,7 +87,7 @@ class FakeRecipeRepository:
 
   def save(self, recipe: domain.Recipe) -> None:
     if recipe.id not in self._recipes:
-      raise ValueError(f"Recipe {recipe.id} not found")
+      raise NotFoundError(f"Recipe {recipe.id} not found")
     self._recipes[recipe.id] = copy.deepcopy(recipe)
     history = self._history.setdefault(recipe.id, [])
     if not any(v.id == recipe.current_version.id for v in history):

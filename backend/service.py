@@ -1,17 +1,20 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from datetime import date, datetime
 from .config import get_settings
 from .db import DatabasePool, DBConnector
-from .exceptions import DatabaseError
-from .models import (
+from .exceptions import ConflictError, DatabaseError, DomainError, NotFoundError
+from .api.schemas import (
   Recipe,
-  RecipeRequest,
-  RecipeVersionRequest,
-  RecipeListItem,
-  RecipeVersion,
   RecipeCreateResponse,
+  RecipeListItem,
+  RecipeRequest,
+  RecipeVersion,
+  RecipeVersionRequest,
+)
+from .models import (
   BreadTiming,
   BreadTimingCreate,
   BreadTimingUpdate,
@@ -22,8 +25,8 @@ from uuid import UUID
 
 import logging
 
+from .application.recipe_service import RecipeService
 from .infrastructure.unit_of_work import UnitOfWork
-from .recipe_service import RecipeService
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("service")
@@ -54,6 +57,33 @@ app.add_middleware(
 )
 
 
+# --- Exception handlers --------------------------------------------------
+# One place translates application/domain errors to HTTP responses, so the
+# recipe routes stay free of try/except ladders. (Timing routes still handle
+# their own errors inline until Part IV.)
+
+
+@app.exception_handler(NotFoundError)
+async def _handle_not_found(request: Request, exc: NotFoundError) -> JSONResponse:
+  return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(ConflictError)
+async def _handle_conflict(request: Request, exc: ConflictError) -> JSONResponse:
+  return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(DomainError)
+async def _handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
+  return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(DatabaseError)
+async def _handle_database_error(request: Request, exc: DatabaseError) -> JSONResponse:
+  logger.error(f"{request.method} {request.url.path} - database error: {exc}")
+  return JSONResponse(status_code=500, content={"detail": f"Database error: {exc}"})
+
+
 # --- Dependency providers -------------------------------------------------
 # Wiring lives here and only here: routes receive their collaborators, they
 # never reach for a module global.
@@ -71,39 +101,17 @@ def get_recipe_service(pool: DatabasePool = Depends(get_pool)) -> RecipeService:
   return RecipeService(lambda: UnitOfWork(pool))
 
 
-# New versioned recipe endpoints
+# Versioned recipe endpoints. These routes only translate HTTP <-> service call;
+# errors are turned into responses by the handlers registered above.
+
+
 @app.post("/recipes/", response_model=Recipe, status_code=201)
 def create_recipe(
   recipe: RecipeRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Create a new versioned recipe with initial version 1.0
-  """
-  logger.info(f"POST /recipes/ - Creating recipe: {recipe.model_dump()}")
-  try:
-    recipe_obj = recipe_service.create_recipe(recipe)
-    logger.info(
-      f"POST /recipes/ - Successfully created recipe '{recipe_obj.name}' with ID: {recipe_obj.id}"
-    )
-    return recipe_obj
-
-  except DatabaseError as e:
-    logger.error(f"POST /recipes/ - Database error creating recipe: {str(e)}")
-    raise HTTPException(
-      status_code=500, detail="Failed to create recipe due to database error"
-    )
-
-  except ValueError as e:
-    logger.error(f"POST /recipes/ - Validation error creating recipe: {str(e)}")
-    raise HTTPException(status_code=422, detail=f"Validation error: {str(e)}")
-
-  except Exception as e:
-    logger.error(f"POST /recipes/ - Unexpected error creating recipe: {str(e)}")
-    raise HTTPException(
-      status_code=500,
-      detail="An unexpected error occurred while creating the recipe",
-    )
+  """Create a new versioned recipe with initial version 1."""
+  return recipe_service.create_recipe(recipe)
 
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
@@ -117,28 +125,16 @@ def list_recipes(
   ingredient: str = None,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  List recipes with pagination, optional category filter, search, ingredient filter, and sorting
-  """
-  logger.info(
-    f"GET /recipes/ - Listing recipes with category={category}, search={search}, ingredient={ingredient}, sort_by={sort_by}, sort_direction={sort_direction}"
+  """List recipes with pagination, optional category/ingredient filter, search, and sorting."""
+  return recipe_service.list_recipes(
+    category=category,
+    limit=limit,
+    offset=offset,
+    search=search,
+    sort_by=sort_by,
+    sort_direction=sort_direction,
+    ingredient=ingredient,
   )
-  try:
-    recipes = recipe_service.list_recipes(
-      category=category,
-      limit=limit,
-      offset=offset,
-      search=search,
-      sort_by=sort_by,
-      sort_direction=sort_direction,
-      ingredient=ingredient,
-    )
-    logger.info(f"GET /recipes/ - Successfully retrieved {len(recipes)} recipes")
-    return recipes
-
-  except Exception as e:
-    logger.error(f"GET /recipes/ - Error listing recipes: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/recipes/{recipe_id}", response_model=Recipe)
@@ -146,21 +142,11 @@ def get_recipe(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Get a versioned recipe by ID with current version and baker's percentages
-  """
-  try:
-    recipe = recipe_service.get_recipe(recipe_id)
-    if not recipe:
-      raise HTTPException(status_code=404, detail="Recipe not found")
-
-    return recipe
-
-  except DatabaseError as e:
-    raise HTTPException(status_code=400, detail=str(e))
-  except Exception as e:
-    logger.error(f"Error getting recipe: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  """Get a versioned recipe by ID with its current version."""
+  recipe = recipe_service.get_recipe(recipe_id)
+  if recipe is None:
+    raise HTTPException(status_code=404, detail="Recipe not found")
+  return recipe
 
 
 @app.patch("/recipes/{recipe_id}", response_model=RecipeCreateResponse)
@@ -169,34 +155,19 @@ def update_recipe(
   recipe_data: RecipeRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Update a recipe - creates new version and updates current_version_id
-  Uses the same complete JSON body structure as POST creation
-  """
-  logger.info(
-    f"PATCH /recipes/{recipe_id} - Updating recipe with data: {recipe_data.dict()}"
-  )
-  try:
-    updated_recipe = recipe_service.update_recipe_full(recipe_id, recipe_data)
-    response = RecipeCreateResponse(
-      recipe=updated_recipe,
-      message=f"Recipe '{updated_recipe.name}' updated successfully to version {updated_recipe.current_version.version_number}",
-      success=True,
-    )
-    logger.info(
-      f"PATCH /recipes/{recipe_id} - Successfully updated recipe to version {updated_recipe.current_version.version_number}"
-    )
-    return response
+  """Update a recipe: add a new version and move the current-version pointer.
 
-  except ValueError as e:
-    logger.error(f"PATCH /recipes/{recipe_id} - Recipe not found: {str(e)}")
-    raise HTTPException(status_code=404, detail=str(e))
-  except DatabaseError as e:
-    logger.error(f"PATCH /recipes/{recipe_id} - Database error: {str(e)}")
-    raise HTTPException(status_code=400, detail=str(e))
-  except Exception as e:
-    logger.error(f"PATCH /recipes/{recipe_id} - Error updating recipe: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  Takes the same complete JSON body as recipe creation.
+  """
+  updated_recipe = recipe_service.update_recipe_full(recipe_id, recipe_data)
+  return RecipeCreateResponse(
+    recipe=updated_recipe,
+    message=(
+      f"Recipe '{updated_recipe.name}' updated successfully to version "
+      f"{updated_recipe.current_version.version_number}"
+    ),
+    success=True,
+  )
 
 
 @app.delete("/recipes/{recipe_id}")
@@ -204,28 +175,9 @@ def delete_recipe(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Delete a recipe and all its versions and baker's percentages
-  """
-  logger.info(f"DELETE /recipes/{recipe_id} - Deleting recipe")
-  try:
-    success = recipe_service.delete_recipe(recipe_id)
-    if success:
-      logger.info(f"DELETE /recipes/{recipe_id} - Successfully deleted recipe")
-      return {"message": "Recipe deleted successfully", "success": True}
-    else:
-      logger.error(f"DELETE /recipes/{recipe_id} - Recipe not found")
-      raise HTTPException(status_code=404, detail="Recipe not found")
-
-  except ValueError as e:
-    logger.error(f"DELETE /recipes/{recipe_id} - Recipe not found: {str(e)}")
-    raise HTTPException(status_code=404, detail=str(e))
-  except DatabaseError as e:
-    logger.error(f"DELETE /recipes/{recipe_id} - Database error: {str(e)}")
-    raise HTTPException(status_code=400, detail=str(e))
-  except Exception as e:
-    logger.error(f"DELETE /recipes/{recipe_id} - Error deleting recipe: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  """Delete a recipe and (via cascade) all its versions."""
+  recipe_service.delete_recipe(recipe_id)
+  return {"message": "Recipe deleted successfully", "success": True}
 
 
 @app.post("/recipes/{recipe_id}/versions", response_model=Recipe)
@@ -234,23 +186,13 @@ def create_recipe_version(
   version_request: RecipeVersionRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Manually create a new version of a recipe
-  """
-  try:
-    recipe = recipe_service.create_recipe_version(
-      recipe_id=recipe_id,
-      ingredients=version_request.ingredients,
-      instructions=version_request.instructions,
-      description=version_request.description,
-    )
-    return recipe
-
-  except ValueError as e:
-    raise HTTPException(status_code=404, detail=str(e))
-  except Exception as e:
-    logger.error(f"Error creating recipe version: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  """Manually add a new version to an existing recipe."""
+  return recipe_service.create_recipe_version(
+    recipe_id=recipe_id,
+    ingredients=version_request.ingredients,
+    instructions=version_request.instructions,
+    description=version_request.description,
+  )
 
 
 @app.get("/recipes/{recipe_id}/versions", response_model=List[RecipeVersion])
@@ -258,16 +200,8 @@ def get_recipe_versions(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Get all versions of a recipe
-  """
-  try:
-    versions = recipe_service.get_recipe_versions(recipe_id)
-    return versions
-
-  except Exception as e:
-    logger.error(f"Error getting recipe versions: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  """Get all versions of a recipe, newest first."""
+  return recipe_service.get_recipe_versions(recipe_id)
 
 
 @app.get("/recipes/{recipe_id}/versions/{version_id_1}/diff/{version_id_2}")
@@ -277,19 +211,8 @@ def get_version_diff(
   version_id_2: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """
-  Get diff between two versions of a recipe.
-  Both versions must belong to the given recipe_id.
-  """
-  try:
-    diff = recipe_service.get_recipe_version_diff(recipe_id, version_id_1, version_id_2)
-    return diff
-
-  except ValueError as e:
-    raise HTTPException(status_code=404, detail=str(e))
-  except Exception as e:
-    logger.error(f"Error getting version diff: {str(e)}")
-    raise HTTPException(status_code=500, detail=str(e))
+  """Get the diff between two versions of a recipe. Both must belong to ``recipe_id``."""
+  return recipe_service.get_recipe_version_diff(recipe_id, version_id_1, version_id_2)
 
 
 def validate_date(year: int, month: int, day: int) -> date:
