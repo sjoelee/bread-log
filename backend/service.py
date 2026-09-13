@@ -116,13 +116,13 @@ def create_recipe(
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
 def list_recipes(
-  category: str = None,
+  category: Optional[str] = None,
   limit: int = 50,
   offset: int = 0,
-  search: str = None,
+  search: Optional[str] = None,
   sort_by: str = "created_at",
   sort_direction: str = "desc",
-  ingredient: str = None,
+  ingredient: Optional[str] = None,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """List recipes with pagination, optional category/ingredient filter, search, and sorting."""
