@@ -161,6 +161,7 @@ class DBConnector:
         with conn.cursor() as cur:
           cur.execute(query, params)
           result = cur.fetchone()
+          assert result is not None, "INSERT ... RETURNING always yields a row"
           timing_id, created_at, updated_at = result
           conn.commit()
 
@@ -303,10 +304,14 @@ class DBConnector:
         with conn.cursor() as cur:
           # Get total count
           cur.execute(count_query, params)
-          total_count = cur.fetchone()[0]
+          count_row = cur.fetchone()
+          assert count_row is not None, "SELECT COUNT(*) always yields a row"
+          total_count = count_row[0]
 
           # Get paginated results
-          cur.execute(main_query, main_params)
+          # order_by/order_direction are checked against an allowlist above, so
+          # this f-string is safe despite not being a literal.
+          cur.execute(main_query, main_params)  # pyright: ignore[reportArgumentType]
           results = cur.fetchall()
 
           # Parse timing records
@@ -390,6 +395,8 @@ class DBConnector:
             )
             conn.commit()
         updated_timing = self.get_bread_timing(timing_id)
+        if not updated_timing:
+          raise DatabaseError("Failed to retrieve updated timing")
 
       return updated_timing
 
