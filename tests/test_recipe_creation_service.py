@@ -5,7 +5,8 @@ from datetime import datetime
 import pytest
 
 from backend.api import schemas
-from backend.recipe_service import RecipeService
+from backend.application.recipe_service import RecipeService
+from backend.exceptions import NotFoundError
 from tests.fakes import FakeRecipeRepository, FakeUnitOfWork
 
 FIXED_NOW = datetime(2024, 5, 1, 12, 0, 0)
@@ -72,7 +73,7 @@ class TestUpdateRecipe:
   def test_update_missing_recipe_raises(self):
     from uuid import uuid4
 
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(NotFoundError, match="not found"):
       _service().update_recipe_full(uuid4(), _request())
 
 
@@ -98,7 +99,7 @@ class TestQueries:
   def test_delete_missing_raises(self):
     from uuid import uuid4
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotFoundError):
       _service().delete_recipe(uuid4())
 
   def test_version_history_and_diff(self):

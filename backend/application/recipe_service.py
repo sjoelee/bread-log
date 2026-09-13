@@ -7,12 +7,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Callable, List, Optional
 from uuid import UUID
 
-from .api import mappers, schemas
-from .domain import models as domain
-from .domain import versioning
+from ..api import mappers, schemas
+from ..domain import models as domain
+from ..domain import versioning
+from ..exceptions import NotFoundError
 
 if TYPE_CHECKING:
-  from .infrastructure.unit_of_work import UnitOfWork
+  from ..infrastructure.unit_of_work import UnitOfWork
 
 
 class RecipeService:
@@ -66,12 +67,12 @@ class RecipeService:
     Adds a new version (with a computed ``change_summary`` against the previous
     one) and updates the recipe's ``name``/``description``/``category``. The
     read, the version bump, and the metadata update are one transaction.
-    Raises ``ValueError`` if the recipe does not exist.
+    Raises ``NotFoundError`` if the recipe does not exist.
     """
     with self._uow_factory() as uow:
       recipe = uow.recipes.get(recipe_id)
       if recipe is None:
-        raise ValueError(f"Recipe with ID {recipe_id} not found")
+        raise NotFoundError(f"Recipe with ID {recipe_id} not found")
 
       new_ingredients = mappers.ingredients_to_domain(request.ingredients)
       new_steps = versioning.assign_step_ids(
@@ -103,13 +104,13 @@ class RecipeService:
     """Add a new version to an existing recipe, leaving its name/category alone.
 
     Like ``update_recipe_full`` but scoped to version content only.
-    ``version_number`` always increments by one. Raises ``ValueError`` if the
+    ``version_number`` always increments by one. Raises ``NotFoundError`` if the
     recipe does not exist.
     """
     with self._uow_factory() as uow:
       recipe = uow.recipes.get(recipe_id)
       if recipe is None:
-        raise ValueError(f"Recipe {recipe_id} not found")
+        raise NotFoundError(f"Recipe {recipe_id} not found")
 
       new_ingredients = mappers.ingredients_to_domain(ingredients)
       new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
@@ -129,11 +130,11 @@ class RecipeService:
   def delete_recipe(self, recipe_id: UUID) -> bool:
     """Delete a recipe and (via cascade) all its versions.
 
-    Raises ``ValueError`` if it does not exist; otherwise returns ``True``.
+    Raises ``NotFoundError`` if it does not exist; otherwise returns ``True``.
     """
     with self._uow_factory() as uow:
       if uow.recipes.get(recipe_id) is None:
-        raise ValueError(f"Recipe with ID {recipe_id} not found")
+        raise NotFoundError(f"Recipe with ID {recipe_id} not found")
       return uow.recipes.delete(recipe_id)
 
   # --- queries -----------------------------------------------------------
@@ -186,16 +187,18 @@ class RecipeService:
     """Compare two versions and return their ingredient and step changes.
 
     Both versions must exist and belong to ``recipe_id`` — otherwise
-    ``ValueError``. The result is a plain dict (``from_version``, ``to_version``,
+    ``NotFoundError``. The result is a plain dict (``from_version``, ``to_version``,
     ``ingredient_changes``, ``step_changes``, ``created_at``) shaped for the API.
     """
     with self._uow_factory() as uow:
       v1 = uow.recipes.get_version(version_id_1)
       v2 = uow.recipes.get_version(version_id_2)
       if not v1 or not v2:
-        raise ValueError("One or both versions not found")
+        raise NotFoundError("One or both versions not found")
       if v1.recipe_id != recipe_id or v2.recipe_id != recipe_id:
-        raise ValueError("One or both versions do not belong to the specified recipe")
+        raise NotFoundError(
+          "One or both versions do not belong to the specified recipe"
+        )
       return {
         "from_version": str(v1.version_number),
         "to_version": str(v2.version_number),

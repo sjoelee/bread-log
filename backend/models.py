@@ -4,10 +4,9 @@ from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from uuid import UUID
 
-# Recipe DTOs live in backend/api/schemas.py. Re-exported here so existing
-# `from backend.models import Recipe` call sites keep working until updated
-# (Stage 6). Dropped: RecipeUpdateRequest, IngredientDiff, StepDiff,
-# RecipeVersionDiff (Stage 3), BakersPercentages (Stage 4).
+# Recipe DTOs live in backend/api/schemas.py. This re-export kept older
+# `from backend.models import Recipe` call sites working during the split and is
+# now unreferenced — removed with the rest of this legacy module in teardown.
 from .api.schemas import (  # noqa: F401
   Ingredient,
   Recipe,

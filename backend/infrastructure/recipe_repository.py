@@ -13,7 +13,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from ..domain import models as domain
-from ..exceptions import DatabaseError
+from ..exceptions import DatabaseError, NotFoundError
 from . import mappers
 
 logger = logging.getLogger("recipe_repository")
@@ -157,7 +157,7 @@ class RecipeRepository:
 
   def save(self, recipe: domain.Recipe) -> None:
     """Persist an existing recipe: upsert its current version, move the current
-    pointer, and update the scalar fields. Raises ``ValueError`` if the recipe
+    pointer, and update the scalar fields. Raises ``NotFoundError`` if the recipe
     row is gone."""
     v = recipe.current_version
     try:
@@ -196,8 +196,8 @@ class RecipeRepository:
           ],
         )
         if cur.rowcount == 0:
-          raise ValueError(f"Recipe {recipe.id} not found")
-    except ValueError:
+          raise NotFoundError(f"Recipe {recipe.id} not found")
+    except NotFoundError:
       raise
     except Exception as e:
       logger.error(f"Error saving recipe {recipe.id}: {e}")

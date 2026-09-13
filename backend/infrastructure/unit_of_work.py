@@ -20,14 +20,24 @@ class UnitOfWork:
   def __init__(self, pool: DatabasePool):
     self._pool = pool
     self._conn = None
-    self.recipes: RecipeRepository | None = None
+    self._recipes: RecipeRepository | None = None
+
+  @property
+  def recipes(self) -> RecipeRepository:
+    assert self._recipes is not None, (
+      "UnitOfWork.recipes accessed outside a 'with' block"
+    )
+    return self._recipes
 
   def __enter__(self) -> UnitOfWork:
     self._conn = self._pool.getconn()
-    self.recipes = RecipeRepository(self._conn)
+    self._recipes = RecipeRepository(self._conn)
     return self
 
   def __exit__(self, exc_type, exc, tb) -> None:
+    assert self._conn is not None, (
+      "UnitOfWork.__exit__ called without a matching __enter__"
+    )
     try:
       if exc_type is None:
         self._conn.commit()
@@ -37,4 +47,4 @@ class UnitOfWork:
     finally:
       self._pool.putconn(self._conn)
       self._conn = None
-      self.recipes = None
+      self._recipes = None

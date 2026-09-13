@@ -185,8 +185,9 @@ plain dicts until Stages 3–6 wire domain objects through. (Timing rules stay i
 ### Application service **(live, being reshaped)**
 One method per use case. Opens the *Unit of Work*, loads aggregates via *repositories*, calls
 domain methods, commits. Holds the *sequence* of a use case but no rules and no SQL.
-Today: `RecipeService` in `backend/recipe_service.py` (still muddy — mixes concerns).
-Target: `backend/application/recipe_service.py` + `timing_service.py`.
+Today: `RecipeService` in `backend/application/recipe_service.py` — DTO in, DTO out, one
+`UnitOfWork` per method.
+Target: also a `timing_service.py` alongside it (Part IV).
 
 ### Repository **(live for recipes)**
 A collection-like interface for loading and saving **one aggregate**, hiding SQL and the
@@ -234,6 +235,13 @@ its result as a parameter. Enables swapping implementations without touching the
 The FastAPI startup/shutdown handler. Opens `app.state.pool` on startup, closes it on
 shutdown. `TestClient(app)` used as a context manager runs it; a bare `TestClient(app)` does
 not (see `tests/conftest.py::_app_lifespan`).
+
+### Exception translation **(live for recipes)**
+The application and domain layers raise intent-revealing exceptions (`NotFoundError`,
+`ConflictError`, `DomainError`, `DatabaseError` in `backend/exceptions.py`); one set of
+`@app.exception_handler` functions in `backend/service.py` maps each to an HTTP status
+(404 / 409 / 422 / 500). Recipe routes therefore carry no `try/except`. Timing routes still
+translate inline until Part IV.
 
 ### Persistence ignorance
 The property that domain (and, ideally, application) code has no knowledge of how or whether
