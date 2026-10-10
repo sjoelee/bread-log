@@ -28,9 +28,10 @@ today every save creates a new one, (target) that changes — see *promotion*. A
 "recipe specification" in design discussion — same thing.)
 
 ### Recipe history **(concept — not a modeled type)**
-The set of a recipe's versions, ordered by time. **Deliberately not an entity or value
+The set of a recipe's **Ready** versions, ordered by time. The Draft is not part of
+history — it is shown separately. **Deliberately not an entity or value
 object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
-repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`. The
+repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]` (target: Ready only). The
 `Recipe` aggregate holds only the current version (+ the Draft, in Part II); history is
 loaded on demand. Only promote it to a value object if real domain logic over the version
 sequence appears (e.g. trend analysis, adjacent-version diffs).
@@ -51,7 +52,7 @@ The Draft → Ready transition. This is the **only** thing that assigns a `versi
 
 ### Importable **(target)**
 A recipe is importable iff it has at least one Ready version. A brand-new recipe (Draft only,
-zero versions) is **not** importable. Enforced by the *hard gate*.
+zero Ready versions) is **not** importable. Enforced by the *hard gate*.
 
 ### Component / sub-recipe **(target)**
 A pinned reference from one recipe version to a specific Ready version of another recipe —
