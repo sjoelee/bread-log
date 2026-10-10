@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Start of every session
+
+Read these plan files in full before doing anything else, and use them as the
+source of truth for the in-progress refactor (current stage, scope, decisions):
+
+1. `~/.claude/plans/synchronous-shimmying-sedgewick.md` — main plan (Parts I–IV, stage status table)
+2. `~/.claude/plans/i-want-to-think-staged-lampson.md` — detailed per-stage backend DDD plan; the main plan overrides it where they differ
+
+If a file is missing, say so instead of guessing at its contents. Keep the stage
+table in the main plan current as stages merge.
+
 ## Changing or critiquing existing code
 
 - **Verify before you flag.** Before calling shipped code buggy, fragile, or
@@ -35,7 +46,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Running Tests
 - `uv run pytest` — Run all backend tests
-- `uv run pytest tests/test_recipe_list_api.py -v` — Run a specific test file
+- `uv run pytest tests/api/test_recipe_list_api.py -v` — Run a specific test file
 - Tests hit the **real PostgreSQL database** (`bread_makes`) — no mocking
 - `pythonpath = ["."]` is set in `pyproject.toml` so `backend.*` imports resolve correctly
 
@@ -57,12 +68,15 @@ React + TypeScript single-page app. All UI lives in `src/BreadAppNew.tsx` (the m
 UI libraries: Material-UI (DatePicker, TimePicker), Tailwind CSS, Wouter (routing), dayjs.
 
 ### Backend (`backend/`)
-FastAPI service with these key files:
-- `service.py` — all route definitions (the FastAPI app entry point)
-- `recipe_service.py` — recipe business logic layer
-- `db.py` — `DBConnector` class with all raw SQL via psycopg3; uses a connection pool (`DatabasePool`)
-- `models.py` — all Pydantic request/response models
-- `recipe_versioning.py` — diff logic, baker's percentage calculation, version bump rules
+FastAPI service, layered per the DDD refactor (recipes only; timing still uses `db.py` until Part IV):
+- `service.py` — FastAPI app, lifespan, dependency providers, thin recipe routes, exception handlers; timing routes (still with inline logic) also live here
+- `api/` — `schemas.py` (recipe request/response DTOs), `mappers.py` (DTO ↔ domain)
+- `application/recipe_service.py` — recipe use cases; opens one `UnitOfWork` per use case
+- `domain/` — `models.py` (`Ingredient`, `RecipeStep`, `RecipeVersion`, `Recipe`), `versioning.py` (pure diff logic, baker's percentage calculation)
+- `infrastructure/` — `pool.py` (`DatabasePool`), `unit_of_work.py` (owns connection + transaction), `recipe_repository.py` (recipe SQL, `dict_row`), `mappers.py` (row ↔ domain)
+- `db.py` — `DBConnector`: timing-only raw SQL via psycopg3 (retired in Part IV)
+- `models.py` — bread-timing Pydantic models only
+- `exceptions.py` — `DatabaseError`, `NotFoundError`, `ConflictError`, `DomainError`
 
 ### Key Data Models
 - **Recipe** — versioned; `recipes` table holds current pointer, `recipe_versions` holds all versions, `bakers_percentages` holds calculated percentages per version. Cascade delete removes versions and percentages when a recipe is deleted.
@@ -78,15 +92,16 @@ FastAPI service with these key files:
 ### Key Behaviors to Know
 - `BreadTimingCreate.recipe_name` is required (NOT NULL in DB) — validate on the frontend before submit
 - `recipe_versions` and `bakers_percentages` cascade-delete when a recipe is deleted
-- `GET /recipes/` returns `RecipeListItem` (includes `description`, `flour_ingredient_names`, `version`) — no per-recipe follow-up fetch needed
-- `GET /recipes/{id}` returns the full `Recipe` with `current_version` and `bakers_percentages` — only needed for View & Edit / Use Template
+- `GET /recipes/` returns `RecipeListItem` (includes `description`, `version`) — no per-recipe follow-up fetch needed
+- `GET /recipes/{id}` returns the full `Recipe` with `current_version` — only needed for View & Edit / Use Template
 - The `recentTimings` state in `BreadAppNew.tsx` is used by the Saved Timings tab (paginated). The dropdown for bread name uses a **separate** `timingDropdownNames` state populated by `loadAllDistinctBreadNames()`
 - psycopg3 connection pool logs `rolling back returned connection` for reads — this is harmless (no autocommit on reads, rollback is a no-op)
 
 ### Tests (`tests/`)
-- `test_recipe_list_api.py` — sorting and ingredient filter tests for `GET /recipes/`
-- `test_timing_api.py` — full CRUD coverage for timing endpoints
-- `test_recipe_creation_api.py`, `test_recipe_creation_service.py`, `test_recipe_creation_transactions.py`
-- `test_baker_percentages.py`, `test_recipe_versioning.py`, `test_ingredient_matching.py`
+Organized by layer, mirroring `backend/`:
+- `domain/` — pure, no DB/HTTP (`test_domain_models`, `test_baker_percentages`, `test_ingredient_matching`)
+- `application/` — `RecipeService` against `tests/fakes.py` doubles
+- `infrastructure/` — real PostgreSQL (`test_recipe_repository`, `test_recipe_creation_transactions`)
+- `api/` — `TestClient` against the app, plus API mappers and app wiring (`test_recipe_list_api`, `test_timing_api`, `test_recipe_creation_api`, `test_recipe_versioning_api`, `test_recipe_error_handling`)
 - Fixtures in `conftest.py` provide sample ingredients, instructions, and recipe shapes
 - Each test class that writes data should clean up (delete) created records in a `yield` fixture

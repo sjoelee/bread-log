@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from ..db import DatabasePool
+from .pool import DatabasePool
 from .recipe_repository import RecipeRepository
 
 logger = logging.getLogger("unit_of_work")

@@ -1,7 +1,7 @@
 """Database row -> domain object mapping.
 
-Rows are psycopg tuples in the column order the queries in ``recipe_repository.py``
-select (see the ``_*`` SQL constants there).
+Rows are psycopg dicts (``dict_row``) keyed by the column names/aliases the queries
+in ``recipe_repository.py`` select (see the ``_*`` SQL constants there).
 """
 
 from __future__ import annotations
@@ -35,94 +35,59 @@ def _steps(jsonb) -> list[domain.RecipeStep]:
   ]
 
 
-def version_from_row(row) -> domain.RecipeVersion:
-  (
-    vid,
-    recipe_id,
-    version_number,
-    description,
-    ingredients,
-    instructions,
-    created_at,
-    change_summary,
-  ) = row
+def version_from_row(row: dict) -> domain.RecipeVersion:
   return domain.RecipeVersion(
-    id=vid,
-    recipe_id=recipe_id,
-    version_number=version_number,
-    description=description,
-    ingredients=_ingredients(ingredients),
-    instructions=_steps(instructions),
-    created_at=created_at,
-    change_summary=change_summary,
+    id=row["id"],
+    recipe_id=row["recipe_id"],
+    version_number=row["version_number"],
+    description=row["description"],
+    ingredients=_ingredients(row["ingredients"]),
+    instructions=_steps(row["instructions"]),
+    created_at=row["created_at"],
+    change_summary=row["change_summary"],
   )
 
 
-def recipe_from_joined_row(row) -> Optional[domain.Recipe]:
+def recipe_from_joined_row(row: Optional[dict]) -> Optional[domain.Recipe]:
   """Build a ``Recipe`` from a recipe row LEFT JOINed to its current version row.
+
+  Recipe columns are keyed by name; version columns carry a ``v_`` alias so the
+  two sides' ``id`` / ``description`` / ``created_at`` don't collide.
 
   Returns ``None`` if the row is missing or the recipe has no current version.
   """
-  if row is None:
-    return None
-  (
-    rid,
-    name,
-    description,
-    category,
-    r_created_at,
-    r_updated_at,
-    v_id,
-    v_number,
-    v_description,
-    v_ingredients,
-    v_instructions,
-    v_created_at,
-  ) = row
-  if v_id is None:
+  if row is None or row["v_id"] is None:
     return None
   version = domain.RecipeVersion(
-    id=v_id,
-    recipe_id=rid,
-    version_number=v_number,
-    description=v_description,
-    ingredients=_ingredients(v_ingredients),
-    instructions=_steps(v_instructions),
-    created_at=v_created_at,
+    id=row["v_id"],
+    recipe_id=row["id"],
+    version_number=row["v_number"],
+    description=row["v_description"],
+    ingredients=_ingredients(row["v_ingredients"]),
+    instructions=_steps(row["v_instructions"]),
+    created_at=row["v_created_at"],
   )
   return domain.Recipe(
-    id=rid,
-    name=name,
-    description=description,
-    category=category,
+    id=row["id"],
+    name=row["name"],
+    description=row["description"],
+    category=row["category"],
     current_version=version,
-    created_at=r_created_at,
-    updated_at=r_updated_at,
+    created_at=row["created_at"],
+    updated_at=row["updated_at"],
   )
 
 
-def summary_from_row(row) -> domain.RecipeSummary:
-  (
-    rid,
-    name,
-    description,
-    category,
-    created_at,
-    updated_at,
-    version_number,
-    current_version_id,
-    ingredient_count,
-    step_count,
-  ) = row
+def summary_from_row(row: dict) -> domain.RecipeSummary:
   return domain.RecipeSummary(
-    id=rid,
-    name=name,
-    description=description,
-    category=category,
-    version_number=version_number,
-    current_version_id=current_version_id,
-    ingredient_count=ingredient_count or 0,
-    step_count=step_count or 0,
-    created_at=created_at,
-    updated_at=updated_at,
+    id=row["id"],
+    name=row["name"],
+    description=row["description"],
+    category=row["category"],
+    version_number=row["version_number"],
+    current_version_id=row["current_version_id"],
+    ingredient_count=row["ingredient_count"] or 0,
+    step_count=row["step_count"] or 0,
+    created_at=row["created_at"],
+    updated_at=row["updated_at"],
   )

@@ -12,6 +12,8 @@ from dataclasses import asdict
 from typing import List, Optional
 from uuid import UUID
 
+from psycopg.rows import dict_row
+
 from ..domain import models as domain
 from ..exceptions import DatabaseError, NotFoundError
 from . import mappers
@@ -20,8 +22,9 @@ logger = logging.getLogger("recipe_repository")
 
 _RECIPE_JOINED = """
   SELECT r.id, r.name, r.description, r.category, r.created_at, r.updated_at,
-         rv.id, rv.version_number, rv.description, rv.ingredients,
-         rv.instructions, rv.created_at
+         rv.id AS v_id, rv.version_number AS v_number,
+         rv.description AS v_description, rv.ingredients AS v_ingredients,
+         rv.instructions AS v_instructions, rv.created_at AS v_created_at
   FROM recipes r
   LEFT JOIN recipe_versions rv ON r.current_version_id = rv.id
   WHERE r.id = %s
@@ -217,7 +220,7 @@ class RecipeRepository:
 
   def _fetchone(self, query: str, params, what: str):
     try:
-      with self._conn.cursor() as cur:
+      with self._conn.cursor(row_factory=dict_row) as cur:
         cur.execute(query, params)
         return cur.fetchone()
     except Exception as e:
@@ -226,7 +229,7 @@ class RecipeRepository:
 
   def _fetchall(self, query: str, params, what: str):
     try:
-      with self._conn.cursor() as cur:
+      with self._conn.cursor(row_factory=dict_row) as cur:
         cur.execute(query, params)
         return cur.fetchall()
     except Exception as e:

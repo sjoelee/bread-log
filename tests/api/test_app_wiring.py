@@ -8,7 +8,7 @@ the way the DDD refactor needs: an explicit pool lifecycle, services injected
 from unittest.mock import MagicMock
 
 from backend.config import Settings, get_settings
-from backend.db import DatabasePool, _build_conninfo
+from backend.infrastructure.pool import DatabasePool, _build_conninfo
 from backend.service import app, get_recipe_service, lifespan
 
 

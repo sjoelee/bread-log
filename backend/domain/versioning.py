@@ -2,14 +2,14 @@
 
 Pure functions over plain dicts — no I/O, no framework imports.
 
-Unused, pending removal: ``calculate_step_similarity``, ``determine_next_version``,
-``has_meaningful_changes``, ``calculate_bakers_percentages``.
+Unused, pending removal: ``has_meaningful_changes``,
+``calculate_bakers_percentages``.
 """
 
 import dataclasses
 import re
 import uuid
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 def normalize_ingredient_name(name: str) -> str:
@@ -61,59 +61,6 @@ def compare_ingredients(
       result["added"].append(new_ing)
 
   return result
-
-
-def calculate_step_similarity(old_step: str, new_step: str) -> Dict:
-  """
-  Calculate similarity between two recipe steps using content similarity
-  """
-  if old_step == new_step:
-    return {"similarity": 1.0, "change_type": "identical", "changes": []}
-
-  # Tokenize and normalize
-  old_tokens = set(re.findall(r"\b\w+\b", old_step.lower()))
-  new_tokens = set(re.findall(r"\b\w+\b", new_step.lower()))
-
-  # Calculate Jaccard similarity
-  if not old_tokens and not new_tokens:
-    similarity = 1.0
-  elif not old_tokens or not new_tokens:
-    similarity = 0.0
-  else:
-    intersection = old_tokens.intersection(new_tokens)
-    union = old_tokens.union(new_tokens)
-    similarity = len(intersection) / len(union)
-
-  # Detect specific changes
-  changes = []
-
-  # Time pattern changes
-  time_regex = r"(\d+)\s*(hours?|minutes?|mins?)"
-  old_times = re.findall(time_regex, old_step, re.IGNORECASE)
-  new_times = re.findall(time_regex, new_step, re.IGNORECASE)
-  if old_times != new_times:
-    old_time_str = " ".join([f"{num} {unit}" for num, unit in old_times])
-    new_time_str = " ".join([f"{num} {unit}" for num, unit in new_times])
-    if old_time_str != new_time_str:
-      changes.append(f"Timing changed: {old_time_str} → {new_time_str}")
-
-  # Temperature pattern changes
-  temp_regex = r"(\d+)\s*°?[FC]"
-  old_temps = re.findall(temp_regex, old_step, re.IGNORECASE)
-  new_temps = re.findall(temp_regex, new_step, re.IGNORECASE)
-  if old_temps != new_temps:
-    old_temp_str = ", ".join([f"{temp}°" for temp in old_temps])
-    new_temp_str = ", ".join([f"{temp}°" for temp in new_temps])
-    if old_temp_str != new_temp_str:
-      changes.append(f"Temperature changed: {old_temp_str} → {new_temp_str}")
-
-  # Classify change type
-  if similarity > 0.7:
-    change_type = "modified"
-  else:
-    change_type = "completely_different"
-
-  return {"similarity": similarity, "change_type": change_type, "changes": changes}
 
 
 def compare_instructions(
@@ -179,36 +126,12 @@ def compare_instructions(
   return result
 
 
-def generate_step_ids(instructions: List[Dict]) -> List[Dict]:
-  """
-  Generate IDs for instructions that don't have them
-  """
-  updated_instructions = []
-  for instruction in instructions:
-    if not instruction.get("id"):
-      instruction["id"] = str(uuid.uuid4())
-    updated_instructions.append(instruction)
-  return updated_instructions
-
-
 def assign_step_ids(steps):
   """Return the list with a uuid filled in for any RecipeStep missing one."""
   return [
     step if step.id else dataclasses.replace(step, id=str(uuid.uuid4()))
     for step in steps
   ]
-
-
-def determine_next_version(
-  current_major: int, current_minor: int, force_major: bool = False
-) -> Tuple[int, int]:
-  """
-  Determine the next version number
-  """
-  if force_major:
-    return current_major + 1, 0
-  else:
-    return current_major, current_minor + 1
 
 
 def create_version_summary(ingredient_diff: Dict, step_diff: Dict) -> Dict:

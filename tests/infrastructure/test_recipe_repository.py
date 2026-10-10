@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from backend.db import DatabasePool
+from backend.infrastructure.pool import DatabasePool
 from backend.domain import models as domain
 from backend.infrastructure.unit_of_work import UnitOfWork
 
@@ -51,6 +51,25 @@ class TestRoundTrip:
       assert loaded.current_version.description == "Initial version"
       assert [i.name for i in loaded.current_version.ingredients] == ["flour"]
       assert [s.instruction for s in loaded.current_version.instructions] == ["Mix"]
+    finally:
+      with uow_factory() as uow:
+        uow.recipes.delete(recipe.id)
+
+  def test_joined_read_keeps_recipe_and_version_columns_distinct(self, uow_factory):
+    # The joined query selects id/description/created_at from both tables; the
+    # version side is aliased so dict_row doesn't let one overwrite the other.
+    recipe = _recipe("repo-joined-columns")
+    with uow_factory() as uow:
+      uow.recipes.add(recipe)
+    try:
+      with uow_factory() as uow:
+        loaded = uow.recipes.get(recipe.id)
+      assert loaded is not None
+      assert loaded.id == recipe.id
+      assert loaded.current_version.id == recipe.current_version.id
+      assert loaded.id != loaded.current_version.id
+      assert loaded.current_version.recipe_id == recipe.id
+      assert loaded.description != loaded.current_version.description
     finally:
       with uow_factory() as uow:
         uow.recipes.delete(recipe.id)
