@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from backend.db import DatabasePool
+from backend.infrastructure.pool import DatabasePool
 from backend.domain import models as domain
 from backend.infrastructure.unit_of_work import UnitOfWork
 

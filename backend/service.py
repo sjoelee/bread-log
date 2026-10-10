@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from datetime import date, datetime
 from .config import get_settings
-from .db import DatabasePool, DBConnector
+from .db import DBConnector
+from .infrastructure.pool import DatabasePool
 from .exceptions import ConflictError, DatabaseError, DomainError, NotFoundError
 from .api.schemas import (
   Recipe,
