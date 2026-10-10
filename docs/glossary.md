@@ -70,11 +70,6 @@ Analogous to a lockfile entry. The baker can repoint a pin to any Ready version 
 child by editing the component; that edits the parent's Draft, and a new parent version
 exists only once it is promoted.
 
-### Circular dependency **(target)**
-An import edge that would make a recipe (transitively) depend on itself (A → B → A).
-Rejected before the edge is added. Raised as `CircularDependency`. Detected by a domain
-service that walks the component graph.
-
 ### Leaf ingredient **(live)**
 A single quantity of one thing: `{name, amount, unit, type, notes}`. `type` is `flour` or
 `other` (was `flour | liquid | preferment | fat | other`; narrowed on the frontend).
