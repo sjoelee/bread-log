@@ -19,11 +19,11 @@ changes. Its ingredients and steps live on its *versions*; the current one is
 goes through it.
 
 ### Recipe version **(live)**
-One snapshot of a recipe's content: its ingredients, steps, and (target) component
+One snapshot of a recipe's content: its ingredients, steps, and (target) sub-recipe
 references, at a point in time. This is what a baker means by "the recipe" when looking at
 a single version. Table: `recipe_versions`. Immutable once Ready (see *Draft* / *Ready*);
 today every save creates a new one, (target) that changes — see *promotion*. An **entity**
-— it has its own id, which bakes and component references pin. A *Draft* is also a version
+— it has its own id, which bakes and sub-recipe references pin. A *Draft* is also a version
 (the one in progress); a *Ready version* is the numbered, frozen kind. (Sometimes called a
 "recipe specification" in design discussion — same thing.)
 
@@ -50,24 +50,30 @@ The Draft → Ready transition. This is the **only** thing that assigns a `versi
 (`MAX(existing ready number) + 1`). Triggered explicitly by the user, who supplies a
 *release note*. Method: `Recipe.promote(release_note)`.
 
-### Component / sub-recipe **(target)**
-A pinned reference from one recipe version to a specific Ready version of another recipe —
-e.g. a milk bread importing a tangzhong. Table: `recipe_components`. The child recipe is
-prepared separately and reused; contrast with an *inline preparation*.
-A recipe can only be used as a sub-recipe if it has at least one Ready version (adding one
-that doesn't raises `SubRecipeNotReady`); the component picker lists only such recipes.
+### Sub-recipe **(target)**
+An ordinary recipe that another recipe uses — e.g. a tangzhong used by a milk bread. It is
+prepared separately and reused; contrast with an *inline preparation*. A recipe can only be
+used as a sub-recipe if it has at least one Ready version (adding one that doesn't raises
+`SubRecipeNotReady`); the sub-recipe picker lists only such recipes.
+
+### Sub-recipe reference **(target)**
+One use of a sub-recipe inside a recipe version: a *pin* to a specific Ready version of the
+child, plus the amount, unit, and label for this use. Value object `SubRecipeRef`; table
+`recipe_sub_recipe_refs`. This is what scaling lives on — the child recipe itself is never
+changed. (Not to be confused with the everyday word "component", e.g. "the filling"; that
+is not a modeled concept.)
 
 ### Inline preparation **(target)**
 A step that cooks or transforms leaf ingredients *within this recipe* (brown the butter,
 toast the seeds). Not its own recipe, not versioned — just a step with `kind = 'prep'`.
-The test vs a component: *would you ever iterate it on its own, or use it in another recipe?*
-Yes → component. No → inline preparation.
+The test vs a sub-recipe: *would you ever iterate it on its own, or use it in another recipe?*
+Yes → sub-recipe. No → inline preparation.
 
 ### Pinned reference / pin **(target)**
-A component stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
+A sub-recipe reference stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
 float to "latest", and nothing tells the parent when the child gets a newer Ready version.
 Analogous to a lockfile entry. The baker can repoint a pin to any Ready version of the same
-child by editing the component; that edits the parent's Draft, and a new parent version
+child by editing the reference; that edits the parent's Draft, and a new parent version
 exists only once it is promoted.
 
 ### Leaf ingredient **(live)**
@@ -78,7 +84,7 @@ Stored in `recipe_versions.ingredients` (JSONB).
 ### Step **(live)** / step `kind` + `uses` **(target)**
 An ordered instruction. Today: `{order, text}` free text. (target) `{order, text, kind, uses[]}`
 where `kind ∈ prep | mix | ferment | shape | bake | finish` and `uses[]` names the
-ingredient/component ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
+ingredient/sub-recipe ref ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
 
 ### Baker's percentage **(not modelled)**
 Each ingredient's weight as a percentage of total flour weight. Bread-specific; **not in the
@@ -89,7 +95,7 @@ bread-specific model.
 ### Overall formula vs final dough
 Pro-baking terms. *Overall formula* folds pre-ferment flour/water back into the totals;
 *final dough* is what's left after the pre-ferments. **We deliberately do NOT model this** —
-components are flat line items (decided with the user).
+sub-recipe references are flat line items (decided with the user).
 
 ### Release note **(target)**
 Free text the user types at promotion, describing what changed. Stored in
@@ -125,7 +131,7 @@ One bread-making session — the execution of a recipe. Records process timestam
 (`autolyse_ts` … `bake_ts`), temperatures, stretch-fold count, notes, and `status`
 (`in_progress` | `completed`). Table: `bread_timings`. Links to a recipe via `recipe_name`
 (required text) plus optional `recipe_id` / `recipe_version_id`. (target) the pinned version
-alone makes the whole component tree reproducible — no extra snapshot needed.
+alone makes the whole sub-recipe tree reproducible — no extra snapshot needed.
 
 ### Stretch and fold **(live)**
 A dough-handling action performed during bulk fermentation. The app tracks only a count
@@ -147,7 +153,7 @@ This codebase targets four layers; **dependencies point inward only**:
 
 ### Aggregate / aggregate root **(live, scaffolding)**
 A cluster of objects treated as one unit for consistency and persistence. `Recipe` is the
-aggregate root; its `RecipeVersion` (and `Component`s in Part II) has no independent lifecycle
+aggregate root; its `RecipeVersion` (and `SubRecipeRef`s in Part II) has no independent lifecycle
 — cascade delete confirms it. You load, mutate, and save the whole `Recipe`, never a
 `RecipeVersion` on its own. `BreadTiming` is a **separate** aggregate that references a recipe
 by id only.
@@ -161,7 +167,7 @@ An object with identity that persists over time. `Recipe`, `RecipeVersion` (data
 
 ### Value object **(live, scaffolding)**
 An object defined only by its attributes, immutable, no identity. `Ingredient`, `RecipeStep`
-— `@dataclass(frozen=True)` in `backend/domain/models.py` as of Stage 2. `Component` comes in
+— `@dataclass(frozen=True)` in `backend/domain/models.py` as of Stage 2. `SubRecipeRef` comes in
 Part II. Nothing wires through these yet — Stage 3 mappers are the first consumer.
 
 ### Domain service **(live, partial)**

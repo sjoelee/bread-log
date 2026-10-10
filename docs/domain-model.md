@@ -91,7 +91,7 @@ specification" is a synonym for `RecipeVersion` you may see in design notes.
 | Class | Kind | Reason |
 |---|---|---|
 | `Recipe` | aggregate root, entity | UUID identity that persists; mutable; the consistency + transaction boundary |
-| `RecipeVersion` | entity | own UUID identity; a distinct thing pointed at by `recipes.current_version_id` (and, later, by component pins) |
+| `RecipeVersion` | entity | own UUID identity; a distinct thing pointed at by `recipes.current_version_id` (and, later, by sub-recipe reference pins) |
 | `Ingredient` | value object (`frozen=True`) | fully defined by its attributes ("1000 g bread flour"); no identity, no id field; diffed by name; change = new value |
 | `RecipeStep` | value object (`frozen=True`) | defined by `order` + `instruction`; the optional `id` is a soft diff-matching key, not identity |
 | `RecipeSummary` | read model | DB-computed projection; never mutated, no invariants — pure query side |
@@ -143,9 +143,9 @@ classDiagram
 
     class Recipe {
         <<aggregate root>>
-        +add_component(child, amount, unit, label)
+        +add_sub_recipe(child, amount, unit, label)
         +promote(release_note)
-        +update_component(component_id, ...)
+        +update_sub_recipe(ref_id, ...)
     }
     class RecipeVersion {
         <<entity>>
@@ -157,7 +157,7 @@ classDiagram
         +str kind
         +List~str~ uses
     }
-    class Component {
+    class SubRecipeRef {
         <<value object (frozen)>>
         +UUID child_recipe_id
         +UUID child_version_id
@@ -170,23 +170,23 @@ classDiagram
 
     Recipe "1" *-- "1" RecipeVersion : current (latest Ready)
     Recipe "1" o-- "0..1" RecipeVersion : draft
-    RecipeVersion "1" *-- "0..*" Component : components
-    Component ..> RecipeVersion : pins a version of ANOTHER Recipe
+    RecipeVersion "1" *-- "0..*" SubRecipeRef : sub_recipes
+    SubRecipeRef ..> RecipeVersion : pins a version of ANOTHER Recipe
 
     note for RecipeVersion "state = draft | ready. version_number is NULL on a draft, assigned only on promote."
-    note for RecipeStep "kind = prep | mix | ferment | shape | bake | finish. uses = ids of the ingredients/components the step acts on."
-    note for Component "Reference ACROSS the aggregate boundary — never nest one Recipe inside another. Invariants (Recipe.add_component): child must have a Ready version; the edge must not create a cycle."
+    note for RecipeStep "kind = prep | mix | ferment | shape | bake | finish. uses = ids of the ingredients/sub-recipe refs the step acts on."
+    note for SubRecipeRef "Reference ACROSS the aggregate boundary — never nest one Recipe inside another. Invariants (Recipe.add_sub_recipe): child must have a Ready version; the edge must not create a cycle."
 ```
 
 New table:
 
 ```mermaid
 erDiagram
-    recipe_versions ||--o{ recipe_components : "parent_version_id · CASCADE"
-    recipes ||--o{ recipe_components : "child_recipe_id · RESTRICT"
-    recipe_versions ||--o{ recipe_components : "child_version_id · RESTRICT"
+    recipe_versions ||--o{ recipe_sub_recipe_refs : "parent_version_id · CASCADE"
+    recipes ||--o{ recipe_sub_recipe_refs : "child_recipe_id · RESTRICT"
+    recipe_versions ||--o{ recipe_sub_recipe_refs : "child_version_id · RESTRICT"
 
-    recipe_components {
+    recipe_sub_recipe_refs {
         uuid id PK
         uuid parent_version_id FK
         uuid child_recipe_id FK
