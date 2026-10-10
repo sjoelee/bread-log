@@ -15,7 +15,7 @@ Status tags:
 The named thing — "Country Sourdough" — and its stable identity across edits: name,
 category, and notes. Like a document across its revisions, it persists while its content
 changes. Its ingredients and steps live on its *versions*; the current one is
-`recipe.current_version`. Table: `recipes`. The aggregate root (see Part B): every change
+`recipe.current_version`. Table: `recipes`. The aggregate root (see *Aggregate / aggregate root*): every change
 goes through it.
 
 ### Recipe version **(live)**
