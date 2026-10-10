@@ -256,7 +256,7 @@ objects are stored. The goal of the Part I refactor.
 - **`backend/recipe_versioning.py`** — moved to `backend/domain/versioning.py` in Stage 2.
 - **`DBConnector._compute_timing_status` / `service.calculate_timing_status`** — duplicate
   "is this timing complete?" logic. Left as-is for now; consolidated during Part IV.
-- **`force_major` / major-minor versioning / `determine_next_version`** — vestigial. Version
+- **`force_major` / major-minor versioning** — vestigial. Version
   numbers are a single incrementing int, and (target) advance only on promotion.
 - **`account_makes`, `dough_makes`, `DoughMake`, `AccountMake`** — legacy tables/models, not
   the current data model.
