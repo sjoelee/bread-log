@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Start of every session
+
+Read these plan files in full before doing anything else, and use them as the
+source of truth for the in-progress refactor (current stage, scope, decisions):
+
+1. `~/.claude/plans/synchronous-shimmying-sedgewick.md` — main plan (Parts I–IV, stage status table)
+2. `~/.claude/plans/i-want-to-think-staged-lampson.md` — detailed per-stage backend DDD plan; the main plan overrides it where they differ
+
+If a file is missing, say so instead of guessing at its contents. Keep the stage
+table in the main plan current as stages merge.
+
 ## Changing or critiquing existing code
 
 - **Verify before you flag.** Before calling shipped code buggy, fragile, or
