@@ -1,6 +1,6 @@
 # Glossary
 
-Shared vocabulary for the bread-log domain and its architecture. Use these exact terms in
+Shared vocabulary for the bread-log recipe domain. Use these exact terms in
 code, comments, commits, and conversation so humans and Claude sessions stay aligned.
 
 Status tags:
@@ -105,107 +105,6 @@ The structured comparison of two recipe versions (ingredients added/removed/modi
 steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
 (moved there from `recipe_versioning.py` in Stage 2).
-
-### Layer
-This codebase targets four layers; **dependencies point inward only**:
-
-| Layer | Directory | Job | May NOT contain |
-|---|---|---|---|
-| Interface / HTTP | `backend/service.py` | parse request → one service call → shape response | business rules, SQL, transactions |
-| Application | `backend/application/` | orchestrate one use case: open transaction, call domain, persist, commit | business rules, SQL |
-| Domain | `backend/domain/` | the rules; pure, no I/O | framework imports (FastAPI, psycopg) |
-| Infrastructure | `backend/infrastructure/` | talk to Postgres; implement the repository ports | business rules |
-
-### Aggregate / aggregate root **(live, scaffolding)**
-A cluster of objects treated as one unit for consistency and persistence. `Recipe` is the
-aggregate root; its `RecipeVersion` (and `SubRecipeRef`s in Part II) has no independent lifecycle
-— cascade delete confirms it. You load, mutate, and save the whole `Recipe`, never a
-`RecipeVersion` on its own.
-The `Recipe` dataclass (holding `current_version`, with `create()` / `add_version()`) exists
-in `backend/domain/models.py` as of Stage 2, unit-tested but not yet wired into the app. Full
-version history is a separate repository read, not held on the aggregate.
-
-### Entity **(live, scaffolding)**
-An object with identity that persists over time. `Recipe`, `RecipeVersion` (dataclasses in
-`backend/domain/models.py` as of Stage 2).
-
-### Value object **(live, scaffolding)**
-An object defined only by its attributes, immutable, no identity. `Ingredient`, `RecipeStep`
-— `@dataclass(frozen=True)` in `backend/domain/models.py` as of Stage 2. `SubRecipeRef` comes in
-Part II. Nothing wires through these yet — Stage 3 mappers are the first consumer.
-
-### Domain service **(live, partial)**
-Stateless domain logic that doesn't belong to a single entity: versioning/diff math, cycle
-detection (target). Lives in `backend/domain/versioning.py` as of Stage 2; still called with
-plain dicts until Stages 3–6 wire domain objects through. (Timing rules stay in
-`service.py` / `db.py` until Part IV — no `domain/timing.py`.)
-
-### Application service **(live, being reshaped)**
-One method per use case. Opens the *Unit of Work*, loads aggregates via *repositories*, calls
-domain methods, commits. Holds the *sequence* of a use case but no rules and no SQL.
-Today: `RecipeService` in `backend/application/recipe_service.py` — DTO in, DTO out, one
-`UnitOfWork` per method.
-Target: also a `timing_service.py` alongside it (Part IV).
-
-### Repository **(live for recipes)**
-A collection-like interface for loading and saving **one aggregate**, hiding SQL and the
-multi-table span. `backend/infrastructure/recipe_repository.py::RecipeRepository` is the
-Postgres implementation (`get` / `get_version` / `get_versions` / `list` / `add` / `save` /
-`delete`); `tests/fakes.py::FakeRecipeRepository` is the in-memory one for DB-free tests. No
-separate `Protocol` — `RecipeService` is typed against `RecipeRepository` and the fake is
-structurally compatible. `TimingRepository` is Part IV.
-
-### RecipeSummary **(live)**
-The flat read model `RecipeRepository.list()` returns — a database-computed projection (name,
-category, counts, current version number), not part of any aggregate. Mapped to
-`api.schemas.RecipeListItem` at the edge.
-
-### Unit of Work (UoW) **(target)**
-A context manager that owns one database connection and one transaction. Entered once per
-use case by the application service; exposes `.recipes` / `.timings` bound to that
-connection; **commits on clean exit, rolls back on exception**. `backend/infrastructure/unit_of_work.py`.
-Replaces today's pattern where every `DBConnector` method opens its own connection and commits.
-
-### DTO (Data Transfer Object) **(live, partial)**
-The shape crossing the HTTP boundary — Pydantic request/response models. Kept **separate**
-from domain objects. Recipe DTOs live in `backend/api/schemas.py` as of Stage 3 (timing DTOs
-stay in `backend/models.py` until Part IV; `models.py` re-exports the recipe names for
-now). API-level validation (regex on `unit`/`type`, non-empty checks) lives here, not in the
-domain. Dropped as dead in Stage 3: `RecipeUpdateRequest`, `IngredientDiff`, `StepDiff`,
-`RecipeVersionDiff`.
-
-### Mapper **(live)**
-Pure functions that convert between representations: `backend/api/mappers.py` (DTO ↔ domain)
-and `backend/infrastructure/mappers.py` (database row → domain). `RecipeService` uses both —
-DTO in at the API edge, row out from the repository.
-
-### Composition root **(live)**
-The single place where concrete implementations are wired together. Here: the `Depends`
-providers in `backend/service.py` (`get_pool`, `get_db`, `get_recipe_service`). A test's
-composition root swaps in fakes via `app.dependency_overrides`.
-
-### Dependency injection (DI) / provider **(live)**
-Giving a function its collaborators as arguments instead of having it import or construct
-them. In FastAPI: a **provider** is a function passed to `Depends(...)`; the route receives
-its result as a parameter. Enables swapping implementations without touching the consumer.
-
-### Lifespan **(live)**
-The FastAPI startup/shutdown handler. Opens `app.state.pool` on startup, closes it on
-shutdown. `TestClient(app)` used as a context manager runs it; a bare `TestClient(app)` does
-not (see `tests/conftest.py::_app_lifespan`).
-
-### Exception translation **(live for recipes)**
-The application and domain layers raise intent-revealing exceptions (`NotFoundError`,
-`ConflictError`, `DomainError`, `DatabaseError` in `backend/exceptions.py`); one set of
-`@app.exception_handler` functions in `backend/service.py` maps each to an HTTP status
-(404 / 409 / 422 / 500). Recipe routes therefore carry no `try/except`. Timing routes still
-translate inline until Part IV.
-
-### Persistence ignorance
-The property that domain (and, ideally, application) code has no knowledge of how or whether
-objects are stored. The goal of the Part I refactor.
-
----
 
 ## Deprecated / legacy terms (don't use going forward)
 
