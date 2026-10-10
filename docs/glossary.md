@@ -105,16 +105,3 @@ The structured comparison of two recipe versions (ingredients added/removed/modi
 steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
 (moved there from `recipe_versioning.py` in Stage 2).
-
-## Deprecated / legacy terms (don't use going forward)
-
-- **`DBConnector`** — the ~950-line god object holding all raw SQL. Being dismantled across
-  Stages 4–7 into repositories.
-- **`backend/recipe_versioning.py`** — moved to `backend/domain/versioning.py` in Stage 2.
-- **`DBConnector._compute_timing_status` / `service.calculate_timing_status`** — duplicate
-  "is this timing complete?" logic. Left as-is for now; consolidated during Part IV.
-- **`force_major` / major-minor versioning** — vestigial. Version
-  numbers are a single incrementing int, and (target) advance only on promotion.
-- **`account_makes`, `dough_makes`, `DoughMake`, `AccountMake`** — legacy tables/models, not
-  the current data model.
-- **`fridge_ts`** — renamed to `final_proof_ts`.
