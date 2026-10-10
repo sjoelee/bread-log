@@ -54,6 +54,13 @@ class RecipeSummary:
 
 @dataclass
 class RecipeVersion:
+  """One snapshot of a recipe's content: its ingredients and steps at a point in time.
+
+  This is what a baker means by "the recipe" when looking at a single version.
+  The version number orders a recipe's snapshots; the ``Recipe`` that owns them
+  holds the name and tracks which one is current.
+  """
+
   id: UUID
   recipe_id: UUID
   version_number: int
@@ -66,10 +73,13 @@ class RecipeVersion:
 
 @dataclass
 class Recipe:
-  """Aggregate root: identity, metadata, and the current version.
+  """Aggregate root: the named recipe and the entry point for changing it.
 
-  A ``RecipeVersion`` has no lifecycle of its own — it lives and dies with the
-  Recipe. Full version history is a separate repository read, not held here.
+  A ``Recipe`` is the stable identity (name, category, notes) that persists across
+  edits, like a document across its revisions. Its ingredients and steps live on
+  its ``RecipeVersion`` snapshots; reach the current ones via ``current_version``.
+  A version has no lifecycle of its own — it lives and dies with the Recipe. Full
+  version history is a separate repository read, not held here.
   """
 
   id: UUID

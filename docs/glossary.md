@@ -1,263 +1,100 @@
 # Glossary
 
-Shared vocabulary for the bread-log domain and its architecture. Use these exact terms in
+Shared vocabulary for the bread-log recipe domain. Use these exact terms in
 code, comments, commits, and conversation so humans and Claude sessions stay aligned.
-
-Status tags:
-- **(live)** — exists in the codebase today
-- **(target)** — agreed design, not built yet (see `~/.claude/plans/synchronous-shimmying-sedgewick.md`)
 
 ---
 
-## Part A — Domain language (recipes & baking)
+## Domain language (recipes & baking)
 
-### Recipe **(live)**
-The stable identity of a formula — its name, category, and notes. It does **not** hold
-ingredients or steps directly; those live in its versions. Table: `recipes`. The aggregate
-root (see Part B).
+### Recipe
+The named thing — "Country Sourdough" — and its stable identity across edits: name,
+category, and notes. Like a document across its revisions, it persists while its content
+changes. Its ingredients and steps live on its *versions*; the current one is
+`recipe.current_version`. Table: `recipes`. The aggregate root (see *Aggregate / aggregate root*): every change
+goes through it.
 
-### Recipe version **(live)**
-An immutable snapshot of a recipe's content: ingredients, steps, and (target) component
-references. Table: `recipe_versions`. Today every save creates one; (target) that changes —
-see *Draft* / *promotion*. An **entity** — it has its own id, which bakes and component
-references pin. (Sometimes called a "recipe specification" in design discussion — same thing.)
+### Recipe version
+One snapshot of a recipe's content: its ingredients, steps, and sub-recipe
+references, at a point in time. This is what a baker means by "the recipe" when looking at
+a single version. Table: `recipe_versions`. Immutable once Ready (see *Draft* / *Ready*);
+every save currently creates a new one; under the Draft/Ready model only *promotion* does. An **entity**
+— it has its own id, which sub-recipe references pin. A *Draft* is also a version
+(the one in progress); a *Ready version* is the numbered, frozen kind. (Sometimes called a
+"recipe specification" in design discussion — same thing.)
 
-### Recipe history **(concept — not a modeled type)**
-The set of a recipe's versions, ordered by time. **Deliberately not an entity or value
+### Recipe history
+The set of a recipe's **Ready** versions, ordered by time. The Draft is not part of
+history — it is shown separately. **Deliberately not an entity or value
 object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
-repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]`. The
+repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]` (Ready versions only). The
 `Recipe` aggregate holds only the current version (+ the Draft, in Part II); history is
 loaded on demand. Only promote it to a value object if real domain logic over the version
 sequence appears (e.g. trend analysis, adjacent-version diffs).
 
-### Draft **(target)**
+### Draft
 The single mutable working copy of a recipe. Editing changes the Draft in place — it does
 **not** create a new version. `recipe_versions.state = 'draft'`, `version_number = NULL`.
 A recipe has exactly **0 or 1** Drafts.
 
-### Ready **(target)**
-A recipe version that has been promoted: frozen, numbered, and importable by other recipes.
+### Ready
+A recipe version that has been promoted: frozen, numbered, and usable as a sub-recipe by other recipes.
 `recipe_versions.state = 'ready'`. The opposite of Draft.
 
-### Promotion / promote **(target)**
+### Promotion / promote
 The Draft → Ready transition. This is the **only** thing that assigns a `version_number`
 (`MAX(existing ready number) + 1`). Triggered explicitly by the user, who supplies a
 *release note*. Method: `Recipe.promote(release_note)`.
 
-### Importable **(target)**
-A recipe is importable iff it has at least one Ready version. A brand-new recipe (Draft only,
-zero versions) is **not** importable. Enforced by the *hard gate*.
+### Sub-recipe
+An ordinary recipe that another recipe uses — e.g. a tangzhong used by a milk bread. It is
+prepared separately and reused; contrast with an *inline preparation*. A recipe can only be
+used as a sub-recipe if it has at least one Ready version (adding one that doesn't raises
+`SubRecipeNotReady`); the sub-recipe picker lists only such recipes.
 
-### Component / sub-recipe **(target)**
-A pinned reference from one recipe version to a specific Ready version of another recipe —
-e.g. a milk bread importing a tangzhong. Table: `recipe_components`. The child recipe is
-prepared separately and reused; contrast with an *inline preparation*.
+### Sub-recipe reference
+One use of a sub-recipe inside a recipe version: a *pin* to a specific Ready version of the
+child, plus the amount, unit, and label for this use. Value object `SubRecipeRef`; table
+`recipe_sub_recipe_refs`. This is what scaling lives on — the child recipe itself is never
+changed. (Not to be confused with the everyday word "component", e.g. "the filling"; that
+is not a modeled concept.)
 
-### Inline preparation **(target)**
-A step that cooks or transforms leaf ingredients *within this recipe* (brown the butter,
+### Inline preparation
+A step that cooks or transforms ingredients *within this recipe* (brown the butter,
 toast the seeds). Not its own recipe, not versioned — just a step with `kind = 'prep'`.
-The test vs a component: *would you ever iterate it on its own, or use it in another recipe?*
-Yes → component. No → inline preparation.
+The test vs a sub-recipe: *would you ever iterate it on its own, or use it in another recipe?*
+Yes → sub-recipe. No → inline preparation.
 
-### Pinned reference / pin **(target)**
-A component stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
-float to "latest". Analogous to a lockfile entry. Changing the pin creates a new version of
-the parent.
+### Pinned reference / pin
+A sub-recipe reference stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
+float to "latest", and nothing tells the parent when the child gets a newer Ready version.
+Analogous to a lockfile entry. The baker can repoint a pin to any Ready version of the same
+child by editing the reference; that edits the parent's Draft, and a new parent version
+exists only once it is promoted.
 
-### Hard gate **(target)**
-The rule that a recipe with no Ready version cannot be added as a component. The component
-picker lists only importable recipes. Raised as `SubRecipeNotReady`.
+### Step
+One instruction in a recipe version, with an order number and the instruction text.
+Once steps are structured, each also has a `kind` (`prep`, `mix`, `ferment`, `shape`, `bake`
+or `finish`) and `uses`, the ingredients or sub-recipe references it acts on. Stored in
+`recipe_versions.instructions` (JSONB).
 
-### Bump / bump a dependency **(target)**
-Repointing a component's pin from the child version it currently references to the child's
-latest Ready version. One-click action; produces a new Draft (then version) of the parent.
-Method: `Recipe.bump_dependency(component_id)`.
+### Release note
+Free text the user types at promotion, describing what changed. Stored in the
+version's `recipe_versions.description` column (not the recipe's `description`, which holds *Notes*).
 
-### Update available **(target)**
-The signal shown when a component's pinned `child_version_id` is not the child recipe's
-latest Ready version — i.e. a *bump* is possible.
-
-### Circular dependency **(target)**
-An import edge that would make a recipe (transitively) depend on itself (A → B → A).
-Rejected before the edge is added. Raised as `CircularDependency`. Detected by a domain
-service that walks the component graph.
-
-### Leaf ingredient **(live)**
-A single quantity of one thing: `{name, amount, unit, type, notes}`. `type` is `flour` or
-`other` (was `flour | liquid | preferment | fat | other`; narrowed on the frontend).
-Stored in `recipe_versions.ingredients` (JSONB).
-
-### Step **(live)** / step `kind` + `uses` **(target)**
-An ordered instruction. Today: `{order, text}` free text. (target) `{order, text, kind, uses[]}`
-where `kind ∈ prep | mix | ferment | shape | bake | finish` and `uses[]` names the
-ingredient/component ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
-
-### Baker's percentage **(not modelled)**
-Each ingredient's weight as a percentage of total flour weight. Bread-specific; **not in the
-backend domain or API** — the frontend computes it for display. `calculate_bakers_percentages`
-and the `bakers_percentages` table still exist but are unused, pending removal or a
-bread-specific model.
-
-### Overall formula vs final dough
-Pro-baking terms. *Overall formula* folds pre-ferment flour/water back into the totals;
-*final dough* is what's left after the pre-ferments. **We deliberately do NOT model this** —
-components are flat line items (decided with the user).
-
-### Release note **(target)**
-Free text the user types at promotion, describing what changed. Stored in
-`recipe_versions.description`.
-
-### Notes **(target)**
+### Notes
 One free-form text field on the recipe for tips, warnings, anything. Reuses the existing
-`recipes.description` column, relabeled "Notes" in the UI.
+`recipes.description` column (the recipe's, not the version's — that one holds the *release note*),
+relabeled "Notes" in the UI.
 
-### Change summary **(live)**
+### Change summary
 Machine-generated counts of what changed between versions
 (`{ingredients: {added, removed, modified}, steps: {...}, total_changes}`). Stored in
-`recipe_versions.change_summary`. (target) computed at promotion, diffing against the previous
+`recipe_versions.change_summary`. Computed at promotion, diffing against the previous
 Ready version.
 
-### Version diff **(live)**
+### Version diff
 The structured comparison of two recipe versions (ingredients added/removed/modified,
 steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
 (moved there from `recipe_versioning.py` in Stage 2).
-
-### Recipe session / bake / timing **(live as `BreadTiming`; redesign planned)**
-`BreadTiming` is outdated — it hardcodes a bread process (seven fixed timestamp columns,
-bread-only temps, `stretch_fold_count`). The intended model is a **generic recipe session**:
-you follow any recipe version and record `{step_id: timestamp}` against its structured steps,
-plus free-form observations. Blocked on Part II Slice C (steps need identity + `kind`); see
-"Part IV — Recipe Sessions" in the plan. Final name TBD (RecipeSession / Session / Bake /
-CookLog). Until then the current `BreadTiming` stays exactly as-is, on the `DBConnector` path
-— the DDD foundation (Stages 3–7) is **recipe-only**.
-
-Current `BreadTiming` (unchanged):
-One bread-making session — the execution of a recipe. Records process timestamps
-(`autolyse_ts` … `bake_ts`), temperatures, stretch-fold count, notes, and `status`
-(`in_progress` | `completed`). Table: `bread_timings`. Links to a recipe via `recipe_name`
-(required text) plus optional `recipe_id` / `recipe_version_id`. (target) the pinned version
-alone makes the whole component tree reproducible — no extra snapshot needed.
-
-### Stretch and fold **(live)**
-A dough-handling action performed during bulk fermentation. The app tracks only a count
-(`bread_timings.stretch_fold_count`); the per-fold JSONB (`stretch_folds`) is legacy.
-
----
-
-## Part B — Architecture & DDD terms (as used in this project)
-
-### Layer
-This codebase targets four layers; **dependencies point inward only**:
-
-| Layer | Directory | Job | May NOT contain |
-|---|---|---|---|
-| Interface / HTTP | `backend/service.py` | parse request → one service call → shape response | business rules, SQL, transactions |
-| Application | `backend/application/` | orchestrate one use case: open transaction, call domain, persist, commit | business rules, SQL |
-| Domain | `backend/domain/` | the rules; pure, no I/O | framework imports (FastAPI, psycopg) |
-| Infrastructure | `backend/infrastructure/` | talk to Postgres; implement the repository ports | business rules |
-
-### Aggregate / aggregate root **(live, scaffolding)**
-A cluster of objects treated as one unit for consistency and persistence. `Recipe` is the
-aggregate root; its `RecipeVersion` (and `Component`s in Part II) has no independent lifecycle
-— cascade delete confirms it. You load, mutate, and save the whole `Recipe`, never a
-`RecipeVersion` on its own. `BreadTiming` is a **separate** aggregate that references a recipe
-by id only.
-The `Recipe` dataclass (holding `current_version`, with `create()` / `add_version()`) exists
-in `backend/domain/models.py` as of Stage 2, unit-tested but not yet wired into the app. Full
-version history is a separate repository read, not held on the aggregate.
-
-### Entity **(live, scaffolding)**
-An object with identity that persists over time. `Recipe`, `RecipeVersion` (dataclasses in
-`backend/domain/models.py` as of Stage 2); `BreadTiming` domain entity still to come.
-
-### Value object **(live, scaffolding)**
-An object defined only by its attributes, immutable, no identity. `Ingredient`, `RecipeStep`
-— `@dataclass(frozen=True)` in `backend/domain/models.py` as of Stage 2. `Component` comes in
-Part II. Nothing wires through these yet — Stage 3 mappers are the first consumer.
-
-### Domain service **(live, partial)**
-Stateless domain logic that doesn't belong to a single entity: versioning/diff math, cycle
-detection (target). Lives in `backend/domain/versioning.py` as of Stage 2; still called with
-plain dicts until Stages 3–6 wire domain objects through. (Timing rules stay in
-`service.py` / `db.py` until Part IV — no `domain/timing.py`.)
-
-### Application service **(live, being reshaped)**
-One method per use case. Opens the *Unit of Work*, loads aggregates via *repositories*, calls
-domain methods, commits. Holds the *sequence* of a use case but no rules and no SQL.
-Today: `RecipeService` in `backend/application/recipe_service.py` — DTO in, DTO out, one
-`UnitOfWork` per method.
-Target: also a `timing_service.py` alongside it (Part IV).
-
-### Repository **(live for recipes)**
-A collection-like interface for loading and saving **one aggregate**, hiding SQL and the
-multi-table span. `backend/infrastructure/recipe_repository.py::RecipeRepository` is the
-Postgres implementation (`get` / `get_version` / `get_versions` / `list` / `add` / `save` /
-`delete`); `tests/fakes.py::FakeRecipeRepository` is the in-memory one for DB-free tests. No
-separate `Protocol` — `RecipeService` is typed against `RecipeRepository` and the fake is
-structurally compatible. `TimingRepository` is Part IV.
-
-### RecipeSummary **(live)**
-The flat read model `RecipeRepository.list()` returns — a database-computed projection (name,
-category, counts, current version number), not part of any aggregate. Mapped to
-`api.schemas.RecipeListItem` at the edge.
-
-### Unit of Work (UoW) **(target)**
-A context manager that owns one database connection and one transaction. Entered once per
-use case by the application service; exposes `.recipes` / `.timings` bound to that
-connection; **commits on clean exit, rolls back on exception**. `backend/infrastructure/unit_of_work.py`.
-Replaces today's pattern where every `DBConnector` method opens its own connection and commits.
-
-### DTO (Data Transfer Object) **(live, partial)**
-The shape crossing the HTTP boundary — Pydantic request/response models. Kept **separate**
-from domain objects. Recipe DTOs live in `backend/api/schemas.py` as of Stage 3 (timing DTOs
-stay in `backend/models.py` until Part IV; `models.py` re-exports the recipe names for
-now). API-level validation (regex on `unit`/`type`, non-empty checks) lives here, not in the
-domain. Dropped as dead in Stage 3: `RecipeUpdateRequest`, `IngredientDiff`, `StepDiff`,
-`RecipeVersionDiff`.
-
-### Mapper **(live)**
-Pure functions that convert between representations: `backend/api/mappers.py` (DTO ↔ domain)
-and `backend/infrastructure/mappers.py` (database row → domain). `RecipeService` uses both —
-DTO in at the API edge, row out from the repository.
-
-### Composition root **(live)**
-The single place where concrete implementations are wired together. Here: the `Depends`
-providers in `backend/service.py` (`get_pool`, `get_db`, `get_recipe_service`). A test's
-composition root swaps in fakes via `app.dependency_overrides`.
-
-### Dependency injection (DI) / provider **(live)**
-Giving a function its collaborators as arguments instead of having it import or construct
-them. In FastAPI: a **provider** is a function passed to `Depends(...)`; the route receives
-its result as a parameter. Enables swapping implementations without touching the consumer.
-
-### Lifespan **(live)**
-The FastAPI startup/shutdown handler. Opens `app.state.pool` on startup, closes it on
-shutdown. `TestClient(app)` used as a context manager runs it; a bare `TestClient(app)` does
-not (see `tests/conftest.py::_app_lifespan`).
-
-### Exception translation **(live for recipes)**
-The application and domain layers raise intent-revealing exceptions (`NotFoundError`,
-`ConflictError`, `DomainError`, `DatabaseError` in `backend/exceptions.py`); one set of
-`@app.exception_handler` functions in `backend/service.py` maps each to an HTTP status
-(404 / 409 / 422 / 500). Recipe routes therefore carry no `try/except`. Timing routes still
-translate inline until Part IV.
-
-### Persistence ignorance
-The property that domain (and, ideally, application) code has no knowledge of how or whether
-objects are stored. The goal of the Part I refactor.
-
----
-
-## Deprecated / legacy terms (don't use going forward)
-
-- **`DBConnector`** — the ~950-line god object holding all raw SQL. Being dismantled across
-  Stages 4–7 into repositories.
-- **`backend/recipe_versioning.py`** — moved to `backend/domain/versioning.py` in Stage 2.
-- **`DBConnector._compute_timing_status` / `service.calculate_timing_status`** — duplicate
-  "is this timing complete?" logic. Left as-is for now; consolidated during Part IV.
-- **`force_major` / major-minor versioning** — vestigial. Version
-  numbers are a single incrementing int, and (target) advance only on promotion.
-- **`account_makes`, `dough_makes`, `DoughMake`, `AccountMake`** — legacy tables/models, not
-  the current data model.
-- **`fridge_ts`** — renamed to `final_proof_ts`.
