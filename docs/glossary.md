@@ -23,7 +23,7 @@ One snapshot of a recipe's content: its ingredients, steps, and (target) sub-rec
 references, at a point in time. This is what a baker means by "the recipe" when looking at
 a single version. Table: `recipe_versions`. Immutable once Ready (see *Draft* / *Ready*);
 today every save creates a new one, (target) that changes — see *promotion*. An **entity**
-— it has its own id, which bakes and sub-recipe references pin. A *Draft* is also a version
+— it has its own id, which sub-recipe references pin. A *Draft* is also a version
 (the one in progress); a *Ready version* is the numbered, frozen kind. (Sometimes called a
 "recipe specification" in design discussion — same thing.)
 
@@ -86,17 +86,6 @@ An ordered instruction. Today: `{order, text}` free text. (target) `{order, text
 where `kind ∈ prep | mix | ferment | shape | bake | finish` and `uses[]` names the
 ingredient/sub-recipe ref ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
 
-### Baker's percentage **(not modelled)**
-Each ingredient's weight as a percentage of total flour weight. Bread-specific; **not in the
-backend domain or API** — the frontend computes it for display. `calculate_bakers_percentages`
-and the `bakers_percentages` table still exist but are unused, pending removal or a
-bread-specific model.
-
-### Overall formula vs final dough
-Pro-baking terms. *Overall formula* folds pre-ferment flour/water back into the totals;
-*final dough* is what's left after the pre-ferments. **We deliberately do NOT model this** —
-sub-recipe references are flat line items (decided with the user).
-
 ### Release note **(target)**
 Free text the user types at promotion, describing what changed. Stored in
 `recipe_versions.description`.
@@ -117,30 +106,6 @@ steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
 (moved there from `recipe_versioning.py` in Stage 2).
 
-### Recipe session / bake / timing **(live as `BreadTiming`; redesign planned)**
-`BreadTiming` is outdated — it hardcodes a bread process (seven fixed timestamp columns,
-bread-only temps, `stretch_fold_count`). The intended model is a **generic recipe session**:
-you follow any recipe version and record `{step_id: timestamp}` against its structured steps,
-plus free-form observations. Blocked on Part II Slice C (steps need identity + `kind`); see
-"Part IV — Recipe Sessions" in the plan. Final name TBD (RecipeSession / Session / Bake /
-CookLog). Until then the current `BreadTiming` stays exactly as-is, on the `DBConnector` path
-— the DDD foundation (Stages 3–7) is **recipe-only**.
-
-Current `BreadTiming` (unchanged):
-One bread-making session — the execution of a recipe. Records process timestamps
-(`autolyse_ts` … `bake_ts`), temperatures, stretch-fold count, notes, and `status`
-(`in_progress` | `completed`). Table: `bread_timings`. Links to a recipe via `recipe_name`
-(required text) plus optional `recipe_id` / `recipe_version_id`. (target) the pinned version
-alone makes the whole sub-recipe tree reproducible — no extra snapshot needed.
-
-### Stretch and fold **(live)**
-A dough-handling action performed during bulk fermentation. The app tracks only a count
-(`bread_timings.stretch_fold_count`); the per-fold JSONB (`stretch_folds`) is legacy.
-
----
-
-## Architecture & DDD terms (as used in this project)
-
 ### Layer
 This codebase targets four layers; **dependencies point inward only**:
 
@@ -155,15 +120,14 @@ This codebase targets four layers; **dependencies point inward only**:
 A cluster of objects treated as one unit for consistency and persistence. `Recipe` is the
 aggregate root; its `RecipeVersion` (and `SubRecipeRef`s in Part II) has no independent lifecycle
 — cascade delete confirms it. You load, mutate, and save the whole `Recipe`, never a
-`RecipeVersion` on its own. `BreadTiming` is a **separate** aggregate that references a recipe
-by id only.
+`RecipeVersion` on its own.
 The `Recipe` dataclass (holding `current_version`, with `create()` / `add_version()`) exists
 in `backend/domain/models.py` as of Stage 2, unit-tested but not yet wired into the app. Full
 version history is a separate repository read, not held on the aggregate.
 
 ### Entity **(live, scaffolding)**
 An object with identity that persists over time. `Recipe`, `RecipeVersion` (dataclasses in
-`backend/domain/models.py` as of Stage 2); `BreadTiming` domain entity still to come.
+`backend/domain/models.py` as of Stage 2).
 
 ### Value object **(live, scaffolding)**
 An object defined only by its attributes, immutable, no identity. `Ingredient`, `RecipeStep`
