@@ -42,7 +42,7 @@ class RecipeSummary:
   description: Optional[str]
   category: Optional[str]
   version_number: Optional[int]
-  current_version_id: Optional[UUID]
+  current_version_id: UUID
   ingredient_count: int
   step_count: int
   created_at: datetime

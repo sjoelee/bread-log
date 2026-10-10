@@ -8,3 +8,12 @@ repos:
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: uv run pyright backend
+        language: system
+        types: [python]
+        files: ^backend/
+        pass_filenames: false

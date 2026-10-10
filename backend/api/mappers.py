@@ -46,7 +46,7 @@ def ingredient_to_dto(ing: domain.Ingredient) -> schemas.Ingredient:
     name=ing.name,
     amount=ing.amount,
     unit=ing.unit,
-    type=ing.type,
+    type=ing.type,  # pyright: ignore[reportArgumentType] -- see module docstring
     notes=ing.notes,
   )
 
