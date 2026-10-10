@@ -65,17 +65,10 @@ Yes → component. No → inline preparation.
 
 ### Pinned reference / pin **(target)**
 A component stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
-float to "latest". Analogous to a lockfile entry. Changing the pin creates a new version of
-the parent.
-
-### Bump / bump a dependency **(target)**
-Repointing a component's pin from the child version it currently references to the child's
-latest Ready version. One-click action; produces a new Draft (then version) of the parent.
-Method: `Recipe.bump_dependency(component_id)`.
-
-### Update available **(target)**
-The signal shown when a component's pinned `child_version_id` is not the child recipe's
-latest Ready version — i.e. a *bump* is possible.
+float to "latest", and nothing tells the parent when the child gets a newer Ready version.
+Analogous to a lockfile entry. The baker can repoint a pin to any Ready version of the same
+child by editing the component; that edits the parent's Draft, and a new parent version
+exists only once it is promoted.
 
 ### Circular dependency **(target)**
 An import edge that would make a recipe (transitively) depend on itself (A → B → A).

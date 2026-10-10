@@ -145,7 +145,7 @@ classDiagram
         <<aggregate root>>
         +add_component(child, amount, unit, label)
         +promote(release_note)
-        +bump_dependency(component_id)
+        +update_component(component_id, ...)
     }
     class RecipeVersion {
         <<entity>>
