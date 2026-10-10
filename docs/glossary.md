@@ -9,7 +9,7 @@ Status tags:
 
 ---
 
-## Part A — Domain language (recipes & baking)
+## Domain language (recipes & baking)
 
 ### Recipe **(live)**
 The named thing — "Country Sourdough" — and its stable identity across edits: name,
@@ -150,7 +150,7 @@ A dough-handling action performed during bulk fermentation. The app tracks only 
 
 ---
 
-## Part B — Architecture & DDD terms (as used in this project)
+## Architecture & DDD terms (as used in this project)
 
 ### Layer
 This codebase targets four layers; **dependencies point inward only**:
