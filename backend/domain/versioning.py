@@ -2,14 +2,14 @@
 
 Pure functions over plain dicts — no I/O, no framework imports.
 
-Unused, pending removal: ``calculate_step_similarity``, ``determine_next_version``,
+Unused, pending removal: ``calculate_step_similarity``,
 ``has_meaningful_changes``, ``calculate_bakers_percentages``.
 """
 
 import dataclasses
 import re
 import uuid
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 def normalize_ingredient_name(name: str) -> str:
@@ -179,36 +179,12 @@ def compare_instructions(
   return result
 
 
-def generate_step_ids(instructions: List[Dict]) -> List[Dict]:
-  """
-  Generate IDs for instructions that don't have them
-  """
-  updated_instructions = []
-  for instruction in instructions:
-    if not instruction.get("id"):
-      instruction["id"] = str(uuid.uuid4())
-    updated_instructions.append(instruction)
-  return updated_instructions
-
-
 def assign_step_ids(steps):
   """Return the list with a uuid filled in for any RecipeStep missing one."""
   return [
     step if step.id else dataclasses.replace(step, id=str(uuid.uuid4()))
     for step in steps
   ]
-
-
-def determine_next_version(
-  current_major: int, current_minor: int, force_major: bool = False
-) -> Tuple[int, int]:
-  """
-  Determine the next version number
-  """
-  if force_major:
-    return current_major + 1, 0
-  else:
-    return current_major, current_minor + 1
 
 
 def create_version_summary(ingredient_diff: Dict, step_diff: Dict) -> Dict:

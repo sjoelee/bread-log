@@ -92,8 +92,8 @@ FastAPI service, layered per the DDD refactor (recipes only; timing still uses `
 ### Key Behaviors to Know
 - `BreadTimingCreate.recipe_name` is required (NOT NULL in DB) — validate on the frontend before submit
 - `recipe_versions` and `bakers_percentages` cascade-delete when a recipe is deleted
-- `GET /recipes/` returns `RecipeListItem` (includes `description`, `flour_ingredient_names`, `version`) — no per-recipe follow-up fetch needed
-- `GET /recipes/{id}` returns the full `Recipe` with `current_version` and `bakers_percentages` — only needed for View & Edit / Use Template
+- `GET /recipes/` returns `RecipeListItem` (includes `description`, `version`) — no per-recipe follow-up fetch needed
+- `GET /recipes/{id}` returns the full `Recipe` with `current_version` — only needed for View & Edit / Use Template
 - The `recentTimings` state in `BreadAppNew.tsx` is used by the Saved Timings tab (paginated). The dropdown for bread name uses a **separate** `timingDropdownNames` state populated by `loadAllDistinctBreadNames()`
 - psycopg3 connection pool logs `rolling back returned connection` for reads — this is harmless (no autocommit on reads, rollback is a no-op)
 
