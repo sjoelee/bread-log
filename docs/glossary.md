@@ -42,7 +42,7 @@ The single mutable working copy of a recipe. Editing changes the Draft in place 
 A recipe has exactly **0 or 1** Drafts.
 
 ### Ready **(target)**
-A recipe version that has been promoted: frozen, numbered, and importable by other recipes.
+A recipe version that has been promoted: frozen, numbered, and usable as a sub-recipe by other recipes.
 `recipe_versions.state = 'ready'`. The opposite of Draft.
 
 ### Promotion / promote **(target)**
@@ -50,14 +50,12 @@ The Draft → Ready transition. This is the **only** thing that assigns a `versi
 (`MAX(existing ready number) + 1`). Triggered explicitly by the user, who supplies a
 *release note*. Method: `Recipe.promote(release_note)`.
 
-### Importable **(target)**
-A recipe is importable iff it has at least one Ready version. A brand-new recipe (Draft only,
-zero Ready versions) is **not** importable. Enforced by the *hard gate*.
-
 ### Component / sub-recipe **(target)**
 A pinned reference from one recipe version to a specific Ready version of another recipe —
 e.g. a milk bread importing a tangzhong. Table: `recipe_components`. The child recipe is
 prepared separately and reused; contrast with an *inline preparation*.
+A recipe can only be used as a sub-recipe if it has at least one Ready version (adding one
+that doesn't raises `SubRecipeNotReady`); the component picker lists only such recipes.
 
 ### Inline preparation **(target)**
 A step that cooks or transforms leaf ingredients *within this recipe* (brown the butter,
@@ -69,10 +67,6 @@ Yes → component. No → inline preparation.
 A component stores the child's `recipe_id` **and** a specific `child_version_id`. It does not
 float to "latest". Analogous to a lockfile entry. Changing the pin creates a new version of
 the parent.
-
-### Hard gate **(target)**
-The rule that a recipe with no Ready version cannot be added as a component. The component
-picker lists only importable recipes. Raised as `SubRecipeNotReady`.
 
 ### Bump / bump a dependency **(target)**
 Repointing a component's pin from the child version it currently references to the child's
