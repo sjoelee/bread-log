@@ -12,15 +12,20 @@ Status tags:
 ## Part A — Domain language (recipes & baking)
 
 ### Recipe **(live)**
-The stable identity of a formula — its name, category, and notes. It does **not** hold
-ingredients or steps directly; those live in its versions. Table: `recipes`. The aggregate
-root (see Part B).
+The named thing — "Country Sourdough" — and its stable identity across edits: name,
+category, and notes. Like a document across its revisions, it persists while its content
+changes. Its ingredients and steps live on its *versions*; the current one is
+`recipe.current_version`. Table: `recipes`. The aggregate root (see Part B): every change
+goes through it.
 
 ### Recipe version **(live)**
-An immutable snapshot of a recipe's content: ingredients, steps, and (target) component
-references. Table: `recipe_versions`. Today every save creates one; (target) that changes —
-see *Draft* / *promotion*. An **entity** — it has its own id, which bakes and component
-references pin. (Sometimes called a "recipe specification" in design discussion — same thing.)
+One snapshot of a recipe's content: its ingredients, steps, and (target) component
+references, at a point in time. This is what a baker means by "the recipe" when looking at
+a single version. Table: `recipe_versions`. Immutable once Ready (see *Draft* / *Ready*);
+today every save creates a new one, (target) that changes — see *promotion*. An **entity**
+— it has its own id, which bakes and component references pin. A *Draft* is also a version
+(the one in progress); a *Ready version* is the numbered, frozen kind. (Sometimes called a
+"recipe specification" in design discussion — same thing.)
 
 ### Recipe history **(concept — not a modeled type)**
 The set of a recipe's versions, ordered by time. **Deliberately not an entity or value
