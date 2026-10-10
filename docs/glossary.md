@@ -60,7 +60,7 @@ changed. (Not to be confused with the everyday word "component", e.g. "the filli
 is not a modeled concept.)
 
 ### Inline preparation
-A step that cooks or transforms leaf ingredients *within this recipe* (brown the butter,
+A step that cooks or transforms ingredients *within this recipe* (brown the butter,
 toast the seeds). Not its own recipe, not versioned — just a step with `kind = 'prep'`.
 The test vs a sub-recipe: *would you ever iterate it on its own, or use it in another recipe?*
 Yes → sub-recipe. No → inline preparation.
@@ -72,23 +72,20 @@ Analogous to a lockfile entry. The baker can repoint a pin to any Ready version 
 child by editing the reference; that edits the parent's Draft, and a new parent version
 exists only once it is promoted.
 
-### Leaf ingredient
-A single quantity of one thing: `{name, amount, unit, type, notes}`. `type` is `flour` or
-`other` (was `flour | liquid | preferment | fat | other`; narrowed on the frontend).
-Stored in `recipe_versions.ingredients` (JSONB).
-
 ### Step
-An ordered instruction: `{order, text, kind, uses[]}`
-where `kind ∈ prep | mix | ferment | shape | bake | finish` and `uses[]` names the
-ingredient/sub-recipe ref ids the step acts on. Stored in `recipe_versions.instructions` (JSONB).
+One instruction in a recipe version, with an order number and the instruction text.
+Once steps are structured, each also has a `kind` (`prep`, `mix`, `ferment`, `shape`, `bake`
+or `finish`) and `uses`, the ingredients or sub-recipe references it acts on. Stored in
+`recipe_versions.instructions` (JSONB).
 
 ### Release note
-Free text the user types at promotion, describing what changed. Stored in
-`recipe_versions.description`.
+Free text the user types at promotion, describing what changed. Stored in the
+version's `recipe_versions.description` column (not the recipe's `description`, which holds *Notes*).
 
 ### Notes
 One free-form text field on the recipe for tips, warnings, anything. Reuses the existing
-`recipes.description` column, relabeled "Notes" in the UI.
+`recipes.description` column (the recipe's, not the version's — that one holds the *release note*),
+relabeled "Notes" in the UI.
 
 ### Change summary
 Machine-generated counts of what changed between versions
