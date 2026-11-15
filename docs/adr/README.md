@@ -14,7 +14,9 @@ defined in [`../glossary.md`](../glossary.md).
 - Say "business logic" for domain decisions. Input validation (does this request look
   well-formed?) is not business logic.
 - One decision per ADR. Keep it under a page.
-- To change a decision, write a new ADR and mark the old one `Superseded by NNNN`.
+- **Accepted ADRs are frozen.** Never edit one, not even to fix wording. The only
+  permitted change is its `Status` line. To change a decision, write a new ADR and set the
+  old one to `Superseded by NNNN`.
 
 ## Template
 
