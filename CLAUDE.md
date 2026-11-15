@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Start of every session
 
-Read these plan files in full before doing anything else, and use them as the
+Read these two documents first, before the plan files and before anything else:
+
+1. `docs/adr/` — start with `README.md` (writing rules, index), then every ADR. They
+   are the accepted design decisions.
+2. `docs/glossary.md` — the shared vocabulary. Use its terms exactly.
+
+Treat the ADRs as binding guidelines for every design discussion and every decision:
+check a proposal against them before making it, follow them when writing code, and
+if work would contradict one, stop and say so instead of proceeding. Accepted ADRs are
+frozen (never edited); to change a decision, propose a new ADR that supersedes the old
+one and get it reviewed before any code changes. Draft ADRs one at a time in chat and
+get approval before writing files; follow the writing rules in `docs/adr/README.md`.
+
+Then read these plan files in full, and use them as the
 source of truth for the in-progress refactor (current stage, scope, decisions):
 
 1. `~/.claude/plans/synchronous-shimmying-sedgewick.md` — main plan (Parts I–IV, stage status table)

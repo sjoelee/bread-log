@@ -1,7 +1,9 @@
 # Glossary
 
-Shared vocabulary for the bread-log recipe domain. Use these exact terms in
-code, comments, commits, and conversation so humans and Claude sessions stay aligned.
+Shared vocabulary for the bread-log recipe domain and its architecture. Use these exact
+terms in code, comments, commits, and conversation so humans and Claude sessions stay
+aligned. Design decisions are recorded in [`adr/`](adr/README.md); entries below say
+"Here: …" where a term maps to a concrete technology or location.
 
 ---
 
@@ -98,3 +100,95 @@ The structured comparison of two recipe versions (ingredients added/removed/modi
 steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
 (moved there from `recipe_versioning.py` in Stage 2).
+
+---
+
+## Architecture
+
+### ADR — Architecture Decision Record
+A short document recording one design decision: context, the choice, alternatives
+rejected, consequences. Lives in `docs/adr/`. A changed decision gets a new ADR that
+supersedes the old one.
+
+### API — Application Programming Interface
+Here, the HTTP endpoints the frontend calls (e.g. `POST /recipes/`).
+
+### DTO — Data Transfer Object
+A type defining the shape of data crossing the client boundary: a request body or a
+response body, including input validation. Kept separate from domain objects (ADR 0003).
+Here: the Pydantic classes in `backend/api/schemas.py`.
+
+### Layer
+One of four tiers of the backend. The domain depends on nothing; application depends only
+on the domain; interface depends on application and domain; infrastructure depends on the
+domain (ADR 0001).
+
+| Layer | Job | Here |
+|---|---|---|
+| Interface | the boundary clients talk to: request in, one application call, response out | `backend/service.py`, `backend/api/` |
+| Application | orchestrates use cases | `backend/application/` |
+| Domain | business logic; pure, no I/O | `backend/domain/` |
+| Infrastructure | storage and external systems | `backend/infrastructure/` |
+
+### Use case
+One thing a user can ask the system to do, e.g. "create a recipe" or "promote a draft".
+Each is one method on an application service.
+
+### Application service
+The class holding the use cases. It is a thin coordination layer: it holds no business
+logic. A method opens a unit of work, loads aggregates through repositories, tells the
+domain objects one layer down to do the work, then saves. The business logic lives in the
+domain; the service only sequences the steps. Here: `RecipeService`.
+
+### Domain model
+The plain objects and functions that hold the business logic. Imports nothing from a web,
+validation or storage framework, so it runs in a test with no database or HTTP. Here:
+dataclasses in `backend/domain/models.py`.
+
+### Business logic
+The decisions about how recipes behave, independent of HTTP and storage: how versions are
+compared, when a change counts as meaningful, which recipes may be imported, how version
+numbers are assigned. Lives in the domain layer.
+
+### Input validation
+Checking that a request is well-formed (non-empty name, positive amount, allowed unit)
+before it reaches the application. Lives in the DTOs. Not business logic: it looks at one
+request, not at a recipe's state.
+
+### Mapper
+A pure function converting one representation to another. Here: DTO ↔ domain in
+`backend/api/mappers.py`; stored row → domain in `backend/infrastructure/mappers.py`.
+
+### Aggregate
+A cluster of objects loaded, changed and saved as one unit, entered through one root.
+`Recipe` is the aggregate root; its versions have no lifecycle of their own (deleting a
+recipe deletes them). You load and save the whole `Recipe`, never a version alone.
+
+### Repository
+The object that loads and saves one aggregate, hiding all storage detail. Callers pass and
+receive domain objects (e.g. `Recipe`), never rows. Never commits; the unit of work does.
+The domain declares the interface it needs (ADR 0004); the production and in-memory
+implementations both satisfy it. Here: `RecipeRepository` (PostgreSQL) and
+`FakeRecipeRepository` in `tests/fakes.py`.
+
+### Protocol
+A Python type (`typing.Protocol`) declaring a set of methods. Any class with matching
+methods satisfies it without inheriting from it, like a Go interface. Checked only by the
+type checker (pyright); Python does not check at runtime. Here: how the repository
+interface is expressed.
+
+### Fake
+A simple working stand-in used in tests, e.g. an in-memory repository that keeps recipes in
+a dict. Unlike a mock, it has real behavior; tests assert on results, not on which calls
+were made.
+
+### Unit of Work
+A scope that owns one storage session and one transaction for a single use case. Commits
+when the use case completes normally, discards everything if it fails, always releases the
+session (ADR 0002). Exposes the repositories, bound to that session. Here:
+`UnitOfWork` in `backend/infrastructure/unit_of_work.py`, over a psycopg connection pool.
+
+### Test database
+A dedicated database, separate from development, that storage-touching tests run against
+(ADR 0005). Here: PostgreSQL, built from `database/schema.sql`; the test run must refuse
+any database whose name does not end in `_test`.
