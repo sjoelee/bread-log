@@ -60,14 +60,15 @@ table in the main plan current as stages merge.
 ### Running Tests
 - `uv run pytest` — Run all backend tests
 - `uv run pytest tests/api/test_recipe_list_api.py -v` — Run a specific test file
-- Tests hit the **real PostgreSQL database** (`bread_makes`) — no mocking
+- Tests hit a **real PostgreSQL test database** (`bread_makes_test`, never the dev database `bread_makes`) — no mocking of the database (ADR 0005)
+- First-time setup, and again whenever `database/schema.sql` changes: `scripts/reset_test_db.sh` (drops and recreates `bread_makes_test` from `schema.sql`)
+- `tests/conftest.py` reads `TEST_DATABASE_URL` (default `postgresql://sammylee@localhost/bread_makes_test`), ignores `DATABASE_URL`, and aborts the session unless the database name ends in `_test`
 - `pythonpath = ["."]` is set in `pyproject.toml` so `backend.*` imports resolve correctly
 
 ### Database
-- PostgreSQL 15 required (`brew install postgresql@15`), database name: `bread_makes`
-- Schema files are in `/database/` — apply manually with `psql`
-- Active tables: `recipes`, `recipe_versions`, `bakers_percentages`, `bread_timings`
-- `account_makes` and `dough_makes` are legacy tables, no longer the primary data model
+- PostgreSQL 15 required (`brew install postgresql@15`), development database: `bread_makes`; test database: `bread_makes_test`
+- Schema files are in `/database/` — apply manually with `psql`. `database/schema.sql` is a `pg_dump --schema-only --no-owner --no-privileges` of the dev database; regenerate it after any schema change
+- Active tables: `recipes`, `recipe_versions`, `bread_timings`
 
 ## Architecture Overview
 

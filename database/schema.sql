@@ -16,45 +16,53 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
 --
 -- Name: temperature_unit_type; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.temperature_unit_type AS ENUM ('Fahrenheit', 'Celsius');
+CREATE TYPE public.temperature_unit_type AS ENUM (
+    'Fahrenheit',
+    'Celsius'
+);
+
+
+--
+-- Name: extract_all_ingredient_names(jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.extract_all_ingredient_names(flour_ingredients_json jsonb, other_ingredients_json jsonb) RETURNS text[]
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+BEGIN
+    RETURN ARRAY(
+        SELECT ingredient ->> 'name'
+        FROM (
+            SELECT jsonb_array_elements(flour_ingredients_json) AS ingredient
+            UNION ALL
+            SELECT jsonb_array_elements(other_ingredients_json) AS ingredient
+        ) combined_ingredients
+    );
+END;
+$$;
 
 
 --
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $$
+CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$;
 
 
---
--- Name: bakers_percentages; Type: TABLE; Schema: public; Owner: -
---
+SET default_tablespace = '';
 
-CREATE TABLE public.bakers_percentages (
-    id uuid NOT NULL,
-    recipe_id uuid,
-    recipe_version_id uuid,
-    total_flour_weight numeric(10,2) NOT NULL,
-    flour_ingredients jsonb NOT NULL,
-    other_ingredients jsonb NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
-);
-
+SET default_table_access_method = heap;
 
 --
 -- Name: bread_timings; Type: TABLE; Schema: public; Owner: -
@@ -66,12 +74,12 @@ CREATE TABLE public.bread_timings (
     date date DEFAULT CURRENT_DATE,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    autolyse_ts timestamp without time zone,
-    mix_ts timestamp without time zone,
-    bulk_ts timestamp without time zone,
-    preshape_ts timestamp without time zone,
-    final_shape_ts timestamp without time zone,
-    final_proof_ts timestamp without time zone,
+    autolyse_ts timestamp with time zone,
+    mix_ts timestamp with time zone,
+    bulk_ts timestamp with time zone,
+    preshape_ts timestamp with time zone,
+    final_shape_ts timestamp with time zone,
+    final_proof_ts timestamp with time zone,
     room_temp numeric(5,1),
     water_temp numeric(5,1),
     flour_temp numeric(5,1),
@@ -81,9 +89,10 @@ CREATE TABLE public.bread_timings (
     notes text,
     status character varying(20) DEFAULT 'in_progress'::character varying,
     stretch_fold_count integer DEFAULT 0 NOT NULL,
-    bake_ts timestamp without time zone,
+    bake_ts timestamp with time zone,
     recipe_id uuid,
     recipe_version_id uuid,
+    timezone character varying(50) DEFAULT 'UTC'::character varying NOT NULL,
     CONSTRAINT bread_timings_status_check CHECK (((status)::text = ANY ((ARRAY['in_progress'::character varying, 'completed'::character varying])::text[])))
 );
 
@@ -94,21 +103,17 @@ CREATE TABLE public.bread_timings (
 
 CREATE TABLE public.recipe_versions (
     id uuid NOT NULL,
-    recipe_id uuid,
+    recipe_id uuid NOT NULL,
+    state character varying(10) DEFAULT 'ready'::character varying NOT NULL,
+    version_number integer,
     description text,
     ingredients jsonb NOT NULL,
     instructions jsonb NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     change_summary jsonb,
-    version_number integer NOT NULL
+    CONSTRAINT ck_version_number_matches_state CHECK ((((state)::text = 'draft'::text) = (version_number IS NULL))),
+    CONSTRAINT recipe_versions_state_check CHECK (((state)::text = ANY ((ARRAY['draft'::character varying, 'ready'::character varying])::text[])))
 );
-
-
---
--- Name: TABLE recipe_versions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.recipe_versions IS 'Recipe versions with simplified version_number field (1, 2, 3, etc.)';
 
 
 --
@@ -118,28 +123,12 @@ COMMENT ON TABLE public.recipe_versions IS 'Recipe versions with simplified vers
 CREATE TABLE public.recipes (
     id uuid NOT NULL,
     name character varying(255) NOT NULL,
+    description text,
     category character varying(100),
     current_version_id uuid,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    description text
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
-
-
---
--- Name: bakers_percentages bakers_percentages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bakers_percentages
-    ADD CONSTRAINT bakers_percentages_pkey PRIMARY KEY (id);
-
-
---
--- Name: bakers_percentages bakers_percentages_recipe_id_recipe_version_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bakers_percentages
-    ADD CONSTRAINT bakers_percentages_recipe_id_recipe_version_id_key UNIQUE (recipe_id, recipe_version_id);
 
 
 --
@@ -159,11 +148,11 @@ ALTER TABLE ONLY public.recipe_versions
 
 
 --
--- Name: recipe_versions recipe_versions_recipe_id_version_number_unique; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: recipe_versions recipe_versions_recipe_id_version_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.recipe_versions
-    ADD CONSTRAINT recipe_versions_recipe_id_version_number_unique UNIQUE (recipe_id, version_number);
+    ADD CONSTRAINT recipe_versions_recipe_id_version_number_key UNIQUE (recipe_id, version_number);
 
 
 --
@@ -172,20 +161,6 @@ ALTER TABLE ONLY public.recipe_versions
 
 ALTER TABLE ONLY public.recipes
     ADD CONSTRAINT recipes_pkey PRIMARY KEY (id);
-
-
---
--- Name: idx_bakers_percentages_recipe; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bakers_percentages_recipe ON public.bakers_percentages USING btree (recipe_id);
-
-
---
--- Name: idx_bakers_percentages_recipe_version; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bakers_percentages_recipe_version ON public.bakers_percentages USING btree (recipe_version_id);
 
 
 --
@@ -287,10 +262,10 @@ CREATE INDEX idx_recipes_updated ON public.recipes USING btree (updated_at DESC)
 
 
 --
--- Name: bakers_percentages update_bakers_percentages_updated_at; Type: TRIGGER; Schema: public; Owner: -
+-- Name: uq_recipe_versions_one_draft; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE TRIGGER update_bakers_percentages_updated_at BEFORE UPDATE ON public.bakers_percentages FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE UNIQUE INDEX uq_recipe_versions_one_draft ON public.recipe_versions USING btree (recipe_id) WHERE ((state)::text = 'draft'::text);
 
 
 --
@@ -305,22 +280,6 @@ CREATE TRIGGER update_bread_timings_updated_at BEFORE UPDATE ON public.bread_tim
 --
 
 CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON public.recipes FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-
---
--- Name: bakers_percentages bakers_percentages_recipe_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bakers_percentages
-    ADD CONSTRAINT bakers_percentages_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id) ON DELETE CASCADE;
-
-
---
--- Name: bakers_percentages bakers_percentages_recipe_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bakers_percentages
-    ADD CONSTRAINT bakers_percentages_recipe_version_id_fkey FOREIGN KEY (recipe_version_id) REFERENCES public.recipe_versions(id) ON DELETE CASCADE;
 
 
 --
