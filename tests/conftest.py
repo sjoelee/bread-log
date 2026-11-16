@@ -2,13 +2,45 @@
 Pytest configuration and fixtures for recipe testing
 """
 
-import pytest
+import os
 from datetime import datetime
+from urllib.parse import urlparse
 from uuid import uuid4
 
+import psycopg
+import pytest
 from fastapi.testclient import TestClient
 
-from backend.service import app
+DEFAULT_TEST_DATABASE_URL = "postgresql://sammylee@localhost/bread_makes_test"
+
+
+def _point_app_at_test_database() -> None:
+  """Route the whole test session to a dedicated test database.
+
+  Settings are read once and cached, so this has to run before ``backend.service``
+  is imported. Any ``DATABASE_URL`` in the environment is deliberately ignored.
+  Refuses to run unless the database name ends in ``_test``.
+  """
+  url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+  name = urlparse(url).path.lstrip("/")
+  if not name.endswith("_test"):
+    raise pytest.UsageError(
+      f"Refusing to run tests against database {name!r}: the name must end in "
+      "'_test'. Set TEST_DATABASE_URL to a test database."
+    )
+  try:
+    psycopg.connect(url, connect_timeout=3).close()
+  except psycopg.OperationalError as e:
+    raise pytest.UsageError(
+      f"Cannot connect to test database {name!r}. "
+      "Create it with scripts/reset_test_db.sh."
+    ) from e
+  os.environ["DATABASE_URL"] = url
+
+
+_point_app_at_test_database()
+
+from backend.service import app  # noqa: E402  (must follow the database setup above)
 
 
 @pytest.fixture(scope="session", autouse=True)
