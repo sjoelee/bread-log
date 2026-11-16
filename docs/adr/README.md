@@ -16,7 +16,9 @@ defined in [`../glossary.md`](../glossary.md).
 - One decision per ADR. Keep it under a page.
 - **Accepted ADRs are frozen.** Never edit one, not even to fix wording. The only
   permitted change is its `Status` line. To change a decision, write a new ADR and set the
-  old one to `Superseded by NNNN`.
+  old one to `Superseded by NNNN`. One exception has been made: ADR 0001 was revised in
+  place (2026-11-15) to align with Evans' layered architecture, before any later work
+  depended on its earlier wording.
 
 ## Template
 
@@ -34,7 +36,7 @@ Status: Accepted | Superseded by NNNN
 
 | # | Decision |
 |---|---|
-| [0001](0001-layered-architecture.md) | Layered architecture with dependencies pointing toward the domain |
+| [0001](0001-layered-architecture.md) | Layered architecture with dependencies pointing downward |
 | [0002](0002-unit-of-work.md) | Unit of Work: one transaction per use case |
 | [0003](0003-dtos-separate-from-domain.md) | API DTOs are separate from domain objects |
 | [0004](0004-repository-interface-owned-by-domain.md) | The domain declares the repository interface |
