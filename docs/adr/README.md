@@ -47,3 +47,4 @@ Status: Accepted | Superseded by NNNN
 | [0009](0009-no-sub-recipe-update-notifications.md) | A recipe is not told when its sub-recipes change |
 | [0010](0010-no-circular-sub-recipes.md) | A recipe cannot be its own sub-recipe, directly or indirectly |
 | [0011](0011-draft-and-ready-shown-separately.md) | A recipe's representation shows its Draft and latest Ready version separately |
+| [0012](0012-application-declares-unit-of-work-interface.md) | The application layer declares the unit-of-work interface |
