@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from backend.service import app
 from backend.exceptions import DatabaseError
-from backend.infrastructure.recipe_repository import RecipeRepository
+from backend.infrastructure.recipe_repository import PostgresRecipeRepository
 
 client = TestClient(app)
 
@@ -34,7 +34,7 @@ class TestRecipeTransactionIntegrity:
 
     # WHEN: Database error occurs during version creation (step 2)
     with patch(
-      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+      "backend.infrastructure.recipe_repository.PostgresRecipeRepository.add"
     ) as mock_create:
       # Simulate database error during transaction
       mock_create.side_effect = DatabaseError("Failed to insert recipe version")
@@ -103,7 +103,7 @@ class TestRecipeTransactionIntegrity:
 
     # WHEN: First request fails due to database error
     with patch(
-      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+      "backend.infrastructure.recipe_repository.PostgresRecipeRepository.add"
     ) as mock_create:
       mock_create.side_effect = DatabaseError("Simulated database failure")
 
@@ -200,7 +200,7 @@ class TestSpecificTransactionSteps:
 
     # Mock specific database error during recipe insertion
     with patch(
-      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+      "backend.infrastructure.recipe_repository.PostgresRecipeRepository.add"
     ) as mock_create:
       mock_create.side_effect = DatabaseError("Failed to insert into recipes table")
 
@@ -224,7 +224,7 @@ class TestSpecificTransactionSteps:
     }
 
     with patch(
-      "backend.infrastructure.recipe_repository.RecipeRepository.add"
+      "backend.infrastructure.recipe_repository.PostgresRecipeRepository.add"
     ) as mock_create:
       # Simulate foreign key constraint violation
       mock_create.side_effect = DatabaseError("Foreign key constraint violation")
@@ -267,13 +267,13 @@ class TestUseCaseAtomicity:
 
       # save() runs for real (INSERT version + UPDATE recipe), then blows up
       # before the use case returns. The UnitOfWork must roll both statements back.
-      real_save = RecipeRepository.save
+      real_save = PostgresRecipeRepository.save
 
       def save_then_fail(self, recipe):
         real_save(self, recipe)
         raise DatabaseError("failure after the write")
 
-      with patch.object(RecipeRepository, "save", save_then_fail):
+      with patch.object(PostgresRecipeRepository, "save", save_then_fail):
         resp = client.patch(f"/recipes/{recipe_id}", json=v2_body)
       assert resp.status_code == 500
 
@@ -291,13 +291,13 @@ class TestUseCaseAtomicity:
       client.delete(f"/recipes/{recipe_id}")
 
   def test_create_write_is_rolled_back_on_failure(self):
-    real_add = RecipeRepository.add
+    real_add = PostgresRecipeRepository.add
 
     def add_then_fail(self, recipe):
       real_add(self, recipe)
       raise DatabaseError("failure after insert")
 
-    with patch.object(RecipeRepository, "add", add_then_fail):
+    with patch.object(PostgresRecipeRepository, "add", add_then_fail):
       resp = client.post("/recipes/", json={**self.BASE, "name": "Should Not Persist"})
     assert resp.status_code == 500
 

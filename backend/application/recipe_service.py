@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import Callable, List, Optional
 from uuid import UUID
 
 from ..domain import models as domain
 from ..domain import versioning
 from ..exceptions import NotFoundError
-
-if TYPE_CHECKING:
-  from ..infrastructure.unit_of_work import UnitOfWork
+from .unit_of_work import UnitOfWork
 
 
 class RecipeService:
@@ -29,7 +27,7 @@ class RecipeService:
 
   def __init__(
     self,
-    uow_factory: Callable[[], "UnitOfWork"],
+    uow_factory: Callable[[], UnitOfWork],
     *,
     now: Callable[[], datetime] = datetime.now,
   ):
@@ -225,7 +223,7 @@ class RecipeService:
 
   # --- helpers ---------------------------------------------------------
 
-  def _reload(self, uow: "UnitOfWork", recipe_id: UUID) -> domain.Recipe:
+  def _reload(self, uow: UnitOfWork, recipe_id: UUID) -> domain.Recipe:
     """Re-read a recipe inside the current transaction, so callers get the
     persisted view. Raises ``ValueError`` if it vanished."""
     recipe = uow.recipes.get(recipe_id)

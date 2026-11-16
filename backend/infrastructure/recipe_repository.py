@@ -55,7 +55,7 @@ def _instructions_json(steps: List[domain.RecipeStep]) -> str:
   return json.dumps({"instructions": [asdict(s) for s in steps]})
 
 
-class RecipeRepository:
+class PostgresRecipeRepository:
   def __init__(self, conn):
     self._conn = conn
 

@@ -170,8 +170,9 @@ recipe deletes them). You load and save the whole `Recipe`, never a version alon
 The object that loads and saves one aggregate, hiding all storage detail. Callers pass and
 receive domain objects (e.g. `Recipe`), never rows. Never commits; the unit of work does.
 The domain declares the interface it needs (ADR 0004); the production and in-memory
-implementations both satisfy it. Here: `RecipeRepository` (PostgreSQL) and
-`FakeRecipeRepository` in `tests/fakes.py`.
+implementations both satisfy it. Here: the `RecipeRepository` interface in
+`backend/domain/repositories.py`; `PostgresRecipeRepository` (PostgreSQL) and
+`FakeRecipeRepository` in `tests/fakes.py` implement it.
 
 ### Protocol
 A Python type (`typing.Protocol`) declaring a set of methods. Any class with matching
@@ -187,8 +188,10 @@ were made.
 ### Unit of Work
 A scope that owns one storage session and one transaction for a single use case. Commits
 when the use case completes normally, discards everything if it fails, always releases the
-session (ADR 0002). Exposes the repositories, bound to that session. Here:
-`UnitOfWork` in `backend/infrastructure/unit_of_work.py`, over a psycopg connection pool.
+session (ADR 0002). Exposes the repositories, bound to that session. The application layer declares the interface (ADR 0012). Here: the
+`UnitOfWork` interface in `backend/application/unit_of_work.py`; the implementation is
+`UnitOfWork` in `backend/infrastructure/unit_of_work.py`, over a psycopg connection pool,
+and `FakeUnitOfWork` in `tests/fakes.py`.
 
 ### Test database
 A dedicated database, separate from development, that storage-touching tests run against
