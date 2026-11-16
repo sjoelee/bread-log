@@ -7,6 +7,7 @@ from .config import get_settings
 from .db import DBConnector
 from .infrastructure.pool import DatabasePool
 from .exceptions import ConflictError, DatabaseError, DomainError, NotFoundError
+from .api import mappers
 from .api.schemas import (
   Recipe,
   RecipeCreateResponse,
@@ -112,7 +113,14 @@ def create_recipe(
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """Create a new versioned recipe with initial version 1."""
-  return recipe_service.create_recipe(recipe)
+  created = recipe_service.create_recipe(
+    name=recipe.name,
+    ingredients=mappers.ingredients_to_domain(recipe.ingredients),
+    instructions=mappers.steps_to_domain(recipe.instructions),
+    description=recipe.description,
+    category=recipe.category,
+  )
+  return mappers.recipe_to_dto(created)
 
 
 @app.get("/recipes/", response_model=List[RecipeListItem])
@@ -127,7 +135,7 @@ def list_recipes(
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """List recipes with pagination, optional category/ingredient filter, search, and sorting."""
-  return recipe_service.list_recipes(
+  summaries = recipe_service.list_recipes(
     category=category,
     limit=limit,
     offset=offset,
@@ -136,6 +144,7 @@ def list_recipes(
     sort_direction=sort_direction,
     ingredient=ingredient,
   )
+  return [mappers.summary_to_dto(s) for s in summaries]
 
 
 @app.get("/recipes/{recipe_id}", response_model=Recipe)
@@ -144,10 +153,7 @@ def get_recipe(
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """Get a versioned recipe by ID with its current version."""
-  recipe = recipe_service.get_recipe(recipe_id)
-  if recipe is None:
-    raise HTTPException(status_code=404, detail="Recipe not found")
-  return recipe
+  return mappers.recipe_to_dto(recipe_service.get_recipe(recipe_id))
 
 
 @app.patch("/recipes/{recipe_id}", response_model=RecipeCreateResponse)
@@ -160,9 +166,16 @@ def update_recipe(
 
   Takes the same complete JSON body as recipe creation.
   """
-  updated_recipe = recipe_service.update_recipe_full(recipe_id, recipe_data)
+  updated_recipe = recipe_service.update_recipe_full(
+    recipe_id,
+    name=recipe_data.name,
+    ingredients=mappers.ingredients_to_domain(recipe_data.ingredients),
+    instructions=mappers.steps_to_domain(recipe_data.instructions),
+    description=recipe_data.description,
+    category=recipe_data.category,
+  )
   return RecipeCreateResponse(
-    recipe=updated_recipe,
+    recipe=mappers.recipe_to_dto(updated_recipe),
     message=(
       f"Recipe '{updated_recipe.name}' updated successfully to version "
       f"{updated_recipe.current_version.version_number}"
@@ -188,12 +201,13 @@ def create_recipe_version(
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """Manually add a new version to an existing recipe."""
-  return recipe_service.create_recipe_version(
+  updated = recipe_service.create_recipe_version(
     recipe_id=recipe_id,
-    ingredients=version_request.ingredients,
-    instructions=version_request.instructions,
+    ingredients=mappers.ingredients_to_domain(version_request.ingredients),
+    instructions=mappers.steps_to_domain(version_request.instructions),
     description=version_request.description,
   )
+  return mappers.recipe_to_dto(updated)
 
 
 @app.get("/recipes/{recipe_id}/versions", response_model=List[RecipeVersion])
@@ -202,7 +216,8 @@ def get_recipe_versions(
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
   """Get all versions of a recipe, newest first."""
-  return recipe_service.get_recipe_versions(recipe_id)
+  versions = recipe_service.get_recipe_versions(recipe_id)
+  return [mappers.version_to_dto(v) for v in versions]
 
 
 @app.get("/recipes/{recipe_id}/versions/{version_id_1}/diff/{version_id_2}")

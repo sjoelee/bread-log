@@ -1,4 +1,4 @@
-"""Recipe use cases: DTO in, DTO out, domain objects in between."""
+"""Recipe use cases: domain objects in, domain objects out."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Callable, List, Optional
 from uuid import UUID
 
-from ..api import mappers, schemas
 from ..domain import models as domain
 from ..domain import versioning
 from ..exceptions import NotFoundError
@@ -17,8 +16,8 @@ if TYPE_CHECKING:
 
 
 class RecipeService:
-  """Recipe use cases. Each method takes/returns API DTOs (``api.schemas``) and
-  works with domain objects and the repository in between.
+  """Recipe use cases. Each method takes and returns domain objects; translating
+  to and from API DTOs is the interface layer's job.
 
   Every method opens a ``UnitOfWork`` for the duration of the use case: all its
   repository calls share one connection and one transaction, committed on a
@@ -39,30 +38,43 @@ class RecipeService:
 
   # --- commands ----------------------------------------------------------
 
-  def create_recipe(self, request: schemas.RecipeRequest) -> schemas.Recipe:
+  def create_recipe(
+    self,
+    *,
+    name: str,
+    ingredients: List[domain.Ingredient],
+    instructions: List[domain.RecipeStep],
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+  ) -> domain.Recipe:
     """Create a recipe and its first version (``version_number`` 1).
 
     Fills in a UUID for any step that lacks one, persists the recipe, and
     returns the freshly reloaded full recipe.
     """
     recipe = domain.Recipe.create(
-      name=request.name,
-      ingredients=mappers.ingredients_to_domain(request.ingredients),
-      instructions=versioning.assign_step_ids(
-        mappers.steps_to_domain(request.instructions)
-      ),
+      name=name,
+      ingredients=ingredients,
+      instructions=versioning.assign_step_ids(instructions),
       now=self._now(),
-      description=request.description,
-      category=request.category,
+      description=description,
+      category=category,
     )
     with self._uow_factory() as uow:
       uow.recipes.add(recipe)
       return self._reload(uow, recipe.id)
 
   def update_recipe_full(
-    self, recipe_id: UUID, request: schemas.RecipeRequest
-  ) -> schemas.Recipe:
-    """Replace a recipe wholesale from a full request body.
+    self,
+    recipe_id: UUID,
+    *,
+    name: str,
+    ingredients: List[domain.Ingredient],
+    instructions: List[domain.RecipeStep],
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+  ) -> domain.Recipe:
+    """Replace a recipe wholesale from full content.
 
     Adds a new version (with a computed ``change_summary`` against the previous
     one) and updates the recipe's ``name``/``description``/``category``. The
@@ -74,33 +86,30 @@ class RecipeService:
       if recipe is None:
         raise NotFoundError(f"Recipe with ID {recipe_id} not found")
 
-      new_ingredients = mappers.ingredients_to_domain(request.ingredients)
-      new_steps = versioning.assign_step_ids(
-        mappers.steps_to_domain(request.instructions)
-      )
+      new_steps = versioning.assign_step_ids(instructions)
 
       recipe.add_version(
-        ingredients=new_ingredients,
+        ingredients=ingredients,
         instructions=new_steps,
         now=self._now(),
-        description=request.description,
+        description=description,
         change_summary=self._change_summary(
-          recipe.current_version, new_ingredients, new_steps
+          recipe.current_version, ingredients, new_steps
         ),
       )
-      recipe.name = request.name
-      recipe.description = request.description
-      recipe.category = request.category
+      recipe.name = name
+      recipe.description = description
+      recipe.category = category
       uow.recipes.save(recipe)
       return self._reload(uow, recipe_id)
 
   def create_recipe_version(
     self,
     recipe_id: UUID,
-    ingredients: List[schemas.Ingredient],
-    instructions: List[schemas.RecipeStep],
+    ingredients: List[domain.Ingredient],
+    instructions: List[domain.RecipeStep],
     description: Optional[str] = None,
-  ) -> schemas.Recipe:
+  ) -> domain.Recipe:
     """Add a new version to an existing recipe, leaving its name/category alone.
 
     Like ``update_recipe_full`` but scoped to version content only.
@@ -112,16 +121,15 @@ class RecipeService:
       if recipe is None:
         raise NotFoundError(f"Recipe {recipe_id} not found")
 
-      new_ingredients = mappers.ingredients_to_domain(ingredients)
-      new_steps = versioning.assign_step_ids(mappers.steps_to_domain(instructions))
+      new_steps = versioning.assign_step_ids(instructions)
 
       recipe.add_version(
-        ingredients=new_ingredients,
+        ingredients=ingredients,
         instructions=new_steps,
         now=self._now(),
         description=description,
         change_summary=self._change_summary(
-          recipe.current_version, new_ingredients, new_steps
+          recipe.current_version, ingredients, new_steps
         ),
       )
       uow.recipes.save(recipe)
@@ -139,11 +147,16 @@ class RecipeService:
 
   # --- queries -----------------------------------------------------------
 
-  def get_recipe(self, recipe_id: UUID) -> Optional[schemas.Recipe]:
-    """Return the full recipe (metadata + current version) or ``None`` if absent."""
+  def get_recipe(self, recipe_id: UUID) -> domain.Recipe:
+    """Return the full recipe (metadata + current version).
+
+    Raises ``NotFoundError`` if the recipe does not exist.
+    """
     with self._uow_factory() as uow:
       recipe = uow.recipes.get(recipe_id)
-      return mappers.recipe_to_dto(recipe) if recipe else None
+      if recipe is None:
+        raise NotFoundError("Recipe not found")
+      return recipe
 
   def list_recipes(
     self,
@@ -154,15 +167,15 @@ class RecipeService:
     sort_by: str = "created_at",
     sort_direction: str = "desc",
     ingredient: Optional[str] = None,
-  ) -> List[schemas.RecipeListItem]:
-    """Return a page of lightweight list items (no full version content).
+  ) -> List[domain.RecipeSummary]:
+    """Return a page of lightweight summaries (no full version content).
 
     ``search`` matches the name; ``ingredient`` matches an ingredient name in the
     current version; ``category`` is an exact match. ``sort_by`` is ``created_at``
     or ``name``, ``sort_direction`` is ``asc`` or ``desc``.
     """
     with self._uow_factory() as uow:
-      summaries = uow.recipes.list(
+      return uow.recipes.list(
         category=category,
         search=search,
         ingredient=ingredient,
@@ -171,15 +184,14 @@ class RecipeService:
         limit=limit,
         offset=offset,
       )
-      return [mappers.summary_to_dto(s) for s in summaries]
 
-  def get_recipe_versions(self, recipe_id: UUID) -> List[schemas.RecipeVersion]:
+  def get_recipe_versions(self, recipe_id: UUID) -> List[domain.RecipeVersion]:
     """Return every version of the recipe, newest ``version_number`` first.
 
     Empty list if the recipe has no versions or does not exist.
     """
     with self._uow_factory() as uow:
-      return [mappers.version_to_dto(v) for v in uow.recipes.get_versions(recipe_id)]
+      return uow.recipes.get_versions(recipe_id)
 
   def get_recipe_version_diff(
     self, recipe_id: UUID, version_id_1: UUID, version_id_2: UUID
@@ -213,13 +225,13 @@ class RecipeService:
 
   # --- helpers ---------------------------------------------------------
 
-  def _reload(self, uow: "UnitOfWork", recipe_id: UUID) -> schemas.Recipe:
-    """Re-read a recipe inside the current transaction and map it to a DTO, so
-    callers get the persisted view. Raises ``ValueError`` if it vanished."""
+  def _reload(self, uow: "UnitOfWork", recipe_id: UUID) -> domain.Recipe:
+    """Re-read a recipe inside the current transaction, so callers get the
+    persisted view. Raises ``ValueError`` if it vanished."""
     recipe = uow.recipes.get(recipe_id)
     if recipe is None:
       raise ValueError(f"Failed to load recipe {recipe_id}")
-    return mappers.recipe_to_dto(recipe)
+    return recipe
 
   def _change_summary(
     self,

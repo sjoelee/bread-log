@@ -1,11 +1,12 @@
 """RecipeService against an in-memory repository — no database."""
 
 from datetime import datetime
+from uuid import uuid4
 
 import pytest
 
-from backend.api import schemas
 from backend.application.recipe_service import RecipeService
+from backend.domain import models as domain
 from backend.exceptions import NotFoundError
 from tests.fakes import FakeRecipeRepository, FakeUnitOfWork
 
@@ -17,30 +18,30 @@ def _service():
   return RecipeService(lambda: FakeUnitOfWork(repo), now=lambda: FIXED_NOW)
 
 
-def _request(**overrides):
+def _content(**overrides):
   data = dict(
     name="Simple Sourdough",
     description="Basic country bread",
     category="sourdough",
     ingredients=[
-      {"name": "bread flour", "amount": 1000, "unit": "grams", "type": "flour"},
-      {"name": "water", "amount": 750, "unit": "grams", "type": "liquid"},
+      domain.Ingredient(name="bread flour", amount=1000, unit="grams", type="flour"),
+      domain.Ingredient(name="water", amount=750, unit="grams", type="liquid"),
     ],
     instructions=[
-      {"order": 1, "instruction": "Autolyse"},
-      {"order": 2, "instruction": "Mix"},
+      domain.RecipeStep(order=1, instruction="Autolyse"),
+      domain.RecipeStep(order=2, instruction="Mix"),
     ],
   )
   data.update(overrides)
-  return schemas.RecipeRequest(**data)
+  return data
 
 
 class TestCreateRecipe:
   def test_creates_version_one_with_generated_ids(self):
     svc = _service()
-    recipe = svc.create_recipe(_request())
+    recipe = svc.create_recipe(**_content())
 
-    assert isinstance(recipe, schemas.Recipe)
+    assert isinstance(recipe, domain.Recipe)
     assert recipe.name == "Simple Sourdough"
     assert recipe.category == "sourdough"
     assert recipe.current_version.version_number == 1
@@ -52,15 +53,17 @@ class TestCreateRecipe:
 class TestUpdateRecipe:
   def test_full_update_bumps_version_and_updates_metadata(self):
     svc = _service()
-    created = svc.create_recipe(_request())
+    created = svc.create_recipe(**_content())
 
     updated = svc.update_recipe_full(
       created.id,
-      _request(
+      **_content(
         name="Renamed",
         category="lean",
-        ingredients=[{"name": "rye", "amount": 900, "unit": "grams", "type": "flour"}],
-        instructions=[{"order": 1, "instruction": "Mix well"}],
+        ingredients=[
+          domain.Ingredient(name="rye", amount=900, unit="grams", type="flour")
+        ],
+        instructions=[domain.RecipeStep(order=1, instruction="Mix well")],
       ),
     )
 
@@ -71,47 +74,43 @@ class TestUpdateRecipe:
     assert updated.current_version.change_summary["total_changes"] > 0
 
   def test_update_missing_recipe_raises(self):
-    from uuid import uuid4
-
     with pytest.raises(NotFoundError, match="not found"):
-      _service().update_recipe_full(uuid4(), _request())
+      _service().update_recipe_full(uuid4(), **_content())
 
 
 class TestQueries:
   def test_get_and_list_and_delete(self):
     svc = _service()
-    created = svc.create_recipe(_request(name="Findable"))
+    created = svc.create_recipe(**_content(name="Findable"))
 
     assert svc.get_recipe(created.id).name == "Findable"
 
     listed = svc.list_recipes(search="findable")
     assert [item.name for item in listed] == ["Findable"]
-    assert listed[0].version == "1"
+    assert listed[0].version_number == 1
 
     assert svc.delete_recipe(created.id) is True
-    assert svc.get_recipe(created.id) is None
+    with pytest.raises(NotFoundError):
+      svc.get_recipe(created.id)
 
-  def test_get_missing_returns_none(self):
-    from uuid import uuid4
-
-    assert _service().get_recipe(uuid4()) is None
+  def test_get_missing_raises(self):
+    with pytest.raises(NotFoundError, match="Recipe not found"):
+      _service().get_recipe(uuid4())
 
   def test_delete_missing_raises(self):
-    from uuid import uuid4
-
     with pytest.raises(NotFoundError):
       _service().delete_recipe(uuid4())
 
   def test_version_history_and_diff(self):
     svc = _service()
-    created = svc.create_recipe(_request())
+    created = svc.create_recipe(**_content())
     svc.update_recipe_full(
       created.id,
-      _request(
+      **_content(
         ingredients=[
-          {"name": "bread flour", "amount": 1000, "unit": "grams", "type": "flour"}
+          domain.Ingredient(name="bread flour", amount=1000, unit="grams", type="flour")
         ],
-        instructions=[{"order": 1, "instruction": "Autolyse"}],
+        instructions=[domain.RecipeStep(order=1, instruction="Autolyse")],
       ),
     )
 
