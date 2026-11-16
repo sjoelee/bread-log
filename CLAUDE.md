@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Start of every session
 
-Read these two documents first, before the plan files and before anything else:
+Read these three documents first, before anything else:
 
 1. `docs/adr/` — start with `README.md` (writing rules, index), then every ADR. They
    are the accepted design decisions.
 2. `docs/glossary.md` — the shared vocabulary. Use its terms exactly.
+3. `docs/plan.md` — status and scope by phase and slice (*phase.slice* numbering). Keep
+   its status tables current as slices merge. Decisions live in the ADRs, not in the plan.
 
 Treat the ADRs as binding guidelines for every design discussion and every decision:
 check a proposal against them before making it, follow them when writing code, and
@@ -16,15 +18,6 @@ if work would contradict one, stop and say so instead of proceeding. Accepted AD
 frozen (never edited); to change a decision, propose a new ADR that supersedes the old
 one and get it reviewed before any code changes. Draft ADRs one at a time in chat and
 get approval before writing files; follow the writing rules in `docs/adr/README.md`.
-
-Then read these plan files in full, and use them as the
-source of truth for the in-progress refactor (current stage, scope, decisions):
-
-1. `~/.claude/plans/synchronous-shimmying-sedgewick.md` — main plan (Parts I–IV, stage status table)
-2. `~/.claude/plans/i-want-to-think-staged-lampson.md` — detailed per-stage backend DDD plan; the main plan overrides it where they differ
-
-If a file is missing, say so instead of guessing at its contents. Keep the stage
-table in the main plan current as stages merge.
 
 ## Changing or critiquing existing code
 
@@ -81,13 +74,13 @@ React + TypeScript single-page app. All UI lives in `src/BreadAppNew.tsx` (the m
 UI libraries: Material-UI (DatePicker, TimePicker), Tailwind CSS, Wouter (routing), dayjs.
 
 ### Backend (`backend/`)
-FastAPI service, layered per the DDD refactor (recipes only; timing still uses `db.py` until Part IV):
+FastAPI service, layered per the DDD refactor (recipes only; timing still uses `db.py` until Phase 4):
 - `service.py` — FastAPI app, lifespan, dependency providers, thin recipe routes, exception handlers; timing routes (still with inline logic) also live here
 - `api/` — `schemas.py` (recipe request/response DTOs), `mappers.py` (DTO ↔ domain)
 - `application/recipe_service.py` — recipe use cases; opens one `UnitOfWork` per use case
 - `domain/` — `models.py` (`Ingredient`, `RecipeStep`, `RecipeVersion`, `Recipe`), `versioning.py` (pure diff logic, baker's percentage calculation)
 - `infrastructure/` — `pool.py` (`DatabasePool`), `unit_of_work.py` (owns connection + transaction), `recipe_repository.py` (recipe SQL, `dict_row`), `mappers.py` (row ↔ domain)
-- `db.py` — `DBConnector`: timing-only raw SQL via psycopg3 (retired in Part IV)
+- `db.py` — `DBConnector`: timing-only raw SQL via psycopg3 (retired in Phase 4)
 - `models.py` — bread-timing Pydantic models only
 - `exceptions.py` — `DatabaseError`, `NotFoundError`, `ConflictError`, `DomainError`
 
