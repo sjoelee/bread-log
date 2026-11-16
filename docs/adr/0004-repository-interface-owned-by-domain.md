@@ -18,12 +18,13 @@ including the test one, is checked automatically.
 ## Alternatives
 
 - No interface; the application layer uses the production class directly. Fewer files, but
-  the application layer depends on infrastructure, and the test implementation can drift
-  from it unnoticed.
+  the test implementation can drift from it unnoticed, and tests cannot substitute storage
+  without touching the production class.
 
 ## Consequences
 
-- (+) Dependencies point toward the domain (ADR 0001).
+- (+) The application layer works with an interface the domain declares, so tests can
+  substitute an in-memory implementation.
 - (+) A change to an operation's signature surfaces as an error in every implementation.
 - (−) One more file to maintain, and it must be kept in step with both implementations.
 - (−) An interface checks signatures, not behavior. The implementations can still return

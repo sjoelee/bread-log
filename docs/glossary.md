@@ -119,16 +119,18 @@ response body, including input validation. Kept separate from domain objects (AD
 Here: the Pydantic classes in `backend/api/schemas.py`.
 
 ### Layer
-One of four tiers of the backend. The domain depends on nothing; application depends only
-on the domain; interface depends on application and domain; infrastructure depends on the
-domain (ADR 0001).
+One of four tiers of the backend, from Evans' *Domain-Driven Design* (ch. 4). Listed top to
+bottom; a layer depends only on its own layer or the layers beneath it, and a lower layer
+does not depend on a higher one (ADR 0001). The one accepted exception: repository
+implementations live in infrastructure and build domain objects, so infrastructure refers to
+domain types there.
 
 | Layer | Job | Here |
 |---|---|---|
 | Interface | the boundary clients talk to: request in, one application call, response out | `backend/service.py`, `backend/api/` |
-| Application | orchestrates use cases | `backend/application/` |
-| Domain | business logic; pure, no I/O | `backend/domain/` |
-| Infrastructure | storage and external systems | `backend/infrastructure/` |
+| Application | thin; coordinates use cases, holds no business logic | `backend/application/` |
+| Domain | business logic; no storage or framework code | `backend/domain/` |
+| Infrastructure | generic technical capabilities: persistence, transactions | `backend/infrastructure/` |
 
 ### Use case
 One thing a user can ask the system to do, e.g. "create a recipe" or "promote a draft".
