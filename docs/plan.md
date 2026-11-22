@@ -60,6 +60,7 @@ Not scheduled; pick up deliberately.
 
 - `get_recipe_version_diff` returns an API-shaped dict from the application layer
   (departs from ADR 0003).
+  When revisited, also settle spec 2.1's O1 (Draft-vs-Ready diff to disable Promote).
 - `tests/fakes.py::FakeRecipeRepository.list()` ignores ingredient, sort, limit and offset.
 - The timing API test fails on a fresh database: it expects naive timestamps and gets
   `-08:00` offsets. Cause untraced; slice 1.11 deletes it.
@@ -95,6 +96,8 @@ Scope:
 - Repository and application: load and save both parts; new use cases per the spec.
 - API: draft, promote and discard endpoints; `PATCH /recipes/{id}` edits details only;
   `state` list filter.
+- Minimal frontend fix so the recipe screens keep working, plus a bare Promote button
+  (spec, *Decided during review*).
 - Rewrite the recipe-versioning tests for this model.
 - Resolve the spec's **Open** items before or during implementation.
 
