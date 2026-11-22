@@ -1,114 +1,55 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Start of every session
 
-Read these three documents first, before anything else:
+Read first, in order:
 
-1. `docs/adr/` — start with `README.md` (writing rules, index), then every ADR. They
-   are the accepted design decisions.
-2. `docs/glossary.md` — the shared vocabulary. Use its terms exactly.
-3. `docs/plan.md` — status and scope by phase and slice (*phase.slice* numbering). Keep
-   its status tables current as slices merge. Decisions live in the ADRs, not in the plan.
-
-Treat the ADRs as binding guidelines for every design discussion and every decision:
-check a proposal against them before making it, follow them when writing code, and
-if work would contradict one, stop and say so instead of proceeding. Accepted ADRs are
-frozen (never edited); to change a decision, propose a new ADR that supersedes the old
-one and get it reviewed before any code changes. Draft ADRs one at a time in chat and
-get approval before writing files; follow the writing rules in `docs/adr/README.md`.
+1. `docs/adr/` — `README.md` (writing rules, index), then every ADR. Binding: check
+   proposals against them, follow them in code, and stop and say so if work would
+   contradict one. Changing a decision means a new ADR, reviewed before any code changes.
+2. `docs/glossary.md` — shared vocabulary; use its terms exactly. Its *Layer* table maps
+   layers to directories.
+3. `docs/plan.md` — status and scope by *phase.slice*. Keep its tables current as slices
+   merge.
 
 ## Changing or critiquing existing code
 
-- **Verify before you flag.** Before calling shipped code buggy, fragile, or
-  risky, trace the real path that exercises it (caller → callee, client →
-  server, frontend included) and state a concrete failure with concrete inputs.
-  If you haven't verified it, label it "unverified" — don't present a hypothesis
-  as a defect.
-- **Tests are not the source of truth for whether a feature works.** A missing
-  or weak test means the test is weak, not that the feature is broken. Judge
-  behavior from the code that runs in production.
-- **When the answer is "it's fine," say that and stop.** Don't manufacture a
-  concern or a refactor to have something to act on.
-- **Answer what was asked first.** Keep unrequested findings and redesign ideas
-  in a short, clearly-labeled section at the end, phrased as an offer. Don't
-  pitch a refactor unless asked.
-- **Evaluate each item on its own merits.** Removing one unused thing doesn't
-  mean the next similar-looking thing is unused — check its consumers.
+- **Verify before you flag.** Trace the real path (caller → callee, frontend included) and
+  state a concrete failure with concrete inputs. Otherwise label it "unverified".
+- **Tests are not the source of truth.** A weak test means the test is weak, not that the
+  feature is broken. Judge from production code.
+- **When it's fine, say so and stop.** Don't manufacture concerns or refactors.
+- **Answer what was asked first.** Unrequested findings go in a short labeled section at
+  the end, as an offer.
+- **Evaluate each item on its own merits.** Check consumers before calling something unused.
 
-## Development Commands
+## Commands
 
-### Frontend (React)
-- `npm start` — Start React development server on http://localhost:3000
-- `npm run build` — Build production bundle
-- Do NOT use `npm test` for backend tests (that runs the React test runner)
+- Backend: `uv run uvicorn backend.service:app --reload` (http://localhost:8000). Always
+  `uv run`; never `python` directly. Python **3.9.6** is pinned: no `match`, and
+  `X | Y` needs `from __future__ import annotations`.
+- Frontend: `npm start` (http://localhost:3000), `npm run build`. Never `npm test` for the
+  backend.
+- Tests: `uv run pytest`. They run against `bread_makes_test`, never the dev database
+  `bread_makes`; `tests/conftest.py` reads `TEST_DATABASE_URL` and refuses any database not
+  ending in `_test`. Run `scripts/reset_test_db.sh` on first setup and whenever
+  `database/schema.sql` changes.
+- Checks: `uv run ruff check`, `uv run ruff format`, `uv run pyright backend tests/fakes.py`
+  (also run by pre-commit).
 
-### Backend (FastAPI)
-- `uv run uvicorn backend.service:app --reload` — Start the FastAPI dev server on http://localhost:8000
-- Python version: **3.9.6** (pinned via `.python-version`)
-- All backend commands must be run with `uv run` — do not use `python` or `python3` directly
-- Dependencies are managed via `pyproject.toml` and `uv`
+## Database
 
-### Running Tests
-- `uv run pytest` — Run all backend tests
-- `uv run pytest tests/api/test_recipe_list_api.py -v` — Run a specific test file
-- Tests hit a **real PostgreSQL test database** (`bread_makes_test`, never the dev database `bread_makes`) — no mocking of the database (ADR 0005)
-- First-time setup, and again whenever `database/schema.sql` changes: `scripts/reset_test_db.sh` (drops and recreates `bread_makes_test` from `schema.sql`)
-- `tests/conftest.py` reads `TEST_DATABASE_URL` (default `postgresql://sammylee@localhost/bread_makes_test`), ignores `DATABASE_URL`, and aborts the session unless the database name ends in `_test`
-- `pythonpath = ["."]` is set in `pyproject.toml` so `backend.*` imports resolve correctly
+PostgreSQL 15. Apply schema changes manually with `psql`, then regenerate
+`database/schema.sql` with `pg_dump --schema-only --no-owner --no-privileges bread_makes`
+and rebuild the test database.
 
-### Database
-- PostgreSQL 15 required (`brew install postgresql@15`), development database: `bread_makes`; test database: `bread_makes_test`
-- Schema files are in `/database/` — apply manually with `psql`. `database/schema.sql` is a `pg_dump --schema-only --no-owner --no-privileges` of the dev database; regenerate it after any schema change
-- Active tables: `recipes`, `recipe_versions`, `bread_timings`
+## Legacy, frozen until Phase 4
 
-## Architecture Overview
+Bread timing (`/timings` routes in `service.py`, `backend/db.py` `DBConnector`,
+`backend/models.py`, the Saved Timings UI) is not part of the layered design. Don't
+refactor it or build on it; Phase 4 replaces it from scratch. It commits inside
+`DBConnector`, not through the unit of work.
 
-### Frontend (`src/`)
-React + TypeScript single-page app. All UI lives in `src/BreadAppNew.tsx` (the main component) with supporting files:
-- `src/components/` — `CreateTab`, `RecipeTab`, `StatusBadge`
-- `src/hooks/` — `useBreadForm` (form state + validation + submit), `useSavedMakes`
-- `src/services/api.ts` — `breadTimingApi` (all timing CRUD); recipe calls are inline fetch in `BreadAppNew.tsx`
-- `src/types/bread.ts` — shared TypeScript types
+## Known noise
 
-UI libraries: Material-UI (DatePicker, TimePicker), Tailwind CSS, Wouter (routing), dayjs.
-
-### Backend (`backend/`)
-FastAPI service, layered per the DDD refactor (recipes only; timing still uses `db.py` until Phase 4):
-- `service.py` — FastAPI app, lifespan, dependency providers, thin recipe routes, exception handlers; timing routes (still with inline logic) also live here
-- `api/` — `schemas.py` (recipe request/response DTOs), `mappers.py` (DTO ↔ domain)
-- `application/recipe_service.py` — recipe use cases; opens one `UnitOfWork` per use case
-- `domain/` — `models.py` (`Ingredient`, `RecipeStep`, `RecipeVersion`, `Recipe`), `versioning.py` (pure diff logic, baker's percentage calculation)
-- `infrastructure/` — `pool.py` (`DatabasePool`), `unit_of_work.py` (owns connection + transaction), `recipe_repository.py` (recipe SQL, `dict_row`), `mappers.py` (row ↔ domain)
-- `db.py` — `DBConnector`: timing-only raw SQL via psycopg3 (retired in Phase 4)
-- `models.py` — bread-timing Pydantic models only
-- `exceptions.py` — `DatabaseError`, `NotFoundError`, `ConflictError`, `DomainError`
-
-### Key Data Models
-- **Recipe** — versioned; `recipes` table holds current pointer, `recipe_versions` holds all versions, `bakers_percentages` holds calculated percentages per version. Cascade delete removes versions and percentages when a recipe is deleted.
-- **BreadTiming** — a single bread-making session. Fields: `recipe_name` (NOT NULL), `date`, process timestamps (`autolyse_ts`, `mix_ts`, `bulk_ts`, `preshape_ts`, `final_shape_ts`, `fridge_ts`), temperature readings, `stretch_folds` (JSONB), `status` (`in_progress` | `completed`), `notes`.
-
-### API Conventions
-- Recipes: `POST/GET/PATCH/DELETE /recipes/`, `GET /recipes/{id}`
-- Timings: `POST /timings`, `GET /timings`, `GET /timings/{id}`, `PATCH /timings/{id}`, `DELETE /timings/{id}`
-- `GET /recipes/` supports: `search`, `sort_by` (`created_at` | `name`), `sort_direction` (`asc` | `desc`), `ingredient` (ILIKE match against JSONB ingredients array), `category`, `limit`, `offset`
-- `GET /timings` supports: `page`, `limit`, `recipe_name`, `status`, `date`, `search`, `order_by`, `order_direction`
-- All DELETE endpoints require an explicit `conn.commit()` — psycopg3 does not autocommit
-
-### Key Behaviors to Know
-- `BreadTimingCreate.recipe_name` is required (NOT NULL in DB) — validate on the frontend before submit
-- `recipe_versions` and `bakers_percentages` cascade-delete when a recipe is deleted
-- `GET /recipes/` returns `RecipeListItem` (includes `description`, `version`) — no per-recipe follow-up fetch needed
-- `GET /recipes/{id}` returns the full `Recipe` with `current_version` — only needed for View & Edit / Use Template
-- The `recentTimings` state in `BreadAppNew.tsx` is used by the Saved Timings tab (paginated). The dropdown for bread name uses a **separate** `timingDropdownNames` state populated by `loadAllDistinctBreadNames()`
-- psycopg3 connection pool logs `rolling back returned connection` for reads — this is harmless (no autocommit on reads, rollback is a no-op)
-
-### Tests (`tests/`)
-Organized by layer, mirroring `backend/`:
-- `domain/` — pure, no DB/HTTP (`test_domain_models`, `test_baker_percentages`, `test_ingredient_matching`)
-- `application/` — `RecipeService` against `tests/fakes.py` doubles
-- `infrastructure/` — real PostgreSQL (`test_recipe_repository`, `test_recipe_creation_transactions`)
-- `api/` — `TestClient` against the app, plus API mappers and app wiring (`test_recipe_list_api`, `test_timing_api`, `test_recipe_creation_api`, `test_recipe_versioning_api`, `test_recipe_error_handling`)
-- Fixtures in `conftest.py` provide sample ingredients, instructions, and recipe shapes
-- Each test class that writes data should clean up (delete) created records in a `yield` fixture
+- The psycopg pool logs `rolling back returned connection` after reads. Harmless.
