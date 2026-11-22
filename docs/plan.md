@@ -95,6 +95,8 @@ Scope:
 - Repository and application: load and save both parts; new use cases per the spec.
 - API: draft, promote and discard endpoints; `PATCH /recipes/{id}` edits details only;
   `state` list filter.
+- Minimal frontend fix so the recipe screens keep working, plus a bare Promote button
+  (spec, *Decided during review*).
 - Rewrite the recipe-versioning tests for this model.
 - Resolve the spec's **Open** items before or during implementation.
 
