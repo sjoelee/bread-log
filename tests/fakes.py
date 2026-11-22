@@ -5,7 +5,9 @@ from __future__ import annotations
 import copy
 from uuid import UUID
 
+from backend.application.unit_of_work import UnitOfWork
 from backend.domain import models as domain
+from backend.domain.repositories import RecipeRepository
 from backend.exceptions import NotFoundError
 
 
@@ -98,3 +100,9 @@ class FakeRecipeRepository:
     self._recipes.pop(recipe_id, None)
     self._history.pop(recipe_id, None)
     return existed
+
+
+# Never used at runtime: these assignments make pyright check that the fakes
+# still satisfy the interfaces the application layer depends on.
+_repository: RecipeRepository = FakeRecipeRepository()
+_unit_of_work: UnitOfWork = FakeUnitOfWork()

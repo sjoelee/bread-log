@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from .pool import DatabasePool
-from .recipe_repository import RecipeRepository
+from .recipe_repository import PostgresRecipeRepository
 
 logger = logging.getLogger("unit_of_work")
 
@@ -20,10 +20,10 @@ class UnitOfWork:
   def __init__(self, pool: DatabasePool):
     self._pool = pool
     self._conn = None
-    self._recipes: RecipeRepository | None = None
+    self._recipes: PostgresRecipeRepository | None = None
 
   @property
-  def recipes(self) -> RecipeRepository:
+  def recipes(self) -> PostgresRecipeRepository:
     assert self._recipes is not None, (
       "UnitOfWork.recipes accessed outside a 'with' block"
     )
@@ -31,7 +31,7 @@ class UnitOfWork:
 
   def __enter__(self) -> UnitOfWork:
     self._conn = self._pool.getconn()
-    self._recipes = RecipeRepository(self._conn)
+    self._recipes = PostgresRecipeRepository(self._conn)
     return self
 
   def __exit__(self, exc_type, exc, tb) -> None:

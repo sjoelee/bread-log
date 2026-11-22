@@ -7,7 +7,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from backend.exceptions import DatabaseError
-from backend.infrastructure.recipe_repository import RecipeRepository
+from backend.infrastructure.recipe_repository import PostgresRecipeRepository
 from backend.service import app
 
 client = TestClient(app)
@@ -43,7 +43,9 @@ class TestNotFoundMapsTo404:
 
 class TestDatabaseErrorMapsTo500:
   def test_create_surfaces_500_with_database_error_detail(self):
-    with patch.object(RecipeRepository, "add", side_effect=DatabaseError("boom")):
+    with patch.object(
+      PostgresRecipeRepository, "add", side_effect=DatabaseError("boom")
+    ):
       resp = client.post("/recipes/", json=_FULL_BODY)
     assert resp.status_code == 500
     assert "database error" in resp.json()["detail"].lower()

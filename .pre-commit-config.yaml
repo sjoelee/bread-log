@@ -12,8 +12,8 @@ repos:
     hooks:
       - id: pyright
         name: pyright
-        entry: uv run pyright backend
+        entry: uv run pyright backend tests/fakes.py
         language: system
         types: [python]
-        files: ^backend/
+        files: ^(backend/|tests/fakes\.py$)
         pass_filenames: false
