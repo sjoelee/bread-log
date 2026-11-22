@@ -105,7 +105,20 @@ class FakeRecipeRepository:
   def save(self, recipe: domain.Recipe) -> None:
     if recipe.id not in self._recipes:
       raise NotFoundError(f"Recipe {recipe.id} not found")
-    self._recipes[recipe.id] = copy.deepcopy(recipe)
+    stored = copy.deepcopy(recipe)
+    # Like the real repository, a Ready version that is already stored is frozen:
+    # rewriting it is ignored.
+    frozen = next(
+      (
+        v
+        for v in self._ready.get(recipe.id, [])
+        if recipe.latest_ready is not None and v.id == recipe.latest_ready.id
+      ),
+      None,
+    )
+    if frozen is not None:
+      stored.latest_ready = copy.deepcopy(frozen)
+    self._recipes[recipe.id] = stored
     self._record_ready(recipe)
 
   def delete(self, recipe_id: UUID) -> bool:

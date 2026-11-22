@@ -379,7 +379,7 @@ class TestDraftReadyLifecycle:
     save_draft(recipe["id"], ingredients=BASE_INGREDIENTS[:3])
     assert client.delete(f"/recipes/{recipe['id']}").status_code == 204
     assert client.get(f"/recipes/{recipe['id']}").status_code == 404
-    assert get_versions(recipe["id"]) == []
+    assert client.get(f"/recipes/{recipe['id']}/versions").status_code == 404
 
   def test_names_need_not_be_unique(self, recipe_with_cleanup):
     name = f"Tangzhong {uuid4().hex[:6]}"

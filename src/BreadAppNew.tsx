@@ -1031,11 +1031,18 @@ const BreadApp: React.FC = () => {
                           <span className="text-lg">📝</span>
                           <div className="text-left">
                             <span className="font-medium text-green-800">Recipe Preview: {selectedRecipePreview.name}</span>
-                            {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft) && (
-                              <p className="text-sm text-green-600">
-                                {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft).ingredients?.length || 0} ingredients • {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft).instructions?.length || 0} steps
-                              </p>
-                            )}
+                            {(() => {
+                              // A list row carries counts; a full recipe carries the lists.
+                              const part = selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft;
+                              if (!part) return null;
+                              const ingredients = part.ingredients?.length ?? part.ingredient_count ?? 0;
+                              const steps = part.instructions?.length ?? part.step_count ?? 0;
+                              return (
+                                <p className="text-sm text-green-600">
+                                  {ingredients} ingredients • {steps} steps
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                         <svg
@@ -1228,7 +1235,7 @@ const BreadApp: React.FC = () => {
                                     <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
                                       {(() => {
                                         const recipe = savedRecipes.find(r => r.id === timing.recipe_id);
-                                        const version = recipe?.version ?? '?';
+                                        const version = recipe?.latest_ready?.version_number ?? '?';
                                         return `v${version}`;
                                       })()}
                                     </span>

@@ -182,9 +182,11 @@ class RecipeService:
   def get_recipe_versions(self, recipe_id: UUID) -> List[domain.RecipeVersion]:
     """Return the recipe's Ready versions, newest first. The Draft is not history.
 
-    Empty list if the recipe has no Ready versions or does not exist.
+    Empty list if the recipe has no Ready versions. Raises ``NotFoundError`` if
+    the recipe does not exist.
     """
     with self._uow_factory() as uow:
+      self._get(uow, recipe_id)
       return uow.recipes.get_versions(recipe_id)
 
   def get_recipe_version_diff(

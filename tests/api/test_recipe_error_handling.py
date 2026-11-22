@@ -39,6 +39,9 @@ class TestNotFoundMapsTo404:
   def test_discard_draft_of_missing_recipe(self):
     assert client.delete(f"/recipes/{MISSING}/draft").status_code == 404
 
+  def test_history_of_missing_recipe(self):
+    assert client.get(f"/recipes/{MISSING}/versions").status_code == 404
+
   def test_delete_missing_recipe(self):
     assert client.delete(f"/recipes/{MISSING}").status_code == 404
 

@@ -180,7 +180,8 @@ class TestDelete:
     assert svc.delete_recipe(v1.id) is True
     with pytest.raises(NotFoundError):
       svc.get_recipe(v1.id)
-    assert svc.get_recipe_versions(v1.id) == []
+    with pytest.raises(NotFoundError):
+      svc.get_recipe_versions(v1.id)
 
   def test_missing_recipe_raises(self):
     with pytest.raises(NotFoundError):
@@ -191,6 +192,22 @@ class TestQueries:
   def test_get_missing_raises(self):
     with pytest.raises(NotFoundError, match="Recipe not found"):
       _service().get_recipe(uuid4())
+
+  def test_history_of_missing_recipe_raises(self):
+    with pytest.raises(NotFoundError):
+      _service().get_recipe_versions(uuid4())
+
+
+class TestFake:
+  def test_stored_ready_versions_are_frozen_like_the_database(self):
+    repo = FakeRecipeRepository()
+    svc = RecipeService(lambda: FakeUnitOfWork(repo), now=lambda: FIXED_NOW)
+    v1 = svc.promote(_create(svc).id)
+    tampered = svc.get_recipe(v1.id)
+    tampered.latest_ready.release_note = "tampered"
+    repo.save(tampered)
+    assert repo.get(v1.id).latest_ready.release_note is None
+    assert svc.get_recipe_versions(v1.id)[0].release_note is None
 
   def test_diff_draft_against_ready(self):
     svc = _service()

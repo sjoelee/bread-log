@@ -184,13 +184,17 @@ class Recipe:
     return self.draft
 
   def draft_has_changes(self) -> bool:
-    """True if there is a Draft and it differs from the latest Ready version (or
-    there is no Ready version yet)."""
+    """True if there is a Draft and its content differs in any way from the latest
+    Ready version (or there is no Ready version yet).
+
+    Exact comparison: ingredient order, name spelling and every field count. Steps
+    compare by order and text; step ids are identity, not content.
+    """
     if self.draft is None:
       return False
     if self.latest_ready is None:
       return True
-    return _change_summary(self.latest_ready, self.draft)["total_changes"] > 0
+    return _content(self.draft) != _content(self.latest_ready)
 
   def promote(self, *, release_note: Optional[str], now: datetime) -> RecipeVersion:
     """Turn the Draft into the next Ready version and leave no Draft.
@@ -225,6 +229,13 @@ class Recipe:
       raise NoDraftError(f"Recipe {self.id} has no Draft to discard")
     self.draft = None
     return self.latest_ready is None
+
+
+def _content(version: RecipeVersion) -> tuple:
+  return (
+    tuple(version.ingredients),
+    tuple((s.order, s.instruction) for s in version.instructions),
+  )
 
 
 def _change_summary(old: RecipeVersion, new: RecipeVersion) -> dict:
