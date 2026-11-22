@@ -226,7 +226,7 @@ const BreadApp: React.FC = () => {
           type: isRecipe ? 'recipe' : 'recent',
           lastUsed: created_at,
           recipeId: matchingRecipe?.id,
-          recipeVersionId: matchingRecipe?.current_version_id,
+          recipeVersionId: matchingRecipe?.latest_ready?.version_id,
         });
         usedNames.add(name.toLowerCase());
       }
@@ -240,7 +240,7 @@ const BreadApp: React.FC = () => {
           type: 'recipe',
           lastUsed: new Date(recipe.created_at),
           recipeId: recipe.id,
-          recipeVersionId: recipe.current_version_id,
+          recipeVersionId: recipe.latest_ready?.version_id,
         });
         usedNames.add(recipe.name.toLowerCase());
       }
@@ -330,6 +330,27 @@ const BreadApp: React.FC = () => {
       await loadRecentTimings(0, true);
     } catch (err) {
       setTimingsError(`Failed to delete timing: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handlePromoteRecipe = async (recipeId: string, recipeName: string) => {
+    const note = window.prompt(`Promote the Draft of "${recipeName}". Release note (optional):`, '');
+    if (note === null) return;
+    try {
+      const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
+      const res = await fetch(`${apiBaseUrl}/recipes/${recipeId}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ release_note: note.trim() || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || res.statusText);
+      }
+      await loadSavedRecipes();
+    } catch (err) {
+      setRecipeError(`Failed to promote recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -704,29 +725,37 @@ const BreadApp: React.FC = () => {
                     const apiBaseUrl = isDevelopment
                       ? 'http://localhost:8000'
                       : (process.env.REACT_APP_API_URL || '');
-                    const url = isEditing 
-                      ? `${apiBaseUrl}/recipes/${editingRecipeId}`
-                      : `${apiBaseUrl}/recipes/`;
-                    const method = isEditing ? 'PATCH' : 'POST';
+                    const send = (url: string, method: string, body: object) =>
+                      fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                      });
+                    const details = {
+                      name: recipeData.name,
+                      description: recipeData.description,
+                      category: recipeData.category,
+                    };
+                    const content = {
+                      ingredients: recipeData.ingredients,
+                      instructions: recipeData.instructions,
+                    };
 
-                    const response = await fetch(url, {
-                      method: method,
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        name: recipeData.name,
-                        description: recipeData.description,
-                        category: recipeData.category,
-                        ingredients: recipeData.ingredients,
-                        instructions: recipeData.instructions
-                      }),
-                    });
+                    // Editing saves the details, then the Draft's content.
+                    let response: Response;
+                    if (isEditing) {
+                      const recipeUrl = `${apiBaseUrl}/recipes/${editingRecipeId}`;
+                      response = await send(recipeUrl, 'PATCH', details);
+                      if (response.ok) {
+                        response = await send(`${recipeUrl}/draft`, 'PUT', content);
+                      }
+                    } else {
+                      response = await send(`${apiBaseUrl}/recipes/`, 'POST', { ...details, ...content });
+                    }
 
                     if (response.ok) {
                       const result = await response.json();
                       console.log(`Recipe ${isEditing ? 'updated' : 'created'} successfully:`, result);
-                      console.log('Version:', `${result.current_version?.version_number}`);
                       if (result.bakers_percentages) {
                         console.log('Baker\'s percentages calculated:', result.bakers_percentages);
                       }
@@ -766,10 +795,10 @@ const BreadApp: React.FC = () => {
                   }
                 }}
               />
-              {editingRecipeId && editingRecipe?.current_version_id && (
+              {editingRecipeId && editingRecipe?.latest_ready && (
                 <RecipeVersionHistory
                   recipeId={editingRecipeId}
-                  currentVersionId={editingRecipe.current_version_id}
+                  currentVersionId={editingRecipe.latest_ready.id}
                 />
               )}
               </>
@@ -936,13 +965,24 @@ const BreadApp: React.FC = () => {
                                   >
                                     Use Template
                                   </button>
+                                  {recipe.draft && (
+                                    <button
+                                      className="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 text-xs rounded font-medium"
+                                      onClick={() => handlePromoteRecipe(recipe.id, recipe.name)}
+                                    >
+                                      Promote
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                                 {recipe.category || '—'}
                               </td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
-                                {recipe.version != null ? `v${recipe.version}` : '—'}
+                                {recipe.latest_ready ? `v${recipe.latest_ready.version_number}` : ''}
+                                {recipe.draft && (
+                                  <span className="ml-1 text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Draft</span>
+                                )}
                               </td>
                               <td className="px-3 py-2 text-gray-600">
                                 {recipe.flour_ingredient_names || '—'}
@@ -991,9 +1031,9 @@ const BreadApp: React.FC = () => {
                           <span className="text-lg">📝</span>
                           <div className="text-left">
                             <span className="font-medium text-green-800">Recipe Preview: {selectedRecipePreview.name}</span>
-                            {selectedRecipePreview.current_version && (
+                            {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft) && (
                               <p className="text-sm text-green-600">
-                                {selectedRecipePreview.current_version.ingredients?.length || 0} ingredients • {selectedRecipePreview.current_version.instructions?.length || 0} steps
+                                {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft).ingredients?.length || 0} ingredients • {(selectedRecipePreview.latest_ready ?? selectedRecipePreview.draft).instructions?.length || 0} steps
                               </p>
                             )}
                           </div>

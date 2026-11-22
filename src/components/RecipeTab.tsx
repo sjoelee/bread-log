@@ -41,21 +41,24 @@ interface RecipeFormData {
   instructions: RecipeStep[];
 }
 
+interface RecipeVersionResponse {
+  id: string;
+  recipe_id: string;
+  state: 'draft' | 'ready';
+  version_number: number | null;
+  release_note?: string | null;
+  ingredients: Ingredient[];
+  instructions: RecipeStep[];
+  created_at: string;
+}
+
 interface RecipeResponse {
   id: string;
   name: string;
   description?: string;
   category?: string;
-  current_version_id: string;
-  current_version: {
-    id: string;
-    recipe_id: string;
-    version_number: number;
-    description?: string;
-    ingredients: Ingredient[];
-    instructions: RecipeStep[];
-    created_at: string;
-  };
+  latest_ready?: RecipeVersionResponse | null;
+  draft?: RecipeVersionResponse | null;
   bakers_percentages?: BakersPercentages;
   created_at: string;
   updated_at: string;
@@ -80,14 +83,22 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   isTemplate = false,
   onSubmit
 }) => {
+  // The form edits the Draft if there is one, otherwise starts from the latest Ready.
+  const content = recipe ? (recipe.draft ?? recipe.latest_ready) : null;
+  const versionLabel = recipe?.draft
+    ? recipe.latest_ready
+      ? `Draft (from v${recipe.latest_ready.version_number})`
+      : 'Draft (never promoted)'
+    : `v${recipe?.latest_ready?.version_number}`;
+
   const [formData, setFormData] = useState<RecipeFormData>(() => {
-    if (recipe) {
+    if (recipe && content) {
       return {
         name: recipe.name,
         description: recipe.description || '',
         category: recipe.category || '',
-        ingredients: recipe.current_version.ingredients,
-        instructions: recipe.current_version.instructions
+        ingredients: content.ingredients,
+        instructions: content.instructions
       };
     }
 
@@ -368,9 +379,9 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
           <div className="flex justify-between items-center">
             <div>
               <div className="text-sm text-gray-600">Current Version</div>
-              <div className="font-medium">v{recipe.current_version.version_number}</div>
-              {recipe.current_version.description && (
-                <div className="text-sm text-gray-500 mt-1">{recipe.current_version.description}</div>
+              <div className="font-medium">{versionLabel}</div>
+              {!recipe.draft && recipe.latest_ready?.release_note && (
+                <div className="text-sm text-gray-500 mt-1">{recipe.latest_ready.release_note}</div>
               )}
             </div>
             <div className="text-sm text-gray-500">
@@ -384,7 +395,7 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       {success && (
         <div className="text-green-500">
           {successMessage || 'Recipe saved successfully!'}
-          {recipe && !successMessage && ` New version: v${recipe.current_version.version_number}`}
+          {recipe && !successMessage && ' Draft saved.'}
         </div>
       )}
 

@@ -164,14 +164,15 @@ export interface DropdownOption {
   type: 'make' | 'recipe' | 'recent'; // Source type
   lastUsed?: Date;         // When last used in timing entry
   recipeId?: string;       // UUID of the matching recipe, if any
-  recipeVersionId?: string; // UUID of the current version, if any
+  recipeVersionId?: string; // UUID of the latest Ready version, if any
 }
 
 export interface RecipeVersion {
   id: string;
   recipe_id: string;
-  version_number: number;
-  description?: string;
+  state: 'draft' | 'ready';
+  version_number: number;   // history lists Ready versions only, which are numbered
+  release_note?: string | null;
   ingredients: any[];
   instructions: any[];
   created_at: string;
