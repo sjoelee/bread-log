@@ -6,7 +6,7 @@ import { useBreadForm } from './hooks/useBreadForm.ts';
 import { breadTimingApi } from './services/api.ts';
 import { useSavedMakes } from './hooks/useSavedMakes.ts';
 import { CreateTab } from './components/CreateTab.tsx';
-import { RecipeTab } from './components/RecipeTab.tsx';
+import { RecipeTab, RecipeFormData } from './components/RecipeTab.tsx';
 import { StatusBadge } from './components/StatusBadge.tsx';
 import RecipeVersionHistory from './components/RecipeVersionHistory.tsx';
 
@@ -330,6 +330,125 @@ const BreadApp: React.FC = () => {
       await loadRecentTimings(0, true);
     } catch (err) {
       setTimingsError(`Failed to delete timing: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const recipeApiBase = () =>
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:8000' : (process.env.REACT_APP_API_URL || '');
+
+  const sendJson = (url: string, method: string, body?: object) =>
+    fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  const errorDetail = async (response: Response) => {
+    const errorText = await response.text();
+    let message = response.statusText || `HTTP ${response.status}`;
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (Array.isArray(errorJson.detail)) {
+        message = errorJson.detail.map((e: { loc: string[]; msg: string }) =>
+          `${e.loc.slice(1).join('.')}: ${e.msg}`
+        ).join('; ');
+      } else if (typeof errorJson.detail === 'string') {
+        message = errorJson.detail;
+      }
+    } catch {}
+    return message;
+  };
+
+  // Save Draft: create the recipe, or save its details and then its Draft. The form
+  // stays open on the saved recipe. Returns the saved recipe, or null on failure.
+  const saveRecipe = async (recipeData: RecipeFormData): Promise<any | null> => {
+    const isEditing = editingRecipeId !== null;
+    const details = {
+      name: recipeData.name,
+      description: recipeData.description,
+      category: recipeData.category,
+    };
+    const content = {
+      ingredients: recipeData.ingredients,
+      instructions: recipeData.instructions,
+    };
+    try {
+      setRecipeLoading(true);
+      setRecipeError(null);
+      setRecipeSuccess(false);
+      setRecipeSuccessMessage(null);
+
+      let response: Response;
+      if (isEditing) {
+        const recipeUrl = `${recipeApiBase()}/recipes/${editingRecipeId}`;
+        response = await sendJson(recipeUrl, 'PATCH', details);
+        if (response.ok) {
+          response = await sendJson(`${recipeUrl}/draft`, 'PUT', content);
+        }
+      } else {
+        response = await sendJson(`${recipeApiBase()}/recipes/`, 'POST', { ...details, ...content });
+      }
+
+      if (!response.ok) {
+        setRecipeError(`Failed to save draft: ${await errorDetail(response)}`);
+        return null;
+      }
+      const saved = await response.json();
+      setEditingRecipe(saved);
+      setEditingRecipeId(saved.id);
+      setRecipeSuccess(true);
+      setRecipeSuccessMessage('Draft saved.');
+      loadSavedRecipes();
+      return saved;
+    } catch (error) {
+      setRecipeError(`Error saving draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
+    } finally {
+      setRecipeLoading(false);
+    }
+  };
+
+  // Promote from the edit form (ADR 0016): save the form to the Draft, then promote.
+  const promoteFromForm = async (recipeData: RecipeFormData) => {
+    const note = window.prompt(`Promote "${recipeData.name}". Release note (optional):`, '');
+    if (note === null) return;
+    const saved = await saveRecipe(recipeData);
+    if (!saved) return;
+    try {
+      setRecipeLoading(true);
+      const response = await sendJson(
+        `${recipeApiBase()}/recipes/${saved.id}/promote`, 'POST', { release_note: note.trim() || null },
+      );
+      if (!response.ok) {
+        setRecipeSuccess(false);
+        setRecipeError(`Failed to promote: ${await errorDetail(response)}`);
+        return;
+      }
+      const promoted = await response.json();
+      setEditingRecipe(promoted);
+      setRecipeSuccess(true);
+      setRecipeSuccessMessage(`Promoted to v${promoted.latest_ready.version_number}.`);
+      loadSavedRecipes();
+    } catch (error) {
+      setRecipeError(`Error promoting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setRecipeLoading(false);
+    }
+  };
+
+  // Ask the backend whether the form's content differs from the latest Ready
+  // version. Null when it cannot tell (e.g. the form is not valid yet).
+  const checkRecipeChanges = async (
+    content: Pick<RecipeFormData, 'ingredients' | 'instructions'>,
+  ): Promise<boolean | null> => {
+    if (!editingRecipeId) return null;
+    try {
+      const response = await sendJson(`${recipeApiBase()}/recipes/${editingRecipeId}/changes`, 'POST', content);
+      if (!response.ok) return null;
+      return (await response.json()).has_changes;
+    } catch {
+      return null;
     }
   };
 
@@ -711,89 +830,9 @@ const BreadApp: React.FC = () => {
                 successMessage={recipeSuccessMessage}
                 recipe={editingRecipe}
                 isTemplate={!!editingRecipe && !editingRecipeId}
-                onSubmit={async (recipeData) => {
-                  const isEditing = editingRecipeId !== null;
-                  try {
-                    setRecipeLoading(true);
-                    setRecipeError(null);
-                    setRecipeSuccess(false);
-                    setRecipeSuccessMessage(null);
-
-                    const isDevelopment = window.location.hostname === 'localhost' ||
-                      window.location.hostname === '127.0.0.1';
-
-                    const apiBaseUrl = isDevelopment
-                      ? 'http://localhost:8000'
-                      : (process.env.REACT_APP_API_URL || '');
-                    const send = (url: string, method: string, body: object) =>
-                      fetch(url, {
-                        method,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body),
-                      });
-                    const details = {
-                      name: recipeData.name,
-                      description: recipeData.description,
-                      category: recipeData.category,
-                    };
-                    const content = {
-                      ingredients: recipeData.ingredients,
-                      instructions: recipeData.instructions,
-                    };
-
-                    // Editing saves the details, then the Draft's content.
-                    let response: Response;
-                    if (isEditing) {
-                      const recipeUrl = `${apiBaseUrl}/recipes/${editingRecipeId}`;
-                      response = await send(recipeUrl, 'PATCH', details);
-                      if (response.ok) {
-                        response = await send(`${recipeUrl}/draft`, 'PUT', content);
-                      }
-                    } else {
-                      response = await send(`${apiBaseUrl}/recipes/`, 'POST', { ...details, ...content });
-                    }
-
-                    if (response.ok) {
-                      const result = await response.json();
-                      console.log(`Recipe ${isEditing ? 'updated' : 'created'} successfully:`, result);
-                      if (result.bakers_percentages) {
-                        console.log('Baker\'s percentages calculated:', result.bakers_percentages);
-                      }
-
-                      setRecipeSuccess(true);
-                      setRecipeSuccessMessage(null);
-                      
-                      // Clear editing state after successful save
-                      if (isEditing) {
-                        setEditingRecipe(null);
-                        setEditingRecipeId(null);
-                      }
-                      
-                      // Reload recipes list so changes appear in Saved tab
-                      loadSavedRecipes();
-                    } else {
-                      const errorText = await response.text();
-                      console.error(`Failed to ${isEditing ? 'update' : 'create'} recipe:`, response.statusText, errorText);
-                      let errorMessage = response.statusText || `HTTP ${response.status}`;
-                      try {
-                        const errorJson = JSON.parse(errorText);
-                        if (Array.isArray(errorJson.detail)) {
-                          errorMessage = errorJson.detail.map((e: { loc: string[]; msg: string }) =>
-                            `${e.loc.slice(1).join('.')}: ${e.msg}`
-                          ).join('; ');
-                        } else if (typeof errorJson.detail === 'string') {
-                          errorMessage = errorJson.detail;
-                        }
-                      } catch {}
-                      setRecipeError(`Failed to ${isEditing ? 'update' : 'create'} recipe: ${errorMessage}`);
-                    }
-                  } catch (error) {
-                    console.error(`Error ${isEditing ? 'updating' : 'creating'} recipe:`, error);
-                    setRecipeError(`Error ${isEditing ? 'updating' : 'creating'} recipe: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                  } finally {
-                    setRecipeLoading(false);
-                  }
-                }}
+                onSubmit={(recipeData) => { saveRecipe(recipeData); }}
+                onPromote={editingRecipeId ? promoteFromForm : undefined}
+                checkChanges={editingRecipeId ? checkRecipeChanges : undefined}
               />
               {editingRecipeId && editingRecipe?.latest_ready && (
                 <RecipeVersionHistory

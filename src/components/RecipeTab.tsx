@@ -33,7 +33,7 @@ interface BakersPercentages {
   }>;
 }
 
-interface RecipeFormData {
+export interface RecipeFormData {
   name: string;
   description?: string;
   category?: string;
@@ -72,6 +72,10 @@ interface RecipeTabProps {
   recipe?: RecipeResponse | null;
   isTemplate?: boolean;
   onSubmit?: (data: RecipeFormData) => void;
+  // Given for an existing recipe only: shows Promote (saves first, then promotes).
+  onPromote?: (data: RecipeFormData) => void;
+  // Whether this content differs from the latest Ready version; null if unknown.
+  checkChanges?: (content: Pick<RecipeFormData, 'ingredients' | 'instructions'>) => Promise<boolean | null>;
 }
 
 export const RecipeTab: React.FC<RecipeTabProps> = ({
@@ -81,7 +85,9 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
   successMessage = null,
   recipe = null,
   isTemplate = false,
-  onSubmit
+  onSubmit,
+  onPromote,
+  checkChanges,
 }) => {
   // The form edits the Draft if there is one, otherwise starts from the latest Ready.
   const content = recipe ? (recipe.draft ?? recipe.latest_ready) : null;
@@ -131,6 +137,43 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       try { localStorage.removeItem(RECIPE_DRAFT_KEY); } catch {}
     }
   }, [success]);
+
+  // After a save or promote the parent passes the stored recipe back; reload the
+  // form from it so server-assigned step ids are kept on the next save.
+  useEffect(() => {
+    if (recipe && content) {
+      setFormData({
+        name: recipe.name,
+        description: recipe.description || '',
+        category: recipe.category || '',
+        ingredients: content.ingredients,
+        instructions: content.instructions,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe]);
+
+  // Promote is greyed out while the backend says the form's content equals the
+  // latest Ready version. Checked shortly after the content stops changing.
+  const [hasChanges, setHasChanges] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!onPromote || !checkChanges) return;
+    if (!recipe?.latest_ready) {
+      setHasChanges(true);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await checkChanges({
+        ingredients: formData.ingredients,
+        instructions: formData.instructions,
+      });
+      if (!cancelled) setHasChanges(result);
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.ingredients, formData.instructions, recipe, onPromote]);
+  const promoteDisabled = loading || hasChanges === false;
 
   const handleInputChange = (field: keyof RecipeFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -395,18 +438,28 @@ export const RecipeTab: React.FC<RecipeTabProps> = ({
       {success && (
         <div className="text-green-500">
           {successMessage || 'Recipe saved successfully!'}
-          {recipe && !successMessage && ' Draft saved.'}
         </div>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-3">
         <button
           type="submit"
           disabled={loading}
           className="bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded"
         >
-          {loading ? 'Saving...' : (recipe && !isTemplate) ? 'Save Changes' : 'Create Recipe'}
+          {loading ? 'Saving...' : 'Save Draft'}
         </button>
+        {onPromote && (
+          <button
+            type="button"
+            disabled={promoteDisabled}
+            title={hasChanges === false ? 'No changes since the latest Ready version' : undefined}
+            onClick={() => onPromote(formData)}
+            className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Promote
+          </button>
+        )}
       </div>
     </form>
   );
