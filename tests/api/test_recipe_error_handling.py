@@ -26,15 +26,25 @@ class TestNotFoundMapsTo404:
     assert client.get(f"/recipes/{MISSING}").status_code == 404
 
   def test_patch_missing_recipe(self):
-    resp = client.patch(f"/recipes/{MISSING}", json=_FULL_BODY)
+    resp = client.patch(f"/recipes/{MISSING}", json={"name": "x"})
     assert resp.status_code == 404
+
+  def test_save_draft_on_missing_recipe(self):
+    body = {k: _FULL_BODY[k] for k in ("ingredients", "instructions")}
+    assert client.put(f"/recipes/{MISSING}/draft", json=body).status_code == 404
+
+  def test_promote_missing_recipe(self):
+    assert client.post(f"/recipes/{MISSING}/promote").status_code == 404
+
+  def test_discard_draft_of_missing_recipe(self):
+    assert client.delete(f"/recipes/{MISSING}/draft").status_code == 404
 
   def test_delete_missing_recipe(self):
     assert client.delete(f"/recipes/{MISSING}").status_code == 404
 
-  def test_add_version_to_missing_recipe(self):
+  def test_removed_add_version_endpoint(self):
     resp = client.post(f"/recipes/{MISSING}/versions", json=_FULL_BODY)
-    assert resp.status_code == 404
+    assert resp.status_code == 405
 
   def test_diff_unknown_versions(self):
     resp = client.get(f"/recipes/{MISSING}/versions/{uuid4()}/diff/{uuid4()}")

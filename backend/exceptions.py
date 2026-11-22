@@ -32,3 +32,11 @@ class ConflictError(Exception):
 class DomainError(Exception):
   """Raised when a domain invariant is violated. Mapped to HTTP 422. Base class
   for the composition-feature errors (SubRecipeNotReady, CircularDependency, …)."""
+
+
+class NoDraftError(DomainError):
+  """Raised when promoting or discarding a recipe that has no Draft."""
+
+
+class DraftUnchangedError(DomainError):
+  """Raised when promoting a Draft whose content equals the latest Ready version."""

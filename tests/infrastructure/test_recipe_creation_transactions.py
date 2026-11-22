@@ -76,9 +76,10 @@ class TestRecipeTransactionIntegrity:
 
     # Verify all data was created
     assert data["name"] == "Complete Transaction Test"
-    assert data["current_version"]["version_number"] == 1
-    assert len(data["current_version"]["ingredients"]) == 3
-    assert len(data["current_version"]["instructions"]) == 2
+    assert data["latest_ready"] is None
+    assert data["draft"]["version_number"] is None
+    assert len(data["draft"]["ingredients"]) == 3
+    assert len(data["draft"]["instructions"]) == 2
 
   def test_connection_recovery_after_failed_transaction(self):
     """Test that failed transactions don't break subsequent requests"""
@@ -252,21 +253,12 @@ class TestUseCaseAtomicity:
     assert resp.status_code == 201, resp.text
     return resp.json()
 
-  def test_update_write_is_rolled_back_when_a_later_step_fails(self):
+  def test_promotion_is_rolled_back_when_a_later_step_fails(self):
     created = self._create()
     recipe_id = created["id"]
     try:
-      v2_body = {
-        **self.BASE,
-        "name": "Renamed v2",
-        "ingredients": [
-          {"name": "rye", "amount": 800, "unit": "grams", "type": "flour"}
-        ],
-        "instructions": [{"order": 1, "instruction": "Fold"}],
-      }
-
-      # save() runs for real (INSERT version + UPDATE recipe), then blows up
-      # before the use case returns. The UnitOfWork must roll both statements back.
+      # save() runs for real (Draft row turns Ready, pointer moves), then blows
+      # up before the use case returns. The UnitOfWork must roll it all back.
       real_save = PostgresRecipeRepository.save
 
       def save_then_fail(self, recipe):
@@ -274,19 +266,14 @@ class TestUseCaseAtomicity:
         raise DatabaseError("failure after the write")
 
       with patch.object(PostgresRecipeRepository, "save", save_then_fail):
-        resp = client.patch(f"/recipes/{recipe_id}", json=v2_body)
+        resp = client.post(f"/recipes/{recipe_id}/promote", json={})
       assert resp.status_code == 500
 
-      # Nothing from the failed update survived.
+      # Nothing from the failed promotion survived.
       got = client.get(f"/recipes/{recipe_id}").json()
-      assert got["name"] == created["name"]
-      assert got["current_version"]["version_number"] == 1
-      assert [i["name"] for i in got["current_version"]["ingredients"]] == [
-        "bread flour"
-      ]
-
-      versions = client.get(f"/recipes/{recipe_id}/versions").json()
-      assert [v["version_number"] for v in versions] == [1]
+      assert got["latest_ready"] is None
+      assert got["draft"]["id"] == created["draft"]["id"]
+      assert client.get(f"/recipes/{recipe_id}/versions").json() == []
     finally:
       client.delete(f"/recipes/{recipe_id}")
 

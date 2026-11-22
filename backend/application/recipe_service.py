@@ -45,10 +45,9 @@ class RecipeService:
     description: Optional[str] = None,
     category: Optional[str] = None,
   ) -> domain.Recipe:
-    """Create a recipe and its first version (``version_number`` 1).
+    """Create a recipe whose content is a Draft (no Ready version yet).
 
-    Fills in a UUID for any step that lacks one, persists the recipe, and
-    returns the freshly reloaded full recipe.
+    Fills in a UUID for any step that lacks one and returns the reloaded recipe.
     """
     recipe = domain.Recipe.create(
       name=name,
@@ -62,74 +61,67 @@ class RecipeService:
       uow.recipes.add(recipe)
       return self._reload(uow, recipe.id)
 
-  def update_recipe_full(
+  def update_details(
     self,
     recipe_id: UUID,
     *,
     name: str,
-    ingredients: List[domain.Ingredient],
-    instructions: List[domain.RecipeStep],
     description: Optional[str] = None,
     category: Optional[str] = None,
   ) -> domain.Recipe:
-    """Replace a recipe wholesale from full content.
-
-    Adds a new version (with a computed ``change_summary`` against the previous
-    one) and updates the recipe's ``name``/``description``/``category``. The
-    read, the version bump, and the metadata update are one transaction.
-    Raises ``NotFoundError`` if the recipe does not exist.
-    """
+    """Change the recipe's name, notes and category. Versions are untouched.
+    Raises ``NotFoundError`` if the recipe does not exist."""
     with self._uow_factory() as uow:
-      recipe = uow.recipes.get(recipe_id)
-      if recipe is None:
-        raise NotFoundError(f"Recipe with ID {recipe_id} not found")
-
-      new_steps = versioning.assign_step_ids(instructions)
-
-      recipe.add_version(
-        ingredients=ingredients,
-        instructions=new_steps,
-        now=self._now(),
-        description=description,
-        change_summary=self._change_summary(
-          recipe.current_version, ingredients, new_steps
-        ),
+      recipe = self._get(uow, recipe_id)
+      recipe.update_details(
+        name=name, description=description, category=category, now=self._now()
       )
-      recipe.name = name
-      recipe.description = description
-      recipe.category = category
       uow.recipes.save(recipe)
       return self._reload(uow, recipe_id)
 
-  def create_recipe_version(
+  def save_draft(
     self,
     recipe_id: UUID,
+    *,
     ingredients: List[domain.Ingredient],
     instructions: List[domain.RecipeStep],
-    description: Optional[str] = None,
   ) -> domain.Recipe:
-    """Add a new version to an existing recipe, leaving its name/category alone.
+    """Replace the Draft's content, creating the Draft if there is none.
+    Raises ``NotFoundError`` if the recipe does not exist."""
+    with self._uow_factory() as uow:
+      recipe = self._get(uow, recipe_id)
+      recipe.save_draft(
+        ingredients=ingredients,
+        instructions=versioning.assign_step_ids(instructions),
+        now=self._now(),
+      )
+      uow.recipes.save(recipe)
+      return self._reload(uow, recipe_id)
 
-    Like ``update_recipe_full`` but scoped to version content only.
-    ``version_number`` always increments by one. Raises ``NotFoundError`` if the
-    recipe does not exist.
+  def promote(
+    self, recipe_id: UUID, *, release_note: Optional[str] = None
+  ) -> domain.Recipe:
+    """Turn the Draft into the next Ready version.
+
+    Raises ``NotFoundError`` if the recipe does not exist, ``NoDraftError`` if it
+    has no Draft, and ``DraftUnchangedError`` if the Draft equals the latest
+    Ready version.
     """
     with self._uow_factory() as uow:
-      recipe = uow.recipes.get(recipe_id)
-      if recipe is None:
-        raise NotFoundError(f"Recipe {recipe_id} not found")
+      recipe = self._get(uow, recipe_id)
+      recipe.promote(release_note=release_note, now=self._now())
+      uow.recipes.save(recipe)
+      return self._reload(uow, recipe_id)
 
-      new_steps = versioning.assign_step_ids(instructions)
-
-      recipe.add_version(
-        ingredients=ingredients,
-        instructions=new_steps,
-        now=self._now(),
-        description=description,
-        change_summary=self._change_summary(
-          recipe.current_version, ingredients, new_steps
-        ),
-      )
+  def discard_draft(self, recipe_id: UUID) -> Optional[domain.Recipe]:
+    """Throw away the Draft. Returns the recipe, or ``None`` if it had no Ready
+    version and was therefore deleted. Raises ``NotFoundError`` if the recipe
+    does not exist and ``NoDraftError`` if it has no Draft."""
+    with self._uow_factory() as uow:
+      recipe = self._get(uow, recipe_id)
+      if recipe.discard_draft():
+        uow.recipes.delete(recipe_id)
+        return None
       uow.recipes.save(recipe)
       return self._reload(uow, recipe_id)
 
@@ -146,7 +138,7 @@ class RecipeService:
   # --- queries -----------------------------------------------------------
 
   def get_recipe(self, recipe_id: UUID) -> domain.Recipe:
-    """Return the full recipe (metadata + current version).
+    """Return the full recipe: its fields, latest Ready version and Draft.
 
     Raises ``NotFoundError`` if the recipe does not exist.
     """
@@ -165,11 +157,14 @@ class RecipeService:
     sort_by: str = "created_at",
     sort_direction: str = "desc",
     ingredient: Optional[str] = None,
+    state: str = "any",
   ) -> List[domain.RecipeSummary]:
     """Return a page of lightweight summaries (no full version content).
 
-    ``search`` matches the name; ``ingredient`` matches an ingredient name in the
-    current version; ``category`` is an exact match. ``sort_by`` is ``created_at``
+    ``search`` matches the name; ``category`` is an exact match. ``state`` is
+    ``any``, ``draft`` (recipes with a Draft) or ``ready`` (recipes with a Ready
+    version); ``ingredient`` matches an ingredient name in that part, or in either
+    the Draft or the latest Ready version for ``any``. ``sort_by`` is ``created_at``
     or ``name``, ``sort_direction`` is ``asc`` or ``desc``.
     """
     with self._uow_factory() as uow:
@@ -177,6 +172,7 @@ class RecipeService:
         category=category,
         search=search,
         ingredient=ingredient,
+        state=state,
         sort_by=sort_by,
         sort_direction=sort_direction,
         limit=limit,
@@ -184,9 +180,9 @@ class RecipeService:
       )
 
   def get_recipe_versions(self, recipe_id: UUID) -> List[domain.RecipeVersion]:
-    """Return every version of the recipe, newest ``version_number`` first.
+    """Return the recipe's Ready versions, newest first. The Draft is not history.
 
-    Empty list if the recipe has no versions or does not exist.
+    Empty list if the recipe has no Ready versions or does not exist.
     """
     with self._uow_factory() as uow:
       return uow.recipes.get_versions(recipe_id)
@@ -197,7 +193,7 @@ class RecipeService:
     """Compare two versions and return their ingredient and step changes.
 
     Both versions must exist and belong to ``recipe_id`` — otherwise
-    ``NotFoundError``. The result is a plain dict (``from_version``, ``to_version``,
+    ``NotFoundError``. Either may be the Draft. The result is a plain dict (``from_version``, ``to_version``,
     ``ingredient_changes``, ``step_changes``, ``created_at``) shaped for the API.
     """
     with self._uow_factory() as uow:
@@ -210,8 +206,8 @@ class RecipeService:
           "One or both versions do not belong to the specified recipe"
         )
       return {
-        "from_version": str(v1.version_number),
-        "to_version": str(v2.version_number),
+        "from_version": _label(v1),
+        "to_version": _label(v2),
         "ingredient_changes": versioning.compare_ingredients(
           [asdict(i) for i in v1.ingredients], [asdict(i) for i in v2.ingredients]
         ),
@@ -231,21 +227,13 @@ class RecipeService:
       raise ValueError(f"Failed to load recipe {recipe_id}")
     return recipe
 
-  def _change_summary(
-    self,
-    previous: domain.RecipeVersion,
-    new_ingredients: List[domain.Ingredient],
-    new_steps: List[domain.RecipeStep],
-  ) -> dict:
-    """Diff the proposed content against ``previous`` and return the summary
-    counts stored on the new version's ``change_summary``."""
-    return versioning.create_version_summary(
-      versioning.compare_ingredients(
-        [asdict(i) for i in previous.ingredients],
-        [asdict(i) for i in new_ingredients],
-      ),
-      versioning.compare_instructions(
-        [asdict(s) for s in previous.instructions],
-        [asdict(s) for s in new_steps],
-      ),
-    )
+  def _get(self, uow: UnitOfWork, recipe_id: UUID) -> domain.Recipe:
+    recipe = uow.recipes.get(recipe_id)
+    if recipe is None:
+      raise NotFoundError(f"Recipe with ID {recipe_id} not found")
+    return recipe
+
+
+def _label(version: domain.RecipeVersion) -> str:
+  """``"draft"`` for the Draft, else the version number."""
+  return "draft" if version.version_number is None else str(version.version_number)

@@ -18,7 +18,9 @@ class RecipeRepository(Protocol):
 
   def get_version(self, version_id: UUID) -> Optional[domain.RecipeVersion]: ...
 
-  def get_versions(self, recipe_id: UUID) -> List[domain.RecipeVersion]: ...
+  def get_versions(self, recipe_id: UUID) -> List[domain.RecipeVersion]:
+    """Ready versions only, newest first."""
+    ...
 
   def list(
     self,
@@ -26,6 +28,7 @@ class RecipeRepository(Protocol):
     category: Optional[str] = None,
     search: Optional[str] = None,
     ingredient: Optional[str] = None,
+    state: str = "any",
     sort_by: str = "created_at",
     sort_direction: str = "desc",
     limit: int = 50,
@@ -34,6 +37,9 @@ class RecipeRepository(Protocol):
 
   def add(self, recipe: domain.Recipe) -> None: ...
 
-  def save(self, recipe: domain.Recipe) -> None: ...
+  def save(self, recipe: domain.Recipe) -> None:
+    """Persist the recipe fields, its latest Ready version and its Draft (or the
+    Draft's absence)."""
+    ...
 
   def delete(self, recipe_id: UUID) -> bool: ...

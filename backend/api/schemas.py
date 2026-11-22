@@ -48,33 +48,54 @@ class RecipeStep(BaseModel):
     return v.strip()
 
 
+_NAME = Field(..., min_length=1, max_length=255, description="Recipe name is required")
+_NOTES = Field(None, max_length=1000)
+_CATEGORY = Field(None, pattern=r"^(sourdough|enriched|lean|sweet|other)$")
+_INGREDIENTS = Field(
+  ..., min_length=1, description="At least one ingredient is required"
+)
+_INSTRUCTIONS = Field(
+  ..., min_length=1, description="At least one instruction is required"
+)
+
+
+def _name_not_empty(v):
+  if not v or not v.strip():
+    raise ValueError("Recipe name cannot be empty")
+  return v.strip()
+
+
 class RecipeRequest(BaseModel):
-  name: str = Field(
-    ..., min_length=1, max_length=255, description="Recipe name is required"
-  )
-  description: Optional[str] = Field(None, max_length=1000)
-  category: Optional[str] = Field(
-    None, pattern=r"^(sourdough|enriched|lean|sweet|other)$"
-  )
-  ingredients: List[Ingredient] = Field(
-    ..., min_length=1, description="At least one ingredient is required"
-  )
-  instructions: List[RecipeStep] = Field(
-    ..., min_length=1, description="At least one instruction is required"
-  )
+  """Create a recipe: its details plus the content of its first Draft."""
 
-  @field_validator("name")
-  @classmethod
-  def name_not_empty(cls, v):
-    if not v or not v.strip():
-      raise ValueError("Recipe name cannot be empty")
-    return v.strip()
+  name: str = _NAME
+  description: Optional[str] = _NOTES
+  category: Optional[str] = _CATEGORY
+  ingredients: List[Ingredient] = _INGREDIENTS
+  instructions: List[RecipeStep] = _INSTRUCTIONS
+
+  _check_name = field_validator("name")(_name_not_empty)
 
 
-class RecipeVersionRequest(BaseModel):
-  ingredients: List[Ingredient]
-  instructions: List[RecipeStep]
-  description: Optional[str] = None
+class RecipeDetailsRequest(BaseModel):
+  """Edit the recipe-level fields. ``description`` holds the notes."""
+
+  name: str = _NAME
+  description: Optional[str] = _NOTES
+  category: Optional[str] = _CATEGORY
+
+  _check_name = field_validator("name")(_name_not_empty)
+
+
+class DraftRequest(BaseModel):
+  """Save the Draft's content."""
+
+  ingredients: List[Ingredient] = _INGREDIENTS
+  instructions: List[RecipeStep] = _INSTRUCTIONS
+
+
+class PromoteRequest(BaseModel):
+  release_note: Optional[str] = Field(None, max_length=1000)
 
 
 # --- Response DTOs -----------------------------------------------------------
@@ -83,8 +104,9 @@ class RecipeVersionRequest(BaseModel):
 class RecipeVersion(BaseModel):
   id: UUID
   recipe_id: UUID
-  version_number: int
-  description: Optional[str] = None
+  state: str
+  version_number: Optional[int] = None
+  release_note: Optional[str] = None
   ingredients: List[Ingredient]
   instructions: List[RecipeStep]
   created_at: datetime
@@ -92,14 +114,24 @@ class RecipeVersion(BaseModel):
 
 
 class Recipe(BaseModel):
+  """A recipe with its latest Ready version and its Draft, each present only if
+  it exists (at least one always does)."""
+
   id: UUID
   name: str
   description: Optional[str] = None
   category: Optional[str] = None
-  current_version_id: UUID
-  current_version: RecipeVersion
   created_at: datetime
   updated_at: datetime
+  latest_ready: Optional[RecipeVersion] = None
+  draft: Optional[RecipeVersion] = None
+
+
+class VersionSummary(BaseModel):
+  version_id: UUID
+  version_number: Optional[int] = None
+  ingredient_count: int
+  step_count: int
 
 
 class RecipeListItem(BaseModel):
@@ -107,15 +139,7 @@ class RecipeListItem(BaseModel):
   name: str
   description: Optional[str] = None
   category: Optional[str] = None
-  version: str
-  current_version_id: UUID
-  ingredient_count: int
-  step_count: int
   created_at: datetime
   updated_at: datetime
-
-
-class RecipeCreateResponse(BaseModel):
-  recipe: Recipe
-  message: str
-  success: bool = True
+  latest_ready: Optional[VersionSummary] = None
+  draft: Optional[VersionSummary] = None

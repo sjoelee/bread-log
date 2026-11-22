@@ -63,17 +63,18 @@ class TestRecipeCreationHappyPath:
     assert data["name"] == "Simple Sourdough"
     assert data["description"] == "Basic country bread"
     assert data["category"] == "sourdough"
-    assert data["current_version"]["version_number"] == 1
+    assert data["draft"]["version_number"] is None
+    assert data["latest_ready"] is None
 
     # Verify ingredients stored correctly
-    ingredients = data["current_version"]["ingredients"]
+    ingredients = data["draft"]["ingredients"]
     assert len(ingredients) == 3
     assert ingredients[0]["name"] == "bread flour"
     assert ingredients[0]["amount"] == 1000
     assert ingredients[0]["type"] == "flour"
 
     # Verify instructions stored correctly
-    instructions = data["current_version"]["instructions"]
+    instructions = data["draft"]["instructions"]
     assert len(instructions) == 2
     assert instructions[0]["order"] == 1
     assert "Autolyse" in instructions[0]["instruction"]
@@ -101,7 +102,8 @@ class TestRecipeCreationHappyPath:
     assert data["name"] == "Simple Bread"
     assert data["description"] is None
     assert data["category"] is None
-    assert data["current_version"]["version_number"] == 1
+    assert data["draft"]["version_number"] is None
+    assert data["latest_ready"] is None
 
 
 class TestRecipeValidation:
@@ -216,8 +218,8 @@ class TestIDGeneration:
     assert response.status_code == 201
     data = response.json()
 
-    ingredient = data["current_version"]["ingredients"][0]
-    instruction = data["current_version"]["instructions"][0]
+    ingredient = data["draft"]["ingredients"][0]
+    instruction = data["draft"]["instructions"][0]
 
     assert "id" not in ingredient
     assert "id" in instruction
@@ -244,7 +246,7 @@ class TestIDGeneration:
     assert response.status_code == 201
     data = response.json()
 
-    assert data["current_version"]["instructions"][0]["id"] == "custom_step_id"
+    assert data["draft"]["instructions"][0]["id"] == "custom_step_id"
 
 
 class TestEdgeCases:
@@ -277,8 +279,8 @@ class TestEdgeCases:
     assert response.status_code == 201
     data = response.json()
 
-    assert len(data["current_version"]["ingredients"]) == 20
-    assert len(data["current_version"]["instructions"]) == 50
+    assert len(data["draft"]["ingredients"]) == 20
+    assert len(data["draft"]["instructions"]) == 50
 
 
 # Test fixtures for common data

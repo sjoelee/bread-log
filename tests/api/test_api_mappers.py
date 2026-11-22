@@ -53,20 +53,23 @@ class TestDtoToDomain:
 
 
 class TestDomainToDto:
-  def test_recipe_to_dto_shape(self):
+  def test_new_recipe_has_only_a_draft(self):
     recipe = _domain_recipe()
     dto = mappers.recipe_to_dto(recipe)
 
     assert isinstance(dto, schemas.Recipe)
     assert dto.name == "Country Sourdough"
     assert dto.category == "sourdough"
-    assert dto.current_version_id == recipe.current_version.id
-    assert dto.current_version.version_number == 1
-    assert [i.name for i in dto.current_version.ingredients] == ["bread flour", "water"]
+    assert dto.latest_ready is None
+    assert dto.draft.id == recipe.draft.id
+    assert dto.draft.state == "draft"
+    assert dto.draft.version_number is None
+    assert [i.name for i in dto.draft.ingredients] == ["bread flour", "water"]
 
-  def test_version_after_add_version(self):
+  def test_promoted_recipe_with_a_new_draft_has_both_parts(self):
     recipe = _domain_recipe()
-    recipe.add_version(
+    recipe.promote(release_note="first", now=NOW)
+    recipe.save_draft(
       ingredients=[
         domain.Ingredient(name="rye", amount=200, unit="grams", type="flour")
       ],
@@ -74,8 +77,9 @@ class TestDomainToDto:
       now=NOW,
     )
     dto = mappers.recipe_to_dto(recipe)
-    assert dto.current_version.version_number == 2
-    assert [i.name for i in dto.current_version.ingredients] == ["rye"]
+    assert dto.latest_ready.version_number == 1
+    assert dto.latest_ready.release_note == "first"
+    assert [i.name for i in dto.draft.ingredients] == ["rye"]
 
   def test_none_type_ingredient_cannot_be_serialized(self):
     # documents the known gap: domain allows type=None, the DTO does not

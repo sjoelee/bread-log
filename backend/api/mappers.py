@@ -7,7 +7,7 @@ ingredient with ``type is None`` raises at DTO validation.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from . import schemas
 from ..domain import models as domain
@@ -59,8 +59,9 @@ def version_to_dto(version: domain.RecipeVersion) -> schemas.RecipeVersion:
   return schemas.RecipeVersion(
     id=version.id,
     recipe_id=version.recipe_id,
+    state=version.state,
     version_number=version.version_number,
-    description=version.description,
+    release_note=version.release_note,
     ingredients=[ingredient_to_dto(i) for i in version.ingredients],
     instructions=[step_to_dto(s) for s in version.instructions],
     created_at=version.created_at,
@@ -74,10 +75,23 @@ def recipe_to_dto(recipe: domain.Recipe) -> schemas.Recipe:
     name=recipe.name,
     description=recipe.description,
     category=recipe.category,
-    current_version_id=recipe.current_version.id,
-    current_version=version_to_dto(recipe.current_version),
     created_at=recipe.created_at,
     updated_at=recipe.updated_at,
+    latest_ready=version_to_dto(recipe.latest_ready) if recipe.latest_ready else None,
+    draft=version_to_dto(recipe.draft) if recipe.draft else None,
+  )
+
+
+def _version_summary_to_dto(
+  summary: Optional[domain.VersionSummary],
+) -> Optional[schemas.VersionSummary]:
+  if summary is None:
+    return None
+  return schemas.VersionSummary(
+    version_id=summary.version_id,
+    version_number=summary.version_number,
+    ingredient_count=summary.ingredient_count,
+    step_count=summary.step_count,
   )
 
 
@@ -87,10 +101,8 @@ def summary_to_dto(summary: domain.RecipeSummary) -> schemas.RecipeListItem:
     name=summary.name,
     description=summary.description,
     category=summary.category,
-    version=str(summary.version_number) if summary.version_number is not None else "1",
-    current_version_id=summary.current_version_id,
-    ingredient_count=summary.ingredient_count,
-    step_count=summary.step_count,
     created_at=summary.created_at,
     updated_at=summary.updated_at,
+    latest_ready=_version_summary_to_dto(summary.latest_ready),
+    draft=_version_summary_to_dto(summary.draft),
   )

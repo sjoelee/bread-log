@@ -9,12 +9,13 @@ from .infrastructure.pool import DatabasePool
 from .exceptions import ConflictError, DatabaseError, DomainError, NotFoundError
 from .api import mappers
 from .api.schemas import (
+  DraftRequest,
+  PromoteRequest,
   Recipe,
-  RecipeCreateResponse,
+  RecipeDetailsRequest,
   RecipeListItem,
   RecipeRequest,
   RecipeVersion,
-  RecipeVersionRequest,
 )
 from .models import (
   BreadTiming,
@@ -22,7 +23,7 @@ from .models import (
   BreadTimingUpdate,
   BreadTimingListResponse,
 )
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 import logging
@@ -112,7 +113,7 @@ def create_recipe(
   recipe: RecipeRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Create a new versioned recipe with initial version 1."""
+  """Create a recipe. Its content starts as a Draft; it has no Ready version."""
   created = recipe_service.create_recipe(
     name=recipe.name,
     ingredients=mappers.ingredients_to_domain(recipe.ingredients),
@@ -132,9 +133,11 @@ def list_recipes(
   sort_by: str = "created_at",
   sort_direction: str = "desc",
   ingredient: Optional[str] = None,
+  state: Literal["any", "draft", "ready"] = "any",
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """List recipes with pagination, optional category/ingredient filter, search, and sorting."""
+  """List recipes with pagination, filters, search, and sorting. ``state`` limits
+  the list (and the ``ingredient`` match) to the Draft or the latest Ready version."""
   summaries = recipe_service.list_recipes(
     category=category,
     limit=limit,
@@ -143,6 +146,7 @@ def list_recipes(
     sort_by=sort_by,
     sort_direction=sort_direction,
     ingredient=ingredient,
+    state=state,
   )
   return [mappers.summary_to_dto(s) for s in summaries]
 
@@ -152,62 +156,75 @@ def get_recipe(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Get a versioned recipe by ID with its current version."""
+  """Get a recipe with its latest Ready version and its Draft."""
   return mappers.recipe_to_dto(recipe_service.get_recipe(recipe_id))
 
 
-@app.patch("/recipes/{recipe_id}", response_model=RecipeCreateResponse)
-def update_recipe(
+@app.patch("/recipes/{recipe_id}", response_model=Recipe)
+def update_recipe_details(
   recipe_id: UUID,
-  recipe_data: RecipeRequest,
+  details: RecipeDetailsRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Update a recipe: add a new version and move the current-version pointer.
-
-  Takes the same complete JSON body as recipe creation.
-  """
-  updated_recipe = recipe_service.update_recipe_full(
+  """Edit the recipe's name, notes (``description``) and category."""
+  updated = recipe_service.update_details(
     recipe_id,
-    name=recipe_data.name,
-    ingredients=mappers.ingredients_to_domain(recipe_data.ingredients),
-    instructions=mappers.steps_to_domain(recipe_data.instructions),
-    description=recipe_data.description,
-    category=recipe_data.category,
+    name=details.name,
+    description=details.description,
+    category=details.category,
   )
-  return RecipeCreateResponse(
-    recipe=mappers.recipe_to_dto(updated_recipe),
-    message=(
-      f"Recipe '{updated_recipe.name}' updated successfully to version "
-      f"{updated_recipe.current_version.version_number}"
-    ),
-    success=True,
-  )
+  return mappers.recipe_to_dto(updated)
 
 
-@app.delete("/recipes/{recipe_id}")
+@app.delete("/recipes/{recipe_id}", status_code=204)
 def delete_recipe(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Delete a recipe and (via cascade) all its versions."""
+  """Delete a recipe with its Draft and all its Ready versions."""
   recipe_service.delete_recipe(recipe_id)
-  return {"message": "Recipe deleted successfully", "success": True}
+  return Response(status_code=204)
 
 
-@app.post("/recipes/{recipe_id}/versions", response_model=Recipe)
-def create_recipe_version(
+@app.put("/recipes/{recipe_id}/draft", response_model=Recipe)
+def save_draft(
   recipe_id: UUID,
-  version_request: RecipeVersionRequest,
+  draft: DraftRequest,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Manually add a new version to an existing recipe."""
-  updated = recipe_service.create_recipe_version(
-    recipe_id=recipe_id,
-    ingredients=mappers.ingredients_to_domain(version_request.ingredients),
-    instructions=mappers.steps_to_domain(version_request.instructions),
-    description=version_request.description,
+  """Save the Draft's ingredients and steps, creating the Draft if needed."""
+  updated = recipe_service.save_draft(
+    recipe_id,
+    ingredients=mappers.ingredients_to_domain(draft.ingredients),
+    instructions=mappers.steps_to_domain(draft.instructions),
   )
   return mappers.recipe_to_dto(updated)
+
+
+@app.delete("/recipes/{recipe_id}/draft", response_model=Recipe)
+def discard_draft(
+  recipe_id: UUID,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
+  """Discard the Draft. 204 if the recipe had no Ready version and was deleted."""
+  remaining = recipe_service.discard_draft(recipe_id)
+  if remaining is None:
+    return Response(status_code=204)
+  return mappers.recipe_to_dto(remaining)
+
+
+@app.post("/recipes/{recipe_id}/promote", response_model=Recipe)
+def promote(
+  recipe_id: UUID,
+  body: Optional[PromoteRequest] = None,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
+  """Turn the Draft into the next Ready version. 422 if there is no Draft or it
+  has no changes since the latest Ready version."""
+  promoted = recipe_service.promote(
+    recipe_id, release_note=body.release_note if body else None
+  )
+  return mappers.recipe_to_dto(promoted)
 
 
 @app.get("/recipes/{recipe_id}/versions", response_model=List[RecipeVersion])
@@ -215,7 +232,7 @@ def get_recipe_versions(
   recipe_id: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Get all versions of a recipe, newest first."""
+  """Get the recipe's Ready versions, newest first. The Draft is not history."""
   versions = recipe_service.get_recipe_versions(recipe_id)
   return [mappers.version_to_dto(v) for v in versions]
 
@@ -227,7 +244,8 @@ def get_version_diff(
   version_id_2: UUID,
   recipe_service: RecipeService = Depends(get_recipe_service),
 ):
-  """Get the diff between two versions of a recipe. Both must belong to ``recipe_id``."""
+  """Get the diff between two versions of a recipe (either may be the Draft). Both
+  must belong to ``recipe_id``."""
   return recipe_service.get_recipe_version_diff(recipe_id, version_id_1, version_id_2)
 
 
