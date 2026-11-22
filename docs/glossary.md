@@ -13,15 +13,15 @@ aligned. Design decisions are recorded in [`adr/`](adr/README.md); entries below
 The named thing — "Country Sourdough" — that persists across edits. It holds the name,
 category and notes, which are edited directly and are not versioned (ADR 0013); names need
 not be unique. Like a document across its revisions, it persists while its content
-changes. Its ingredients and steps live on its *versions*; the current one is
-`recipe.current_version`. Table: `recipes`. The aggregate root (see *Aggregate / aggregate root*): every change
+changes. Its ingredients and steps live on its *versions*: `recipe.draft` and
+`recipe.latest_ready`, each optional, never both absent (ADR 0011). Table: `recipes`. The aggregate root (see *Aggregate / aggregate root*): every change
 goes through it.
 
 ### Recipe version
 One snapshot of a recipe's content: its ingredients, steps, and sub-recipe
 references, at a point in time. This is what a baker means by "the recipe" when looking at
 a single version. Table: `recipe_versions`. Immutable once Ready (see *Draft* / *Ready*);
-every save currently creates a new one; under the Draft/Ready model only *promotion* does. An **entity**
+saving edits the Draft, and only *promotion* creates a Ready version. An **entity**
 — it has its own id, which sub-recipe references pin. A *Draft* is also a version
 (the one in progress); a *Ready version* is the numbered, frozen kind. (Sometimes called a
 "recipe specification" in design discussion — same thing.)
@@ -31,7 +31,7 @@ The set of a recipe's **Ready** versions, ordered by time. The Draft is not part
 history — it is shown separately. **Deliberately not an entity or value
 object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
 repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]` (Ready versions only). The
-`Recipe` aggregate holds only the current version (+ the Draft, from slice 2.1); history is
+`Recipe` aggregate holds only the latest Ready version and the Draft; history is
 loaded on demand. Only promote it to a value object if real domain logic over the version
 sequence appears (e.g. trend analysis, adjacent-version diffs).
 
@@ -108,7 +108,7 @@ Ready version.
 The structured comparison of two recipe versions (ingredients added/removed/modified,
 steps added/removed/modified/reordered). Endpoint:
 `GET /recipes/{id}/versions/{v1}/diff/{v2}`. Logic: `backend/domain/versioning.py`
-(moved there from `recipe_versioning.py` in Stage 2).
+Either version may be the Draft.
 
 ---
 

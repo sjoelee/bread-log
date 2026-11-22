@@ -85,6 +85,8 @@ regenerated and the test database rebuilt with `scripts/reset_test_db.sh`.
 
 ### 2.1 Draft / Ready (ADR 0007, 0011, 0013, 0014, 0015)
 
+Status: implemented on branch `slice-2.1-draft-ready`, PR pending.
+
 Spec: [`specs/2.1-draft-ready.md`](specs/2.1-draft-ready.md) — the behavior, API and
 acceptance scenarios live there.
 
