@@ -60,6 +60,7 @@ Not scheduled; pick up deliberately.
 
 - `get_recipe_version_diff` returns an API-shaped dict from the application layer
   (departs from ADR 0003).
+  When revisited, also settle spec 2.1's O1 (Draft-vs-Ready diff to disable Promote).
 - `tests/fakes.py::FakeRecipeRepository.list()` ignores ingredient, sort, limit and offset.
 - The timing API test fails on a fresh database: it expects naive timestamps and gets
   `-08:00` offsets. Cause untraced; slice 1.11 deletes it.
