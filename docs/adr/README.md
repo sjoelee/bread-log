@@ -48,3 +48,6 @@ Status: Accepted | Superseded by NNNN
 | [0010](0010-no-circular-sub-recipes.md) | A recipe cannot be its own sub-recipe, directly or indirectly |
 | [0011](0011-draft-and-ready-shown-separately.md) | A recipe's representation shows its Draft and latest Ready version separately |
 | [0012](0012-application-declares-unit-of-work-interface.md) | The application layer declares the unit-of-work interface |
+| [0013](0013-name-category-notes-not-versioned.md) | A recipe's name, category and notes are not versioned |
+| [0014](0014-draft-can-be-discarded.md) | A Draft can be discarded |
+| [0015](0015-promotion-requires-changed-saved-draft.md) | Promotion requires a saved Draft that differs from the latest Ready version |

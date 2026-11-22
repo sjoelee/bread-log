@@ -10,8 +10,9 @@ aligned. Design decisions are recorded in [`adr/`](adr/README.md); entries below
 ## Domain language (recipes & baking)
 
 ### Recipe
-The named thing — "Country Sourdough" — and its stable identity across edits: name,
-category, and notes. Like a document across its revisions, it persists while its content
+The named thing — "Country Sourdough" — that persists across edits. It holds the name,
+category and notes, which are edited directly and are not versioned (ADR 0013); names need
+not be unique. Like a document across its revisions, it persists while its content
 changes. Its ingredients and steps live on its *versions*; the current one is
 `recipe.current_version`. Table: `recipes`. The aggregate root (see *Aggregate / aggregate root*): every change
 goes through it.
@@ -30,14 +31,14 @@ The set of a recipe's **Ready** versions, ordered by time. The Draft is not part
 history — it is shown separately. **Deliberately not an entity or value
 object** — it has no identity of its own (1:1 with the recipe) and no behavior. It is a
 repository query: `RecipeRepository.get_versions(recipe_id) -> list[RecipeVersion]` (Ready versions only). The
-`Recipe` aggregate holds only the current version (+ the Draft, in Part II); history is
+`Recipe` aggregate holds only the current version (+ the Draft, from slice 2.1); history is
 loaded on demand. Only promote it to a value object if real domain logic over the version
 sequence appears (e.g. trend analysis, adjacent-version diffs).
 
 ### Draft
 The single mutable working copy of a recipe. Editing changes the Draft in place — it does
 **not** create a new version. `recipe_versions.state = 'draft'`, `version_number = NULL`.
-A recipe has exactly **0 or 1** Drafts.
+A recipe has exactly **0 or 1** Drafts. Saving edits it; it can be *discarded*.
 
 ### Ready
 A recipe version that has been promoted: frozen, numbered, and usable as a sub-recipe by other recipes.
@@ -45,8 +46,16 @@ A recipe version that has been promoted: frozen, numbered, and usable as a sub-r
 
 ### Promotion / promote
 The Draft → Ready transition. This is the **only** thing that assigns a `version_number`
-(`MAX(existing ready number) + 1`). Triggered explicitly by the user, who supplies a
-*release note*. Method: `Recipe.promote(release_note)`.
+(`MAX(existing ready number) + 1`). Triggered explicitly by the user, with an optional
+*release note*. Acts only on the saved Draft, and only if its content differs from the
+latest Ready version; a recipe with no Ready version can always promote (ADR 0015).
+Method: `Recipe.promote(release_note)`.
+
+### Discard
+Throwing away a recipe's Draft. The Ready versions are untouched and the recipe is left
+with no Draft. If the recipe has no Ready version, discarding the Draft deletes the recipe
+(ADR 0014). Distinct from *deleting* a recipe, which removes it with its Draft and all its
+Ready versions.
 
 ### Sub-recipe
 An ordinary recipe that another recipe uses — e.g. a tangzhong used by a milk bread. It is
@@ -81,7 +90,7 @@ or `finish`) and `uses`, the ingredients or sub-recipe references it acts on. St
 `recipe_versions.instructions` (JSONB).
 
 ### Release note
-Free text the user types at promotion, describing what changed. Stored in the
+Optional free text the user types at promotion, describing what changed. Stored in the
 version's `recipe_versions.description` column (not the recipe's `description`, which holds *Notes*).
 
 ### Notes

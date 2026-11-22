@@ -81,25 +81,20 @@ Built on the Phase 1 seams. Each slice is independently shippable.
 Schema changes are applied manually with `psql`, then `database/schema.sql` is
 regenerated and the test database rebuilt with `scripts/reset_test_db.sh`.
 
-### 2.1 Draft / Ready (ADR 0007, 0011)
+### 2.1 Draft / Ready (ADR 0007, 0011, 0013, 0014, 0015)
 
-- Schema: `recipe_versions.version_number` nullable; `recipe_versions.state`
-  (`'draft' | 'ready'`, existing rows backfilled to `'ready'`).
-- Domain: `RecipeVersion.state`; `Recipe.edit_draft(...)` and `Recipe.promote(release_note)`
-  replace `Recipe.add_version()`. `has_meaningful_changes` guards a promote with no change
-  from the previous Ready version (warn, don't block).
-- `recipes.current_version_id` points at the latest Ready version (NULL if none). The Draft
-  is loaded as the version with `state = 'draft'`; `Recipe` holds both.
-- Application: `save_draft`, `promote`.
-- API: `POST /recipes/{id}/promote` (body `{release_note}`); `PATCH /recipes/{id}` edits the
-  Draft; responses show Draft and latest Ready separately (ADR 0011); list items gain
-  `state`.
-- Notes: reuse `recipes.description` as the single Notes field; `recipe_versions.description`
-  becomes the release note.
-- `change_summary` is computed at promotion, against the previous Ready version.
+Spec: [`specs/2.1-draft-ready.md`](specs/2.1-draft-ready.md) — the behavior, API and
+acceptance scenarios live there.
+
+Scope:
+- Schema: already in `database/schema.sql`; wipe the existing dev rows (test data).
+- Domain: `Recipe` holds `latest_ready` and `draft`; `save_draft`, `promote`,
+  `discard_draft`, `update_details` replace `add_version()`.
+- Repository and application: load and save both parts; new use cases per the spec.
+- API: draft, promote and discard endpoints; `PATCH /recipes/{id}` edits details only;
+  `state` list filter.
 - Rewrite the recipe-versioning tests for this model.
-- **Decide in the walk-through:** which version a list row shows for a recipe that has only
-  a Draft.
+- Resolve the spec's **Open** items before or during implementation.
 
 ### 2.2 Sub-recipes (ADR 0006, 0008, 0009, 0010)
 
