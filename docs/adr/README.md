@@ -51,3 +51,4 @@ Status: Accepted | Superseded by NNNN
 | [0013](0013-name-category-notes-not-versioned.md) | A recipe's name, category and notes are not versioned |
 | [0014](0014-draft-can-be-discarded.md) | A Draft can be discarded |
 | [0015](0015-promotion-requires-changed-saved-draft.md) | Promotion requires a saved Draft that differs from the latest Ready version |
+| [0016](0016-edit-form-promote-saves-first.md) | The edit form's Promote saves the Draft first |
