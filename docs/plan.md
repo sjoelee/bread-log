@@ -36,7 +36,9 @@ earlier notes and in git history.
 
 ## Phase 1 — Backend foundation
 
-Recipes only. Timing stays on the legacy `DBConnector` path, untouched, until Phase 4.
+Recipes only. Timing is frozen: it stays on the legacy `DBConnector` path, untouched, and
+is replaced from scratch in Phase 4 (no migration of `bread_timings` rows, which are test
+data).
 
 | Slice | What | Status |
 |---|---|---|
@@ -47,9 +49,10 @@ Recipes only. Timing stays on the legacy `DBConnector` path, untouched, until Ph
 | 1.5 | `UnitOfWork`: one transaction per use case, rollback on exception | merged (#5) |
 | 1.6 | Thin recipe routes; exception handlers | merged (#6) |
 | 1.7 | `row_factory` reads; dead code removed; `DatabasePool` moved to infrastructure | merged (#8) |
-| 1.8 | Dedicated test database `bread_makes_test` (ADR 0005); `tests/test_integration.py` removed | branch `test-database` pushed, PR pending |
+| 1.8 | Dedicated test database `bread_makes_test` (ADR 0005); `tests/test_integration.py` removed | merged (#13) |
 | 1.9 | Application layer speaks domain objects (ADR 0001, 0003) | merged (`fb4d60b`) |
-| 1.10 | `RecipeRepository` interface in the domain (ADR 0004), `UnitOfWork` interface in the application layer (ADR 0012), `PostgresRecipeRepository` rename, pyright check of `tests/fakes.py` | branch `repository-interfaces`; rebase onto `main` and open PR once ADR 0012 and 1.8 merge |
+| 1.10 | `RecipeRepository` interface in the domain (ADR 0004), `UnitOfWork` interface in the application layer (ADR 0012), `PostgresRecipeRepository` rename, pyright check of `tests/fakes.py` | branch `repository-interfaces` pushed, PR open (not yet merged) |
+| 1.11 | Remove baker's percentages (backend function and test, frontend Baker's % column and dead types); delete the failing timing test; delete `docs/recipe-system.md`; update `CLAUDE.md`. Open: whether to also drop the frontend reads of `flour_ingredient_names` | tabled |
 
 ### Known gaps in Phase 1
 
@@ -59,10 +62,9 @@ Not scheduled; pick up deliberately.
   (departs from ADR 0003).
 - `tests/fakes.py::FakeRecipeRepository.list()` ignores ingredient, sort, limit and offset.
 - The timing API test fails on a fresh database: it expects naive timestamps and gets
-  `-08:00` offsets. Cause untraced.
-- Leftover baker's percentages code: `calculate_bakers_percentages`,
-  `tests/domain/test_baker_percentages.py`, and a dead frontend branch at
-  `BreadAppNew.tsx:730`.
+  `-08:00` offsets. Cause untraced; slice 1.11 deletes it.
+- The frontend still reads `flour_ingredient_names` (`BreadAppNew.tsx:131`, `:948`), which
+  the backend stopped sending in slice 1.4.
 - The test database keeps leftover recipe rows after a run.
 - `service.py` still imports `DBConnector` for the legacy timing routes.
 
