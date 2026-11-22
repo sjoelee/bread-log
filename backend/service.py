@@ -9,6 +9,7 @@ from .infrastructure.pool import DatabasePool
 from .exceptions import ConflictError, DatabaseError, DomainError, NotFoundError
 from .api import mappers
 from .api.schemas import (
+  ChangesResponse,
   DraftRequest,
   PromoteRequest,
   Recipe,
@@ -211,6 +212,23 @@ def discard_draft(
   if remaining is None:
     return Response(status_code=204)
   return mappers.recipe_to_dto(remaining)
+
+
+@app.post("/recipes/{recipe_id}/changes", response_model=ChangesResponse)
+def has_changes(
+  recipe_id: UUID,
+  content: DraftRequest,
+  recipe_service: RecipeService = Depends(get_recipe_service),
+):
+  """Whether this content differs from the latest Ready version. Read-only; lets a
+  client grey out Promote."""
+  return ChangesResponse(
+    has_changes=recipe_service.has_changes(
+      recipe_id,
+      ingredients=mappers.ingredients_to_domain(content.ingredients),
+      instructions=mappers.steps_to_domain(content.instructions),
+    )
+  )
 
 
 @app.post("/recipes/{recipe_id}/promote", response_model=Recipe)

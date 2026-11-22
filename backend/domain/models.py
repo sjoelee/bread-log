@@ -183,18 +183,28 @@ class Recipe:
     self.updated_at = now
     return self.draft
 
-  def draft_has_changes(self) -> bool:
-    """True if there is a Draft and its content differs in any way from the latest
-    Ready version (or there is no Ready version yet).
+  def differs_from_latest_ready(
+    self, ingredients: list[Ingredient], instructions: list[RecipeStep]
+  ) -> bool:
+    """True if this content differs in any way from the latest Ready version, or
+    there is no Ready version yet.
 
     Exact comparison: ingredient order, name spelling and every field count. Steps
     compare by order and text; step ids are identity, not content.
     """
-    if self.draft is None:
-      return False
     if self.latest_ready is None:
       return True
-    return _content(self.draft) != _content(self.latest_ready)
+    return _content(ingredients, instructions) != _content(
+      self.latest_ready.ingredients, self.latest_ready.instructions
+    )
+
+  def draft_has_changes(self) -> bool:
+    """True if there is a Draft and it differs from the latest Ready version."""
+    if self.draft is None:
+      return False
+    return self.differs_from_latest_ready(
+      self.draft.ingredients, self.draft.instructions
+    )
 
   def promote(self, *, release_note: Optional[str], now: datetime) -> RecipeVersion:
     """Turn the Draft into the next Ready version and leave no Draft.
@@ -231,10 +241,10 @@ class Recipe:
     return self.latest_ready is None
 
 
-def _content(version: RecipeVersion) -> tuple:
+def _content(ingredients: list[Ingredient], instructions: list[RecipeStep]) -> tuple:
   return (
-    tuple(version.ingredients),
-    tuple((s.order, s.instruction) for s in version.instructions),
+    tuple(ingredients),
+    tuple((s.order, s.instruction) for s in instructions),
   )
 
 

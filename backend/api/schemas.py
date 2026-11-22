@@ -94,6 +94,10 @@ class DraftRequest(BaseModel):
   instructions: List[RecipeStep] = _INSTRUCTIONS
 
 
+class ChangesResponse(BaseModel):
+  has_changes: bool
+
+
 class PromoteRequest(BaseModel):
   release_note: Optional[str] = Field(None, max_length=1000)
 

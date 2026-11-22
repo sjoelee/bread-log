@@ -198,6 +198,30 @@ class TestQueries:
       _service().get_recipe_versions(uuid4())
 
 
+class TestHasChanges:
+  def test_compares_unsaved_content_with_latest_ready(self):
+    svc = _service()
+    v1 = svc.promote(_create(svc).id)
+    steps = v1.latest_ready.instructions
+    same = svc.has_changes(v1.id, ingredients=[FLOUR, WATER], instructions=steps)
+    changed = svc.has_changes(
+      v1.id, ingredients=[FLOUR, MORE_WATER], instructions=steps
+    )
+    assert (same, changed) == (False, True)
+    assert svc.get_recipe(v1.id).draft is None  # read-only
+
+  def test_always_true_without_a_ready_version(self):
+    svc = _service()
+    recipe = _create(svc)
+    assert svc.has_changes(
+      recipe.id, ingredients=recipe.draft.ingredients, instructions=_steps()
+    )
+
+  def test_missing_recipe_raises(self):
+    with pytest.raises(NotFoundError):
+      _service().has_changes(uuid4(), ingredients=[FLOUR], instructions=_steps())
+
+
 class TestFake:
   def test_stored_ready_versions_are_frozen_like_the_database(self):
     repo = FakeRecipeRepository()

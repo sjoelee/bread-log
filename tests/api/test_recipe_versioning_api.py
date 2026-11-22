@@ -426,5 +426,19 @@ class TestDraftReadyLifecycle:
     assert row["draft"]["version_number"] is None
     assert row["draft"]["ingredient_count"] == 4
 
+  def test_changes_endpoint_compares_with_latest_ready(self, recipe_with_cleanup):
+    recipe = recipe_with_cleanup()
+    v1 = recipe["latest_ready"]
+    url = f"/recipes/{recipe['id']}/changes"
+    same = {"ingredients": v1["ingredients"], "instructions": v1["instructions"]}
+    changed = {**same, "ingredients": BASE_INGREDIENTS[:2]}
+    assert client.post(url, json=same).json() == {"has_changes": False}
+    assert client.post(url, json=changed).json() == {"has_changes": True}
+    assert client.get(f"/recipes/{recipe['id']}").json()["draft"] is None
+
+  def test_changes_endpoint_on_missing_recipe_is_404(self):
+    body = {"ingredients": BASE_INGREDIENTS, "instructions": BASE_INSTRUCTIONS}
+    assert client.post(f"/recipes/{uuid4()}/changes", json=body).status_code == 404
+
   def test_invalid_state_filter_is_422(self):
     assert client.get("/recipes/?state=bogus").status_code == 422

@@ -137,6 +137,21 @@ class RecipeService:
 
   # --- queries -----------------------------------------------------------
 
+  def has_changes(
+    self,
+    recipe_id: UUID,
+    *,
+    ingredients: List[domain.Ingredient],
+    instructions: List[domain.RecipeStep],
+  ) -> bool:
+    """Whether this content differs from the recipe's latest Ready version (always
+    True when it has none). Read-only. Raises ``NotFoundError`` if the recipe does
+    not exist."""
+    with self._uow_factory() as uow:
+      return self._get(uow, recipe_id).differs_from_latest_ready(
+        ingredients, instructions
+      )
+
   def get_recipe(self, recipe_id: UUID) -> domain.Recipe:
     """Return the full recipe: its fields, latest Ready version and Draft.
 
